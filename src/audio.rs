@@ -204,11 +204,15 @@ impl Player {
     }
 
     /// Builds the compression for the current speed in the background, if it
-    /// is still missing. Replacing an outstanding job cancels it.
+    /// is still missing. Replacing an outstanding job cancels it, and so does
+    /// going back to 1x, which needs none.
     fn ensure_stretch(&mut self) {
         let factor = self.speed;
-        if factor <= 1.0
-            || self.stretches.iter().any(|(built, _)| *built == factor)
+        if factor <= 1.0 {
+            self.stretching = None;
+            return;
+        }
+        if self.stretches.iter().any(|(built, _)| *built == factor)
             || self
                 .stretching
                 .as_ref()
@@ -675,6 +679,21 @@ mod tests {
         let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 1.0);
         assert!(Arc::ptr_eq(&buffer, &samples));
         assert_eq!(factor, 1.0);
+    }
+
+    #[test]
+    fn going_back_to_one_x_cancels_the_outstanding_compression() {
+        let mut player = Player::new(Waker::default());
+        let cancelled = Arc::new(AtomicBool::new(false));
+        player.set_speed(2.0);
+        player.stretching = Some(Stretching {
+            factor: 2.0,
+            slot: Default::default(),
+            cancelled: Arc::clone(&cancelled),
+        });
+        player.set_speed(1.0);
+        assert!(player.stretching.is_none());
+        assert!(cancelled.load(Ordering::Relaxed));
     }
 
     /// Plays a one-second test tone:
