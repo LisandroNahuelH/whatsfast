@@ -3288,7 +3288,10 @@ fn voice_player(
     let button = 36.0;
     let bar_height = 30.0;
     let chip = 38.0;
-    let wave_width = width - button - 10.0 - chip - 10.0;
+    // The chip appears with the playable clip; the waveform takes its space
+    // back while the audio is still downloading.
+    let shows_chip = media.path.is_some();
+    let wave_width = width - button - 10.0 - if shows_chip { chip + 10.0 } else { 0.0 };
     let bars: Vec<u8> = if !waveform.is_empty() {
         waveform.to_vec()
     } else if let Some(bars) = view.player.bars(&message.id) {
@@ -3429,7 +3432,7 @@ fn voice_player(
                 theme::text(ui, text, theme::regular(11.5), palette.secondary);
             });
             // Speed chip, cycling 1x, 1.5x, and 2x like the phone.
-            if media.path.is_some() {
+            if shows_chip {
                 let speed = view.player.speed();
                 let active = speed > 1.0;
                 let (rect, response) = ui.allocate_exact_size(vec2(chip, 20.0), Sense::click());

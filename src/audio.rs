@@ -72,8 +72,9 @@ pub struct Player {
     decoding: Option<Decoding>,
     /// Playback speed applied to the current clip and to later ones.
     speed: f32,
-    /// Time-compressed clip for the loaded message, when already built.
-    stretched: Option<Stretched>,
+    /// Time-compressed copies of the loaded clip, one per speed already
+    /// built, dropped when the clip changes.
+    stretches: Vec<(f32, Arc<Vec<f32>>)>,
     /// Compression being built for the loaded message.
     stretching: Option<Stretching>,
     /// Generated waveforms for clips that did not include one.
@@ -93,15 +94,18 @@ struct Loaded {
     done: bool,
 }
 
-/// A finished pitch-preserving compression of the loaded clip.
-struct Stretched {
-    factor: f32,
-    samples: Arc<Vec<f32>>,
-}
-
 struct Stretching {
     factor: f32,
     slot: StretchedSlot,
+    /// Set when this job is replaced or the clip changes, so the worker
+    /// stops instead of piling up behind the next one.
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Drop for Stretching {
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
 }
 
 type StretchedSlot = Arc<Mutex<Option<Arc<Vec<f32>>>>>;
@@ -121,7 +125,7 @@ impl Player {
             loaded: None,
             decoding: None,
             speed: SPEEDS[0],
-            stretched: None,
+            stretches: Vec::new(),
             stretching: None,
             bars: HashMap::new(),
         }
@@ -154,14 +158,20 @@ impl Player {
         self.speed
     }
 
-    /// The samples that play at `speed`: the compression when it is ready,
-    /// otherwise the clip as recorded.
-    fn buffer_for(loaded: &Loaded, stretched: Option<&Stretched>, speed: f32) -> Arc<Vec<f32>> {
-        match stretched {
-            Some(compressed) if speed > 1.0 && compressed.factor == speed => {
-                Arc::clone(&compressed.samples)
-            }
-            _ => Arc::clone(&loaded.samples),
+    /// The samples that play at `speed` and the speed they represent: the
+    /// clip itself at 1x, its compression once built, and otherwise whatever
+    /// is queued, so a speed still building does not drop playback to 1x.
+    fn buffer_for(
+        loaded: &Loaded,
+        stretches: &[(f32, Arc<Vec<f32>>)],
+        speed: f32,
+    ) -> (Arc<Vec<f32>>, f32) {
+        if speed <= 1.0 {
+            return (Arc::clone(&loaded.samples), 1.0);
+        }
+        match stretches.iter().find(|(factor, _)| *factor == speed) {
+            Some((factor, compressed)) => (Arc::clone(compressed), *factor),
+            None => (Arc::clone(&loaded.buffer), loaded.factor),
         }
     }
 
@@ -171,7 +181,7 @@ impl Player {
         let Some(loaded) = self.loaded.as_ref() else {
             return;
         };
-        let wanted = Self::buffer_for(loaded, self.stretched.as_ref(), self.speed);
+        let (wanted, _) = Self::buffer_for(loaded, &self.stretches, self.speed);
         if self.output.is_none() || Arc::ptr_eq(&wanted, &loaded.buffer) {
             return;
         }
@@ -194,14 +204,11 @@ impl Player {
     }
 
     /// Builds the compression for the current speed in the background, if it
-    /// is still missing.
+    /// is still missing. Replacing an outstanding job cancels it.
     fn ensure_stretch(&mut self) {
         let factor = self.speed;
         if factor <= 1.0
-            || self
-                .stretched
-                .as_ref()
-                .is_some_and(|compressed| compressed.factor == factor)
+            || self.stretches.iter().any(|(built, _)| *built == factor)
             || self
                 .stretching
                 .as_ref()
@@ -215,16 +222,26 @@ impl Player {
         let samples = Arc::clone(&loaded.samples);
         let waker = self.waker.clone();
         let slot: StretchedSlot = Default::default();
+        let cancelled = Arc::new(AtomicBool::new(false));
         let thread_slot = Arc::clone(&slot);
+        let thread_cancelled = Arc::clone(&cancelled);
         let spawned = std::thread::Builder::new()
             .name("voice-stretch".to_owned())
             .spawn(move || {
-                let compressed = Arc::new(crate::timestretch::speed_up(&samples, factor));
-                *thread_slot.lock().unwrap_or_else(|p| p.into_inner()) = Some(compressed);
+                let Some(compressed) =
+                    crate::timestretch::speed_up_unless(&samples, factor, &thread_cancelled)
+                else {
+                    return;
+                };
+                *thread_slot.lock().unwrap_or_else(|p| p.into_inner()) = Some(Arc::new(compressed));
                 waker.wake();
             });
         if spawned.is_ok() {
-            self.stretching = Some(Stretching { factor, slot });
+            self.stretching = Some(Stretching {
+                factor,
+                slot,
+                cancelled,
+            });
         }
     }
 
@@ -262,7 +279,7 @@ impl Player {
         self.output = None;
         self.loaded = None;
         self.decoding = None;
-        self.stretched = None;
+        self.stretches.clear();
         self.stretching = None;
     }
 
@@ -356,7 +373,7 @@ impl Player {
             .and_then(|job| job.slot.lock().unwrap_or_else(|p| p.into_inner()).take());
         if let Some(samples) = compressed {
             let factor = self.stretching.take().expect("just seen").factor;
-            self.stretched = Some(Stretched { factor, samples });
+            self.stretches.push((factor, samples));
             self.apply_speed();
             // The speed may have moved on while this compression built.
             self.ensure_stretch();
@@ -406,12 +423,7 @@ impl Player {
         };
         // The sink always plays at 1x: running it faster sharpens the voice,
         // so speeds above 1x queue a time-compressed copy of the clip.
-        let buffer = Self::buffer_for(loaded, self.stretched.as_ref(), self.speed);
-        let factor = if Arc::ptr_eq(&buffer, &loaded.samples) {
-            1.0
-        } else {
-            self.speed
-        };
+        let (buffer, factor) = Self::buffer_for(loaded, &self.stretches, self.speed);
         let total = clip_length(loaded.samples.len());
         let offset = ((fraction.clamp(0.0, 1.0) * buffer.len() as f32) as usize).min(buffer.len());
         if self.output.is_none() {
@@ -631,6 +643,38 @@ mod tests {
         player.set_speed(1.75);
         assert_eq!(player.cycle_speed(), 2.0);
         assert_eq!(player.speed(), 2.0);
+    }
+
+    #[test]
+    fn a_speed_still_building_keeps_the_queued_one() {
+        let samples = Arc::new(vec![0.0; 12]);
+        let one_and_a_half = Arc::new(vec![0.0; 8]);
+        let double = Arc::new(vec![0.0; 6]);
+        let loaded = Loaded {
+            message: "clip".to_owned(),
+            samples: Arc::clone(&samples),
+            buffer: Arc::clone(&one_and_a_half),
+            factor: 1.5,
+            base: Duration::ZERO,
+            paused: false,
+            done: false,
+        };
+        let mut stretches = vec![(1.5, Arc::clone(&one_and_a_half))];
+
+        let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 2.0);
+        assert!(Arc::ptr_eq(&buffer, &one_and_a_half));
+        assert_eq!(factor, 1.5);
+
+        stretches.push((2.0, Arc::clone(&double)));
+        let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 2.0);
+        assert!(Arc::ptr_eq(&buffer, &double));
+        assert_eq!(factor, 2.0);
+        // Both built speeds stay available when cycling back.
+        let (buffer, _) = Player::buffer_for(&loaded, &stretches, 1.5);
+        assert!(Arc::ptr_eq(&buffer, &one_and_a_half));
+        let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 1.0);
+        assert!(Arc::ptr_eq(&buffer, &samples));
+        assert_eq!(factor, 1.0);
     }
 
     /// Plays a one-second test tone:

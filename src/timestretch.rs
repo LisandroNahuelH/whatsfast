@@ -8,6 +8,8 @@
 //! continuation of the output are picked, and they are overlap-added back at
 //! a smaller hop. The sink then plays the result at normal rate.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 /// Analysis frame, about 43 ms of speech at 48 kHz.
 const FRAME: usize = 2048;
 /// Synthesis hop; consecutive frames overlap three quarters.
@@ -22,17 +24,25 @@ const STEP: usize = 8;
 ///
 /// The result's length is the input's length divided by `factor`, rounded.
 pub fn speed_up(samples: &[f32], factor: f32) -> Vec<f32> {
+    speed_up_unless(samples, factor, &AtomicBool::new(false)).expect("never cancelled")
+}
+
+/// Like `speed_up`, but gives up with `None` as soon as `cancelled` is set,
+/// so a compression nobody will play stops scanning a long clip.
+pub fn speed_up_unless(samples: &[f32], factor: f32, cancelled: &AtomicBool) -> Option<Vec<f32>> {
     let target = ((samples.len() as f64) / f64::from(factor)).round() as usize;
     if factor <= 1.0 {
-        return samples.to_vec();
+        return Some(samples.to_vec());
     }
     if samples.len() < FRAME * 2 {
         // Too short to overlap-add: drop samples, pitch and all. Clips this
         // short are clicks and beeps, not speech.
         let last = samples.len().saturating_sub(1);
-        return (0..target)
-            .map(|i| samples[(((i as f64) * f64::from(factor)) as usize).min(last)])
-            .collect();
+        return Some(
+            (0..target)
+                .map(|i| samples[(((i as f64) * f64::from(factor)) as usize).min(last)])
+                .collect(),
+        );
     }
 
     // Averaged decimation carries the waveform shape the comparison needs.
@@ -57,6 +67,9 @@ pub fn speed_up(samples: &[f32], factor: f32) -> Vec<f32> {
     let mut written = 0usize;
     let mut previous: Option<usize> = None;
     while written + FRAME <= out.len() {
+        if cancelled.load(Ordering::Relaxed) {
+            return None;
+        }
         let frame_end = (nominal + FRAME + SEARCH).min(samples.len());
         let last_start = samples.len() - FRAME;
         let read = if frame_end < samples.len() {
@@ -88,7 +101,7 @@ pub fn speed_up(samples: &[f32], factor: f32) -> Vec<f32> {
         out[i] /= weight[i].max(1e-3);
     }
     out.truncate(target);
-    out
+    Some(out)
 }
 
 /// Returns the offset within `±SEARCH` of `nominal` whose decimated frame
@@ -210,6 +223,12 @@ mod tests {
         assert_eq!(faster.len(), 500);
         assert_eq!(faster[10], 20.0);
         assert_eq!(faster[499], 998.0);
+    }
+
+    #[test]
+    fn a_cancelled_compression_gives_up() {
+        let samples = sine(440.0, 1.0);
+        assert!(speed_up_unless(&samples, 2.0, &AtomicBool::new(true)).is_none());
     }
 
     #[test]
