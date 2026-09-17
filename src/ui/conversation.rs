@@ -3493,6 +3493,9 @@ fn voice_player(
             if shows_chip {
                 let speed = view.player.speed();
                 let active = speed > 1.0;
+                // The label follows the click at once, faded until this
+                // clip actually plays at that speed.
+                let preparing = view.player.preparing_speed(&message.id);
                 let (rect, response) = ui.allocate_exact_size(vec2(chip, 20.0), Sense::click());
                 if ui.is_rect_visible(rect) {
                     let hovered = response.hovered();
@@ -3513,6 +3516,11 @@ fn voice_player(
                     } else {
                         palette.secondary
                     };
+                    let colour = if preparing {
+                        colour.gamma_multiply(0.5)
+                    } else {
+                        colour
+                    };
                     let galley = ui.painter().layout_no_wrap(
                         speed_label(speed),
                         theme::medium(11.0),
@@ -3526,7 +3534,11 @@ fn voice_player(
                 }
                 response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text("Playback speed");
+                    .on_hover_text(if preparing {
+                        "Preparing playback speed"
+                    } else {
+                        "Playback speed"
+                    });
             }
         },
     );

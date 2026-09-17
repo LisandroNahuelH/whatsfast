@@ -152,6 +152,14 @@ impl Player {
         self.ensure_stretch();
     }
 
+    /// Whether `message` is still playing at an earlier speed while the
+    /// compression for the chosen one builds.
+    pub fn preparing_speed(&self, message: &str) -> bool {
+        self.loaded.as_ref().is_some_and(|loaded| {
+            loaded.message == message && !loaded.done && loaded.factor != self.speed
+        })
+    }
+
     /// Cycles 1x, 1.5x, and 2x, wrapping back to 1x.
     pub fn cycle_speed(&mut self) -> f32 {
         let next = SPEEDS
@@ -684,6 +692,29 @@ mod tests {
         let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 1.0);
         assert!(Arc::ptr_eq(&buffer, &samples));
         assert_eq!(factor, 1.0);
+    }
+
+    #[test]
+    fn a_speed_is_preparing_until_the_clip_plays_at_it() {
+        let samples = Arc::new(vec![0.0; 12]);
+        let mut player = Player::new(Waker::default());
+        player.loaded = Some(Loaded {
+            message: "clip".to_owned(),
+            buffer: Arc::clone(&samples),
+            samples,
+            factor: 1.0,
+            base: Duration::ZERO,
+            paused: true,
+            done: false,
+        });
+        assert!(!player.preparing_speed("clip"));
+        player.speed = 2.0;
+        assert!(player.preparing_speed("clip"));
+        assert!(!player.preparing_speed("another clip"));
+        if let Some(loaded) = player.loaded.as_mut() {
+            loaded.factor = 2.0;
+        }
+        assert!(!player.preparing_speed("clip"));
     }
 
     #[test]

@@ -30,10 +30,11 @@ pub fn speed_up(samples: &[f32], factor: f32) -> Vec<f32> {
 /// Like `speed_up`, but gives up with `None` as soon as `cancelled` is set,
 /// so a compression nobody will play stops scanning a long clip.
 pub fn speed_up_unless(samples: &[f32], factor: f32, cancelled: &AtomicBool) -> Option<Vec<f32>> {
-    let target = ((samples.len() as f64) / f64::from(factor)).round() as usize;
-    if factor <= 1.0 {
+    // Only finite speed-ups compress; anything else plays as recorded.
+    if !(factor.is_finite() && factor > 1.0) {
         return Some(samples.to_vec());
     }
+    let target = ((samples.len() as f64) / f64::from(factor)).round() as usize;
     if samples.len() < FRAME * 2 {
         // Too short to overlap-add: drop samples, pitch and all. Clips this
         // short are clicks and beeps, not speech.
@@ -229,6 +230,14 @@ mod tests {
     fn a_cancelled_compression_gives_up() {
         let samples = sine(440.0, 1.0);
         assert!(speed_up_unless(&samples, 2.0, &AtomicBool::new(true)).is_none());
+    }
+
+    #[test]
+    fn unusable_factors_return_the_same_samples() {
+        let samples = sine(440.0, 0.1);
+        for factor in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -2.0] {
+            assert_eq!(speed_up(&samples, factor), samples, "at {factor}");
+        }
     }
 
     #[test]
