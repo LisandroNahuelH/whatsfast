@@ -140,9 +140,14 @@ impl Player {
     ///
     /// Speeds above 1x play a time-compressed copy of the clip, once it has
     /// been built, so the voice keeps its pitch. Until then playback
-    /// continues at the speed already queued.
+    /// continues at the speed already queued. Speeds outside 1x to 2x, such
+    /// as a hand-edited setting, are clamped, and non-finite ones play at 1x.
     pub fn set_speed(&mut self, speed: f32) {
-        self.speed = speed;
+        self.speed = if speed.is_finite() {
+            speed.clamp(SPEEDS[0], SPEEDS[SPEEDS.len() - 1])
+        } else {
+            SPEEDS[0]
+        };
         self.apply_speed();
         self.ensure_stretch();
     }
@@ -679,6 +684,19 @@ mod tests {
         let (buffer, factor) = Player::buffer_for(&loaded, &stretches, 1.0);
         assert!(Arc::ptr_eq(&buffer, &samples));
         assert_eq!(factor, 1.0);
+    }
+
+    #[test]
+    fn unusable_speeds_are_kept_in_range() {
+        let mut player = Player::new(Waker::default());
+        player.set_speed(f32::NAN);
+        assert_eq!(player.speed(), 1.0);
+        player.set_speed(f32::INFINITY);
+        assert_eq!(player.speed(), 1.0);
+        player.set_speed(50.0);
+        assert_eq!(player.speed(), 2.0);
+        player.set_speed(-3.0);
+        assert_eq!(player.speed(), 1.0);
     }
 
     #[test]

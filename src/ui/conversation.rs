@@ -3291,7 +3291,9 @@ fn voice_player(
     // The chip appears with the playable clip; the waveform takes its space
     // back while the audio is still downloading.
     let shows_chip = media.path.is_some();
-    let wave_width = width - button - 10.0 - if shows_chip { chip + 10.0 } else { 0.0 };
+    // Kept above zero so a very narrow window cannot hand the waveform a
+    // negative size or the seek fraction a zero divisor.
+    let wave_width = (width - button - 10.0 - if shows_chip { chip + 10.0 } else { 0.0 }).max(1.0);
     let bars: Vec<u8> = if !waveform.is_empty() {
         waveform.to_vec()
     } else if let Some(bars) = view.player.bars(&message.id) {
