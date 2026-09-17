@@ -172,6 +172,14 @@ pub struct App {
     pub picker_search: String,
     /// Whether the newly opened picker should focus search.
     pub picker_focus: bool,
+    /// Message the full emoji reaction picker is targeting.
+    pub reaction_target: Option<(ChatId, String)>,
+    /// Control that opened the reaction picker.
+    pub reaction_anchor: Option<egui::Rect>,
+    /// Demo/test: keep this message's context menu open.
+    pub open_message_menu: Option<String>,
+    /// Emoji-grid header to scroll into view.
+    pub emoji_jump: Option<&'static str>,
     /// Attachments pending in the composer.
     pub pending: Vec<Pending>,
     /// In-chat audio player.
@@ -383,6 +391,10 @@ impl App {
             picker_anchor: None,
             picker_search: String::new(),
             picker_focus: false,
+            reaction_target: None,
+            reaction_anchor: None,
+            open_message_menu: None,
+            emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
             recording: None,
@@ -1372,6 +1384,9 @@ impl App {
 
     fn open_chat(&mut self, id: ChatId) {
         if self.open_chat.as_deref() != Some(id.as_str()) {
+            self.reaction_target = None;
+            self.reaction_anchor = None;
+            self.emoji_jump = None;
             if let Some(previous) = self.open_chat.take() {
                 let draft = std::mem::take(&mut self.composer);
                 // Discard an unfinished edit instead of keeping it as a draft.
@@ -1841,6 +1856,9 @@ impl App {
                 self.reply_to = None;
                 self.emoji_start = None;
                 self.mention_start = None;
+                self.reaction_target = None;
+                self.reaction_anchor = None;
+                self.emoji_jump = None;
             }
             Action::SendText {
                 chat,
@@ -2031,6 +2049,8 @@ impl App {
             Action::TogglePicker(tab) => {
                 self.emoji_start = None;
                 self.mention_start = None;
+                self.reaction_target = None;
+                self.reaction_anchor = None;
                 if self.picker == Some(tab) {
                     self.picker = None;
                     self.refocus_composer(ctx);
@@ -2039,6 +2059,7 @@ impl App {
                     self.picker_search.clear();
                     self.picker_focus = tab == PickerTab::Emoji;
                     self.emoji_selected = 0;
+                    self.emoji_jump = None;
                     if tab == PickerTab::Stickers {
                         self.stickers_pending = self.stickers.is_empty()
                             && self.stickers_saved.is_empty()
@@ -2051,8 +2072,30 @@ impl App {
                 }
             }
             Action::ClosePicker => {
+                let was_reaction = self.reaction_target.is_some();
                 self.picker = None;
-                self.refocus_composer(ctx);
+                self.reaction_target = None;
+                self.reaction_anchor = None;
+                self.emoji_jump = None;
+                if !was_reaction {
+                    self.refocus_composer(ctx);
+                }
+            }
+            Action::OpenReactionPicker { chat, message } => {
+                self.emoji_start = None;
+                self.mention_start = None;
+                self.picker = None;
+                self.reaction_target = Some((chat, message));
+                self.picker_search.clear();
+                self.picker_focus = true;
+                self.emoji_selected = 0;
+                self.emoji_jump = None;
+                self.reaction_anchor = ctx.input(|input| {
+                    input
+                        .pointer
+                        .latest_pos()
+                        .map(|pos| egui::Rect::from_center_size(pos, egui::vec2(34.0, 34.0)))
+                });
             }
             Action::InsertEmoji(emoji) => {
                 self.insert_in_composer(ctx, &emoji);
@@ -2177,11 +2220,18 @@ impl App {
                 chat,
                 message,
                 emoji,
-            } => self.backend.send(Command::React {
-                chat,
-                message,
-                emoji,
-            }),
+            } => {
+                if !emoji.is_empty() {
+                    self.remember_emoji(&emoji);
+                }
+                self.reaction_target = None;
+                self.reaction_anchor = None;
+                self.backend.send(Command::React {
+                    chat,
+                    message,
+                    emoji,
+                });
+            }
             Action::SetArchived(chat, archived) => {
                 if let Some(known) = self.chat_mut(&chat) {
                     known.archived = archived;
@@ -2680,7 +2730,7 @@ impl App {
                 let slower = velocity * (-dt / GLIDE_DECAY).exp();
                 self.glide = (slower.length() > GLIDE_STOP).then_some(slower);
             }
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(8));
         }
         let held = self
             .scroll_lock

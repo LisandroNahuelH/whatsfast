@@ -713,6 +713,11 @@ pub fn populate(app: &mut App) {
                 emoji: "🔥".into(),
             });
             row.reactions.push(Reaction {
+                sender: mira.0.into(),
+                from_me: false,
+                emoji: "🏆".into(),
+            });
+            row.reactions.push(Reaction {
                 sender: ME.into(),
                 from_me: true,
                 emoji: "🔥".into(),
@@ -1171,6 +1176,58 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     bad_key: true,
                 });
             }
+            "react-menu" => {
+                app.open_message_menu = Some("ada-link".into());
+                if let Some(row) = app
+                    .conversations
+                    .get_mut(SAMPLES[0].id)
+                    .and_then(|conversation| conversation.message_mut("ada-link"))
+                {
+                    row.delivered_at = Some(row.timestamp);
+                    row.read_at = Some(row.timestamp + 60 * 60 * 7);
+                }
+            }
+            "react-picker" => {
+                let chat = SAMPLES[0].id.to_owned();
+                app.reaction_target = Some((chat, "ada-link".into()));
+                app.picker_focus = true;
+                app.settings.recent_emoji = vec![
+                    "👍".into(),
+                    "❤️".into(),
+                    "😂".into(),
+                    "🦀".into(),
+                    "🎉".into(),
+                    "🔥".into(),
+                ];
+            }
+            "react-picker-empty" => {
+                let chat = SAMPLES[0].id.to_owned();
+                app.reaction_target = Some((chat, "ada-link".into()));
+                app.picker_focus = true;
+                app.settings.recent_emoji.clear();
+            }
+            "react-custom" => {
+                if let Some(row) = app
+                    .conversations
+                    .get_mut(SAMPLES[0].id)
+                    .and_then(|conversation| conversation.message_mut("ada-link"))
+                {
+                    row.reactions.retain(|reaction| !reaction.from_me);
+                    row.reactions.push(crate::model::Reaction {
+                        sender: ME.into(),
+                        from_me: true,
+                        emoji: "🦀".into(),
+                    });
+                }
+            }
+            "react-other" => {
+                let group = SAMPLES[1].id;
+                app.open_chat = Some(group.to_owned());
+                if let Some(chat) = app.chats.iter_mut().find(|chat| chat.id == group) {
+                    chat.unread = 0;
+                }
+                app.scroll_to_bottom = true;
+            }
             other => {
                 if app.chat(other).is_some() {
                     app.open_chat = Some(other.to_owned());
@@ -1334,6 +1391,11 @@ mod tests {
             "recording",
             "gifs",
             "gifs-badkey",
+            "react-menu",
+            "react-picker",
+            "react-picker-empty",
+            "react-custom",
+            "react-other",
         ] {
             let mut app = self::app();
             apply_flags(&mut app, Some(page));
@@ -1655,6 +1717,112 @@ mod tests {
         );
         render(&mut app, &ctx);
         assert!(egui::Popup::is_id_open(&ctx, popup), "and it stays open");
+    }
+
+    #[test]
+    fn a_demo_flag_keeps_the_reaction_menu_open() {
+        let mut app = app();
+        apply_flags(&mut app, Some("react-menu"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let chat = sample_ids()[0].to_owned();
+        let popup = crate::ui::conversation::bubble_id(&chat, "ada-link").with("popup");
+        assert!(
+            egui::Popup::is_id_open(&ctx, popup),
+            "react-menu opens the message context menu"
+        );
+    }
+
+    #[test]
+    fn a_reaction_picker_choice_uses_the_same_react_path() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        apply_flags(&mut app, Some("react-picker"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        assert!(app.reaction_target.is_some());
+
+        let chat = sample_ids()[0].to_owned();
+        let current = app
+            .conversations
+            .get(&chat)
+            .and_then(|conversation| conversation.message("ada-link"))
+            .and_then(crate::ui::conversation::own_reaction);
+        let emoji = crate::ui::conversation::reaction_choice(current, "🦀");
+        assert_eq!(emoji, "🦀");
+        app.actions.push(crate::model::Action::React {
+            chat,
+            message: "ada-link".into(),
+            emoji,
+        });
+        render(&mut app, &ctx);
+        assert!(app.reaction_target.is_none());
+        let commands = app.backend.take_demo_commands();
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            crate::backend::Command::React { emoji, .. } if emoji == "🦀"
+        )));
+    }
+
+    #[test]
+    fn switching_chats_closes_the_reaction_picker() {
+        let mut app = app();
+        apply_flags(&mut app, Some("react-picker"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        assert!(app.reaction_target.is_some());
+        assert_eq!(app.open_chat.as_deref(), Some(sample_ids()[0]));
+
+        app.actions
+            .push(crate::model::Action::OpenChat(sample_ids()[1].into()));
+        render(&mut app, &ctx);
+
+        assert_eq!(app.open_chat.as_deref(), Some(sample_ids()[1]));
+        assert!(
+            app.reaction_target.is_none(),
+            "switching chats must drop the previous reaction target"
+        );
+        assert!(app.reaction_anchor.is_none());
+    }
+
+    #[test]
+    fn picking_the_current_reaction_from_the_picker_clears_it() {
+        let mut app = app();
+        apply_flags(&mut app, Some("react-custom"));
+        let chat = sample_ids()[0].to_owned();
+        let current = app
+            .conversations
+            .get(&chat)
+            .and_then(|conversation| conversation.message("ada-link"))
+            .and_then(crate::ui::conversation::own_reaction);
+        assert_eq!(current, Some("🦀"));
+        assert_eq!(crate::ui::conversation::reaction_choice(current, "🦀"), "");
+        assert_eq!(
+            crate::ui::conversation::reaction_choice(current, "🎉"),
+            "🎉"
+        );
+    }
+
+    #[test]
+    fn another_users_trophy_reaction_is_on_the_group_photo() {
+        let mut app = app();
+        apply_flags(&mut app, Some("react-other"));
+        assert_eq!(app.open_chat.as_deref(), Some(sample_ids()[1]));
+        let photo = app
+            .conversations
+            .get(sample_ids()[1])
+            .and_then(|conversation| conversation.message("group-photo"))
+            .expect("group photo");
+        assert!(
+            photo
+                .reactions
+                .iter()
+                .any(|reaction| !reaction.from_me && reaction.emoji == "🏆"),
+            "Mira's trophy should sit on the group photo"
+        );
     }
 
     #[test]
