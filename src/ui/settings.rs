@@ -120,6 +120,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(ui, app, "Show sender pictures in every chat", "WhatsApp shows them in groups only.", |settings| &mut settings.show_sender_pictures);
                     toggle(ui, app, "Names from your address book", "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app.", |settings| &mut settings.names_from_contacts);
                     toggle(ui, app, "Save contacts to the phone's address book", "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way.", |settings| &mut settings.save_contacts_to_phone);
+                    toggle(ui, app, "Forward messages in order", "Send a forwarded batch one message at a time, starting each one when the message before it shows its first tick. Mixed text, pictures, and videos then arrive in their original order. When off, they send together and may arrive out of order.", |settings| &mut settings.forward_in_order);
                     toggle(ui, app, "Show shortcut hints", "", |settings| &mut settings.show_shortcut_hints);
 
                     section(ui, app, "Window");

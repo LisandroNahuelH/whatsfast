@@ -144,6 +144,8 @@ pub enum Command {
         from_chat: ChatId,
         messages: Vec<String>,
         to_chat: ChatId,
+        /// One at a time, waiting for each message's first tick.
+        in_order: bool,
     },
     /// Copies picked attachments to the Downloads folder.
     SaveMedia {

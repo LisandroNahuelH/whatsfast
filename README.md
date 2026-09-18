@@ -67,7 +67,10 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   are dismissed first. Type `:name` to autocomplete
   an emoji without leaving the composer, or `@` in a group to mention a member.
   Reply, react with any emoji, edit, forward, delete, and check when a message was sent,
-  delivered, or read.
+  delivered, or read. Right-click a message to pick it and then others, and forward,
+  download, or star the batch from the bar below. A forwarded batch leaves one message
+  at a time, so mixed text, pictures, and videos arrive in their original order; turn
+  that off in Settings under Chats.
 - **Disappearing-message timers.** Outgoing messages use the chat's known
   timer, including replies, attachments, edits, and forwards. Forwarded copies
   use the destination chat's timer. Received messages remain in the local archive

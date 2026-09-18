@@ -2438,7 +2438,8 @@ impl Worker {
                 from_chat,
                 messages,
                 to_chat,
-            } => self.forward_messages(from_chat, messages, to_chat),
+                in_order,
+            } => self.forward_messages(from_chat, messages, to_chat, in_order),
             Command::SaveMedia { chat, messages } => self.save_media(chat, messages),
             Command::SetStar {
                 chat,
@@ -3114,11 +3115,19 @@ impl Worker {
 
     /// Forwards archived messages to another chat, oldest first.
     ///
-    /// The sends run one after another: each one starts only once the send
-    /// before it came back, which is what the first tick reports. Firing the
-    /// batch together lets light messages overtake heavy ones, so the pictures
-    /// and videos land after the text that came before them.
-    fn forward_messages(&mut self, from_chat: ChatId, messages: Vec<String>, to_chat: ChatId) {
+    /// With `in_order` the sends run one after another: each one starts only
+    /// once the send before it came back, which is what the first tick
+    /// reports. Firing the batch together lets light messages overtake heavy
+    /// ones, so the pictures and videos land after the text that came before
+    /// them. That is what the setting turns off, for people who would rather
+    /// have the whole batch leave at once.
+    fn forward_messages(
+        &mut self,
+        from_chat: ChatId,
+        messages: Vec<String>,
+        to_chat: ChatId,
+        in_order: bool,
+    ) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&to_chat)) else {
             self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
             return;
@@ -3131,6 +3140,20 @@ impl Worker {
             return;
         }
         let commands = self.commands.clone();
+        if !in_order {
+            for (id, message, expiration) in jobs {
+                tokio::spawn(send_outgoing(
+                    client.clone(),
+                    commands.clone(),
+                    to_chat.clone(),
+                    jid.clone(),
+                    id,
+                    message,
+                    expiration,
+                ));
+            }
+            return;
+        }
         tokio::spawn(async move {
             for (id, message, expiration) in jobs {
                 send_outgoing(

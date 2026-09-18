@@ -1954,6 +1954,7 @@ impl App {
                     from_chat,
                     messages,
                     to_chat,
+                    in_order: self.settings.forward_in_order,
                 });
                 self.dialog = None;
                 self.forward_search.clear();
