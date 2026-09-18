@@ -36,6 +36,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         empty(app, ui);
         return;
     };
+    // A right click anywhere in the chat, away from a bubble or a control,
+    // opens the chat's own menu. Registered before the header, the composer
+    // and the rows so each of those keeps its own clicks.
+    let background = ui.interact(
+        ui.max_rect(),
+        egui::Id::new(("chat-background", &chat.id)),
+        Sense::click(),
+    );
     header(app, ui, &chat);
     if theme::macos_chrome(ui.ctx()) {
         super::banner(app, ui);
@@ -50,6 +58,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         composer(app, ui, &chat);
     }
     messages(app, ui, &chat);
+    let palette = app.palette;
+    chat_menu(ui, &palette, &background, &mut app.actions);
 }
 
 fn empty(app: &mut App, ui: &mut egui::Ui) {
@@ -702,6 +712,53 @@ fn mention_picker(app: &mut App, ui: &mut egui::Ui, chat: &Chat, field: egui::Id
             end,
         });
     }
+}
+
+/// The chat's own menu, for a right click that is not on a bubble.
+fn chat_menu(
+    ui: &egui::Ui,
+    palette: &Palette,
+    background: &egui::Response,
+    actions: &mut Vec<Action>,
+) {
+    // Ignore the click when a floating layer covers the chat panel.
+    let right_clicked = background.secondary_clicked()
+        && ui
+            .input(|input| input.pointer.interact_pos())
+            .is_some_and(|pos| {
+                ui.ctx()
+                    .layer_id_at(pos)
+                    .is_none_or(|layer| layer == background.layer_id)
+            });
+    let open = if right_clicked {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if background.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    let width = widgets::menu_width(ui, &["Select messages", "Select all", "Close chat"], true);
+    egui::Popup::menu(background)
+        .open_memory(open)
+        .width(width)
+        .frame(widgets::menu_frame(palette))
+        .at_pointer_fixed()
+        .show(|ui| {
+            if widgets::menu_item(ui, palette, Some(Icon::SquareCheck), "Select messages") {
+                actions.push(Action::StartSelecting { message: None });
+                ui.close();
+            }
+            if widgets::menu_item(ui, palette, Some(Icon::ListChecks), "Select all") {
+                actions.push(Action::StartSelecting { message: None });
+                actions.push(Action::SelectAllMessages);
+                ui.close();
+            }
+            widgets::menu_separator(ui, palette);
+            if widgets::menu_item(ui, palette, Some(Icon::X), "Close chat") {
+                actions.push(Action::CloseChat);
+                ui.close();
+            }
+        });
 }
 
 /// Replaces the composer while messages are picked: what to do with them.
@@ -2436,7 +2493,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
     widgets::menu_separator(ui, &palette);
     if widgets::menu_item(ui, &palette, Some(Icon::SquareCheck), "Select messages") {
         actions.push(Action::StartSelecting {
-            message: message.id.clone(),
+            message: Some(message.id.clone()),
         });
         ui.close();
     }
