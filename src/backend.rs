@@ -185,8 +185,11 @@ pub enum Command {
         messages: Vec<String>,
         starred: bool,
     },
+    /// Asks for the starred messages.
+    LoadStarred,
     /// Result of a star or unstar request.
     Starred {
+        chat: ChatId,
         message: String,
         starred: bool,
         result: Result<(), String>,
@@ -572,6 +575,19 @@ pub enum Event {
     },
     /// The scheduled messages, soonest first.
     Scheduled(Vec<crate::archive::Scheduled>),
+    /// The starred messages of one chat, for the mark in the conversation.
+    Stars {
+        chat: ChatId,
+        ids: Vec<String>,
+    },
+    /// A star the server accepted, or refused, for one message.
+    StarChanged {
+        chat: ChatId,
+        message: String,
+        starred: bool,
+    },
+    /// The starred messages, newest star first.
+    StarredList(Vec<crate::archive::Starred>),
     /// A newer release than this build exists.
     UpdateAvailable {
         version: String,

@@ -628,6 +628,8 @@ pub enum Action {
     },
     /// Switches the left panel to the scheduled list, or back to the chats.
     ToggleScheduled,
+    /// Shows or hides the starred messages in the left panel.
+    ToggleStarred,
     /// Removes a scheduled message.
     CancelScheduled {
         id: String,

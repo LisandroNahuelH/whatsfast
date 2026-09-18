@@ -52,6 +52,8 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
             actions.push(Action::ClearSelection);
         } else if app.show_scheduled {
             actions.push(Action::ToggleScheduled);
+        } else if app.show_starred {
+            actions.push(Action::ToggleStarred);
         } else if app.recording.is_some() {
             actions.push(Action::CancelRecording);
         } else if app.picker.is_some() || app.reaction_target.is_some() {

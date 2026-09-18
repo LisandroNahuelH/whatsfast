@@ -1003,6 +1003,53 @@ mod tests {
     }
 
     #[test]
+    fn the_starred_list_shows_the_message_and_the_mark() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let message = app.conversations[&chat]
+            .messages
+            .first()
+            .expect("the chat has messages")
+            .id
+            .clone();
+        // The star reaches the open chat: this is what the footer paints from.
+        app.stars
+            .insert(chat.clone(), [message.clone()].into_iter().collect());
+        app.show_starred = true;
+        app.starred = vec![crate::archive::Starred {
+            chat: chat.clone(),
+            id: message.clone(),
+            starred_at: crate::util::now(),
+            text: "See you at nine".to_owned(),
+        }];
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let texts: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.iter().any(|text| text == "Starred"),
+            "the header names the panel"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("See you at nine")),
+            "the row shows the starred message itself"
+        );
+        assert!(
+            app.stars[&chat].contains(&message),
+            "the open chat knows which messages are starred"
+        );
+    }
+
+    #[test]
     fn the_scheduled_list_shows_the_message() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

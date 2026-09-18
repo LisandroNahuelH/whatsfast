@@ -81,6 +81,20 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(20.0), palette.text);
+                } else if app.show_starred {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
+                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     let me = app.me.clone().unwrap_or_default();
                     let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
@@ -116,6 +130,22 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                     .clicked()
                     {
                         app.actions.push(Action::ToggleScheduled);
+                    }
+                    if theme::icon_button(
+                        ui,
+                        Icon::Star,
+                        18.0,
+                        if app.show_starred {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        "Starred messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
                     }
                     if theme::icon_button(
                         ui,
@@ -212,10 +242,40 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(16.0), palette.text);
+                } else if app.show_starred {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
+                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     theme::text(ui, "Chats", theme::bold(20.0), palette.text);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if theme::icon_button(
+                        ui,
+                        Icon::Star,
+                        18.0,
+                        if app.show_starred {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        "Starred messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
                     if theme::icon_button(
                         ui,
                         Icon::SquarePen,
@@ -409,10 +469,90 @@ fn when_label(instant: i64) -> String {
         .unwrap_or_default()
 }
 
+/// The starred messages, in the place the chat list usually takes. Newest
+/// star first, each row naming the chat, the moment, and the message.
+fn starred_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let entries: Vec<crate::archive::Starred> = app.starred.clone();
+    if entries.is_empty() {
+        widgets::empty_state(
+            ui,
+            &palette,
+            Icon::Star,
+            "No starred messages",
+            "Pick messages in a chat and press Star to keep them here.",
+        );
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for entry in &entries {
+                starred_row(app, ui, &palette, entry);
+            }
+        });
+}
+
+/// One starred message. Clicking opens its chat at it.
+fn starred_row(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    entry: &crate::archive::Starred,
+) {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 6.0, palette.surface_hover.gamma_multiply(0.5));
+    }
+    let name = app.display_name_or(&entry.chat, None);
+    let when = when_label(entry.starred_at);
+    let top = rect.top();
+    // First line: where the message is, with the moment it was starred.
+    ui.painter().text(
+        pos2(rect.left() + 16.0, top + 20.0),
+        egui::Align2::LEFT_CENTER,
+        name,
+        theme::medium(14.0),
+        palette.text,
+    );
+    ui.painter().text(
+        pos2(rect.right() - 16.0, top + 20.0),
+        egui::Align2::RIGHT_CENTER,
+        when,
+        theme::regular(11.5),
+        palette.secondary,
+    );
+    // Second line: the message itself.
+    ui.painter().text(
+        pos2(rect.left() + 16.0, top + 46.0),
+        egui::Align2::LEFT_CENTER,
+        preview(&entry.text),
+        theme::regular(12.5),
+        palette.secondary,
+    );
+    if response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        app.actions.push(Action::OpenMessage {
+            chat: entry.chat.clone(),
+            message: entry.id.clone(),
+        });
+    }
+}
+
 fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     if app.show_scheduled {
         scheduled_list(app, ui);
+        return;
+    }
+    if app.show_starred {
+        starred_list(app, ui);
         return;
     }
     if !app.search.trim().is_empty() {

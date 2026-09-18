@@ -802,11 +802,24 @@ fn selection_bar(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
-                    if bar_button(ui, &palette, Icon::Star, "Star").clicked() {
+                    // The same button adds and removes: it only removes when
+                    // every picked message is already starred.
+                    let removing = app
+                        .stars
+                        .get(&chat.id)
+                        .is_some_and(|ids| unstars(&picked, ids));
+                    if bar_button(
+                        ui,
+                        &palette,
+                        Icon::Star,
+                        if removing { "Unstar" } else { "Star" },
+                    )
+                    .clicked()
+                    {
                         app.actions.push(Action::StarSelected {
                             chat: chat.id.clone(),
                             messages: picked.clone(),
-                            starred: true,
+                            starred: !removing,
                         });
                     }
                     if bar_button(ui, &palette, Icon::Download, "Download").clicked() {
@@ -874,6 +887,12 @@ fn bar_button(ui: &mut egui::Ui, palette: &Palette, icon: Icon, label: &str) -> 
         );
     }
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Whether the star button should take the stars away: only when there is
+/// something picked and every picked message is already starred.
+fn unstars(picked: &[String], starred: &HashSet<String>) -> bool {
+    !picked.is_empty() && picked.iter().all(|id| starred.contains(id))
 }
 
 /// The wash a row gets while messages are being picked: its own tint when it
@@ -1400,6 +1419,8 @@ struct View<'a> {
     open_menu: Option<&'a str>,
     /// Ids of the picked messages while the selection bar is up.
     selecting: Option<&'a HashSet<String>>,
+    /// Ids of the starred messages of this chat, for the mark in the footer.
+    starred: Option<&'a HashSet<String>>,
     /// Resolves a name with the message's stored name as fallback.
     names_or: &'a dyn Fn(&str, Option<&str>) -> String,
     /// Resolves mention names without replacing our name with "You".
@@ -1451,6 +1472,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             .as_ref()
             .filter(|selecting| selecting.chat == chat.id)
             .map(|selecting| &selecting.ids),
+        starred: app.stars.get(&chat.id),
         names_or: &names_or,
         mention_names: &mention_names,
         avatars: &avatars,
@@ -2120,7 +2142,13 @@ fn bubble_frame(
                 }
                 None => content(ui, view, message, cap, reserve, actions),
             };
-            footer(ui, &palette, message, slot);
+            footer(
+                ui,
+                &palette,
+                message,
+                slot,
+                view.starred.is_some_and(|ids| ids.contains(&message.id)),
+            );
         });
     ui.ctx()
         .data_mut(|data| data.insert_temp(rect_id, inner.response.rect));
@@ -2331,6 +2359,10 @@ fn mirrored_row(
     });
 }
 
+/// Room the footer keeps for the star mark, so a starred message does not
+/// change the bubble's width when the star appears.
+const STAR_MARK: f32 = 16.0;
+
 /// Width of the message footer.
 fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     let font = theme::regular(11.0);
@@ -2352,11 +2384,17 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 }
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + STAR_MARK
 }
 
 /// Paints the time and ticks at the bubble's right edge without widening it.
-fn footer(ui: &mut egui::Ui, palette: &Palette, message: &Message, slot: Option<Rect>) {
+fn footer(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    message: &Message,
+    slot: Option<Rect>,
+    starred: bool,
+) {
     let font = theme::regular(11.0);
     let time = ui.painter().layout_no_wrap(
         crate::util::clock(message.timestamp),
@@ -2396,6 +2434,21 @@ fn footer(ui: &mut egui::Ui, palette: &Palette, message: &Message, slot: Option<
             pos2(x, rect.center().y - edited.size().y / 2.0),
             edited,
             palette.dim,
+        );
+    }
+    if starred {
+        // A passive mark, left of the time. The footer already reserved its
+        // room, so showing it never changes the bubble's width.
+        x -= STAR_MARK;
+        theme::paint_icon(
+            ui,
+            Icon::Star,
+            Rect::from_center_size(
+                pos2(x + STAR_MARK / 2.0, rect.center().y),
+                Vec2::splat(13.0),
+            ),
+            13.0,
+            palette.secondary,
         );
     }
 }
@@ -3985,6 +4038,53 @@ mod tests {
         assert!(unknown.x > unknown.y);
         let tiny = frame_size(&media(Some(40), Some(40)), None, 340.0);
         assert!(tiny.x >= 120.0);
+    }
+
+    #[test]
+    fn the_star_button_removes_only_when_every_pick_is_starred() {
+        let starred: HashSet<String> = ["a".to_owned(), "b".to_owned()].into_iter().collect();
+        let picked = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>();
+        assert!(
+            unstars(&picked(&["a"]), &starred),
+            "picking only starred messages means the button removes them"
+        );
+        assert!(
+            !unstars(&picked(&["a", "c"]), &starred),
+            "one unstarred message means the button adds"
+        );
+        assert!(unstars(&picked(&["a", "b"]), &starred));
+        assert!(
+            !unstars(&picked(&[]), &starred),
+            "nothing picked does nothing"
+        );
+    }
+
+    #[test]
+    fn the_footer_reserves_room_for_the_star_mark() {
+        let ctx = egui::Context::default();
+        let mut incoming = 0.0;
+        let mut own = 0.0;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 200.0))),
+                ..Default::default()
+            },
+            |ui| {
+                let from_them = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
+                let from_me = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, true);
+                incoming = footer_width(ui, &from_them);
+                own = footer_width(ui, &from_me);
+            },
+        );
+        output.textures_delta.clear();
+        assert!(
+            incoming >= STAR_MARK,
+            "the footer keeps room for the star mark before a message is starred"
+        );
+        assert!(
+            own > incoming,
+            "our own messages also keep room for the delivery ticks"
+        );
     }
 
     #[test]
