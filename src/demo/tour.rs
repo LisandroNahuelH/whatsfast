@@ -959,6 +959,58 @@ mod tests {
     }
 
     #[test]
+    fn the_pick_circle_sits_on_the_middle_of_the_row() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        // One frame registers the rows, the next paints their circles.
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let row_id = |message: &str| egui::Id::new(("message-row", chat.as_str(), message));
+        let message = app.conversations[&chat]
+            .messages
+            .iter()
+            .find(|message| {
+                ctx.data(|data| data.get_temp::<(Rect, bool)>(row_id(&message.id)).is_some())
+            })
+            .expect("a row registered its rect")
+            .id
+            .clone();
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let (row, _) = ctx
+            .data(|data| data.get_temp::<(Rect, bool)>(row_id(&message)))
+            .expect("the row kept its rect");
+        let inside: Vec<Pos2> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Circle(circle) if (9.0..12.0).contains(&circle.radius) => {
+                    Some(circle.center)
+                }
+                _ => None,
+            })
+            .filter(|center| row.contains(*center))
+            .collect();
+        assert_eq!(inside.len(), 1, "the row draws one pick circle");
+        let center = inside[0];
+        assert!(
+            (center.y - row.center().y).abs() < 2.0,
+            "the pick circle sits on the row's middle line, not at its top"
+        );
+        let margin = (center.x - row.left()).min(row.right() - center.x);
+        assert!(
+            margin >= 14.0,
+            "the circle keeps a margin from the row's edge, inside its highlight"
+        );
+    }
+
+    #[test]
     fn a_picked_row_keeps_its_highlight() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

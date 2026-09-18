@@ -28,6 +28,9 @@ const SENDER_AVATAR: f32 = 28.0;
 const BODY_SIZE: f32 = 14.5;
 /// Room the composer field keeps for the schedule clock at its right edge.
 const CLOCK_ROOM: f32 = 26.0;
+/// How far the pick circle sits from the row's edge, so it reads inside the
+/// row's highlight instead of on its border.
+const PICK_INSET: f32 = 18.0;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let Some(chat) = app.current_chat().cloned() else {
@@ -914,14 +917,15 @@ fn row_wash(palette: &Palette, picked: bool, hovered: bool) -> Option<egui::Colo
 }
 
 /// The pick circle selection mode draws beside a message's row: left of our
-/// own rows, right of the received ones, so it never covers the bubble.
+/// own rows, right of the received ones, so it never covers the bubble. It
+/// sits on the row's middle line, with a margin from the edge.
 fn paint_pick(ui: &egui::Ui, palette: &Palette, row: Rect, own: bool, picked: bool) {
     let x = if own {
-        row.left() + 11.0
+        row.left() + PICK_INSET
     } else {
-        row.right() - 11.0
+        row.right() - PICK_INSET
     };
-    let center = pos2(x, row.top() + 18.0);
+    let center = pos2(x, row.center().y);
     if picked {
         ui.painter().circle_filled(center, 11.0, palette.accent);
         theme::paint_icon(
