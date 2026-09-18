@@ -780,4 +780,180 @@ mod tests {
                 .all(|row| !row.id.starts_with("tour-"))
         );
     }
+
+    /// Runs one frame with the given pointer events.
+    fn step(app: &mut App, ctx: &egui::Context, events: Vec<Event>, at: f32) {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            time: Some(at as f64),
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            app.background_frame(ctx);
+            app.frame_ui(ui);
+        });
+        output.textures_delta.clear();
+    }
+
+    /// A press and its release, the shape the tour uses for a click.
+    fn click_events(pos: Pos2, button: PointerButton) -> Vec<Event> {
+        [true, false]
+            .into_iter()
+            .map(|pressed| Event::PointerButton {
+                pos,
+                button,
+                pressed,
+                modifiers: Modifiers::NONE,
+            })
+            .collect()
+    }
+
+    /// Runs one frame and hands back its output, for shape checks.
+    fn step_output(
+        app: &mut App,
+        ctx: &egui::Context,
+        events: Vec<Event>,
+        at: f32,
+        focused: bool,
+    ) -> egui::FullOutput {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            time: Some(at as f64),
+            focused,
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            app.background_frame(ctx);
+            app.frame_ui(ui);
+        });
+        output.textures_delta.clear();
+        output
+    }
+
+    /// Whether the composer's caret is painted in the composer's band.
+    fn caret_in(output: &egui::FullOutput, app: &App) -> bool {
+        output.shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::LineSegment { points, stroke }
+                if stroke.width >= 1.5
+                    && stroke.color == app.palette.accent
+                    && points[0].y > 700.0
+                    && points[1].y > 700.0)
+        })
+    }
+
+    #[test]
+    fn the_composer_shows_its_caret_while_the_window_has_focus() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        // egui hides a text field's caret when the raw input says the window
+        // lost focus, and eframe's native backends never set that flag, which
+        // is why the composer had no caret. Shell::raw_input_hook now mirrors
+        // the viewport's real focus into it.
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("composer-text")));
+        let focused = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        assert!(
+            ctx.memory(|memory| memory.has_focus(egui::Id::new("composer-text"))),
+            "the composer takes focus"
+        );
+        assert!(
+            caret_in(&focused, &app),
+            "the caret is painted in the composer while the window has focus"
+        );
+        let unfocused = step_output(&mut app, &ctx, Vec::new(), 0.2, false);
+        assert!(
+            !caret_in(&unfocused, &app),
+            "a window without focus keeps the caret hidden"
+        );
+    }
+
+    #[test]
+    fn a_click_on_a_row_picks_its_message() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step(&mut app, &ctx, Vec::new(), 0.0);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        step(&mut app, &ctx, Vec::new(), 0.1);
+        // A row that is on screen; the chat is scrolled to its end.
+        let (first, row) = app.conversations[&chat]
+            .messages
+            .iter()
+            .filter_map(|message| {
+                let id = egui::Id::new(("message-row", chat.as_str(), message.id.as_str()));
+                ctx.data(|data| data.get_temp::<(Rect, bool)>(id))
+                    .map(|(rect, _)| (message.id.clone(), rect))
+            })
+            .find(|(_, rect)| {
+                rect.height() > 0.0 && rect.center().y > 60.0 && rect.center().y < 700.0
+            })
+            .expect("a row is on screen");
+        step(
+            &mut app,
+            &ctx,
+            click_events(row.center(), PointerButton::Primary),
+            0.2,
+        );
+        step(&mut app, &ctx, Vec::new(), 0.3);
+        assert!(
+            app.selecting
+                .as_ref()
+                .is_some_and(|selecting| selecting.ids.contains(&first)),
+            "a click anywhere on the row picks its message"
+        );
+        step(
+            &mut app,
+            &ctx,
+            click_events(row.center(), PointerButton::Primary),
+            0.4,
+        );
+        step(&mut app, &ctx, Vec::new(), 0.5);
+        assert!(
+            app.selecting.is_none(),
+            "unpicking the last message leaves the mode"
+        );
+    }
+
+    #[test]
+    fn a_right_click_away_from_a_bubble_opens_the_chat_menu() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step(&mut app, &ctx, Vec::new(), 0.0);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let (_, bubble) = app.conversations[&chat]
+            .messages
+            .iter()
+            .filter(|message| message.from_me)
+            .filter_map(|message| {
+                let id = crate::ui::conversation::bubble_id(&chat, &message.id).with("rect");
+                ctx.data(|data| data.get_temp::<Rect>(id))
+                    .map(|rect| (message.id.clone(), rect))
+            })
+            .find(|(_, rect)| rect.center().y > 60.0 && rect.center().y < 700.0)
+            .expect("a bubble of ours is on screen");
+        // The space left of our own bubble belongs to the chat, not to a row.
+        let pos = pos2(bubble.left() - 24.0, bubble.center().y);
+        step(
+            &mut app,
+            &ctx,
+            click_events(pos, PointerButton::Secondary),
+            0.1,
+        );
+        step(&mut app, &ctx, Vec::new(), 0.2);
+        assert!(
+            egui::Popup::is_any_open(&ctx),
+            "a right click away from a bubble opens the chat menu"
+        );
+    }
 }
