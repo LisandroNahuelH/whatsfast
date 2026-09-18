@@ -216,6 +216,7 @@ pub async fn run(
         star_batch: None,
         save_dialog_open: false,
         forward_batch: None,
+        scheduled_seq: 0,
         read_sync: ReadSync::default(),
         poll_decrypting: 0,
         poll_history: Default::default(),
@@ -224,6 +225,8 @@ pub async fn run(
     worker.load_state();
     worker.backfill();
     worker.relocate_media();
+    // Anything the clock passed while the app was closed goes out now.
+    worker.pump_scheduled(true);
     worker.start_bot().await;
     let mut wa_events = wa_events;
     let mut tick = tokio::time::interval(Duration::from_secs(5));
@@ -254,6 +257,7 @@ pub async fn run(
                 worker.pump_read_sync();
                 worker.pump_poll_votes();
                 worker.pump_poll_history();
+                worker.pump_scheduled(false);
             }
         }
     }
@@ -315,6 +319,8 @@ struct Worker {
     save_dialog_open: bool,
     /// Ids of a parallel forward batch, for its progress count.
     forward_batch: Option<(HashSet<String>, usize)>,
+    /// Counter that keeps scheduled ids unique within a run.
+    scheduled_seq: u64,
 }
 
 /// Decoded history chunk waiting to be canonicalized and archived.
@@ -1068,6 +1074,8 @@ impl Worker {
                 self.set_status(LinkStatus::Connected);
                 self.refresh_legacy_preferences();
                 self.retry_avatars();
+                // The link came back: send what is due.
+                self.pump_scheduled(false);
                 self.pump_read_sync();
                 self.poll_history.reconnect(Instant::now());
                 let _ = self.archive.retry_poll_votes();
@@ -2445,7 +2453,9 @@ impl Worker {
                 text,
                 quoting,
                 mentions,
-            } => self.send_text(chat, text, quoting, mentions),
+            } => {
+                self.send_text(chat, text, quoting, mentions);
+            }
             Command::Forward {
                 from_chat,
                 messages,
@@ -2462,6 +2472,29 @@ impl Worker {
                 targets,
                 cancelled,
             } => self.finish_save_targets(chat, targets, cancelled),
+            Command::ScheduleMessage {
+                chat,
+                text,
+                kind,
+                hour,
+                minute,
+                weekday,
+                day_of_month,
+                nth,
+                next_at,
+            } => self.schedule_message(
+                chat,
+                text,
+                kind,
+                hour,
+                minute,
+                weekday,
+                day_of_month,
+                nth,
+                next_at,
+            ),
+            Command::LoadScheduled => self.emit_scheduled(),
+            Command::CancelScheduled { id } => self.cancel_scheduled(id),
             Command::SetStar {
                 chat,
                 messages,
@@ -2995,6 +3028,12 @@ impl Worker {
                     .set_status(&chat, &id, status, crate::util::now());
                 self.emit_message(&chat, &id);
                 self.emit_chat(&chat);
+                // A scheduled send ends its occurrence here: a one-off is done,
+                // a recurrence waits for its next time.
+                if let Ok(Some(entry)) = self.archive.scheduled_for_message(&chat, &id) {
+                    let error = error.as_ref().map(|text| text.clone());
+                    self.close_scheduled(&entry, error, crate::util::now());
+                }
                 if let Some(error) = error {
                     self.emit(Event::Error(format!("Message not sent: {error}")));
                 }
@@ -3106,16 +3145,144 @@ impl Worker {
         }
     }
 
+    /// Stores a scheduled message the user picked a time for.
+    fn schedule_message(
+        &mut self,
+        chat: ChatId,
+        text: String,
+        kind: String,
+        hour: i8,
+        minute: i8,
+        weekday: Option<i8>,
+        day_of_month: Option<i8>,
+        nth: Option<i8>,
+        next_at: i64,
+    ) {
+        let now = crate::util::now();
+        self.scheduled_seq += 1;
+        let entry = crate::archive::Scheduled {
+            id: format!("sched-{now}-{}", self.scheduled_seq),
+            chat,
+            text,
+            kind,
+            hour,
+            minute,
+            weekday,
+            day_of_month,
+            nth,
+            next_at,
+            state: "pending".to_owned(),
+            message_id: None,
+            last_error: None,
+            created_at: now,
+            last_fired_at: None,
+        };
+        if let Err(error) = self.archive.insert_scheduled(&entry) {
+            self.emit(Event::Error(error.to_string()));
+            return;
+        }
+        self.emit(Event::Info("Message scheduled".to_owned()));
+        self.emit_scheduled();
+    }
+
+    /// Hands the scheduled list to the interface.
+    fn emit_scheduled(&mut self) {
+        match self.archive.scheduled() {
+            Ok(list) => self.emit(Event::Scheduled(list)),
+            Err(error) => self.emit(Event::Error(error.to_string())),
+        }
+    }
+
+    fn cancel_scheduled(&mut self, id: String) {
+        if let Err(error) = self.archive.delete_scheduled(&id) {
+            self.emit(Event::Error(error.to_string()));
+        }
+        self.emit_scheduled();
+    }
+
+    /// Fires the scheduled messages whose time has come, and closes the ones an
+    /// earlier run left mid-send.
+    fn pump_scheduled(&mut self, at_startup: bool) {
+        let now = crate::util::now();
+        // At startup nothing is in flight, so every 'sending' row is from a
+        // run that died; later, only the ones stuck for minutes.
+        let stale_before = if at_startup { now } else { now - STALE_SENDING };
+        match self.archive.stale_scheduled(stale_before) {
+            Ok(stale) => {
+                for entry in stale {
+                    self.close_scheduled(&entry, Some("unconfirmed".to_owned()), now);
+                }
+            }
+            Err(error) => log::warn!("could not read stale scheduled messages: {error}"),
+        }
+        if !matches!(self.status, LinkStatus::Connected) {
+            // Nothing can go out without the link; the next tick tries again.
+            return;
+        }
+        match self.archive.due_scheduled(now) {
+            Ok(due) => {
+                for entry in due {
+                    self.fire_scheduled(entry, now);
+                }
+            }
+            Err(error) => log::warn!("could not read due scheduled messages: {error}"),
+        }
+    }
+
+    /// Sends one occurrence, claiming it first so two paths can never send it.
+    fn fire_scheduled(&mut self, entry: crate::archive::Scheduled, now: i64) {
+        if !self
+            .archive
+            .claim_scheduled(&entry.id, now)
+            .unwrap_or(false)
+        {
+            return;
+        }
+        let sent = self.send_text(entry.chat.clone(), entry.text.clone(), None, Vec::new());
+        let Some(id) = sent else {
+            // The link went away between the check and the send: put the
+            // occurrence back and try again on the next tick.
+            let _ = self.archive.release_scheduled(&entry.id);
+            return;
+        };
+        if let Err(error) = self.archive.set_scheduled_message_id(&entry.id, &id) {
+            log::warn!("could not record the scheduled message id: {error}");
+        }
+    }
+
+    /// Ends an occurrence the way its kind asks for.
+    fn close_scheduled(
+        &mut self,
+        entry: &crate::archive::Scheduled,
+        error: Option<String>,
+        now: i64,
+    ) {
+        let next = next_occurrence(entry, now);
+        let outcome = match error {
+            None => crate::archive::ScheduledOutcome::Sent { next_at: next },
+            Some(error) => crate::archive::ScheduledOutcome::Failed {
+                next_at: next,
+                error,
+            },
+        };
+        if let Err(failure) = self.archive.finish_scheduled(&entry.id, now, outcome) {
+            log::warn!("could not close a scheduled message: {failure}");
+        }
+        self.emit_scheduled();
+    }
+
+    /// Sends a text now. Returns the outgoing message id, or `None` when there
+    /// is no client to send it with.
     fn send_text(
         &mut self,
         chat: ChatId,
         text: String,
         quoting: Option<String>,
         mentions: Vec<String>,
-    ) {
+    ) -> Option<String> {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
             self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
-            return;
+            return None;
         };
         let mut quoted_row = None;
         let context = quoting.as_deref().and_then(|id| {
@@ -3173,10 +3340,11 @@ impl Worker {
             self.commands.clone(),
             chat,
             jid,
-            id,
+            id.clone(),
             message,
             expiration,
         ));
+        Some(id)
     }
 
     /// Forwards archived messages to another chat, oldest first.
@@ -4778,6 +4946,17 @@ fn extension_for(mime: &str, file_name: Option<&str>) -> String {
     .to_owned()
 }
 
+/// A send left in flight this long is treated as lost, not as running.
+const STALE_SENDING: i64 = 300;
+
+/// The next occurrence of a stored entry, strictly after `now`. `None` closes
+/// a one-off.
+fn next_occurrence(entry: &crate::archive::Scheduled, now: i64) -> Option<i64> {
+    let recurrence =
+        crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)?;
+    crate::schedule::next_after(recurrence, entry.hour, entry.minute, now)
+}
+
 fn media_path(dir: &Path, chat: &str, id: &str, mime: &str, file_name: Option<&str>) -> PathBuf {
     let extension = extension_for(mime, file_name);
     let stem = match file_name.and_then(|name| Path::new(name).file_stem()?.to_str()) {
@@ -6317,6 +6496,7 @@ mod receipt_tests {
             star_batch: None,
             save_dialog_open: false,
             forward_batch: None,
+            scheduled_seq: 0,
             read_sync: ReadSync::default(),
             poll_decrypting: 0,
             poll_history: Default::default(),

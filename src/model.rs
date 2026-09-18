@@ -506,6 +506,8 @@ pub enum Dialog {
         messages: Vec<String>,
     },
     CreatePoll(ChatId),
+    /// Picks when the composer's text is sent, and whether it repeats.
+    ScheduleMessage(ChatId),
 }
 
 /// Messages picked in one chat while the selection bar is up.
@@ -611,6 +613,24 @@ pub enum Action {
     /// Enters multi-message selection, picking this message when there is one.
     StartSelecting {
         message: Option<String>,
+    },
+    /// Sends the composer's text now, without waiting for Enter.
+    ScheduleText {
+        chat: ChatId,
+        text: String,
+        kind: String,
+        hour: i8,
+        minute: i8,
+        weekday: Option<i8>,
+        day_of_month: Option<i8>,
+        nth: Option<i8>,
+        next_at: i64,
+    },
+    /// Switches the left panel to the scheduled list, or back to the chats.
+    ToggleScheduled,
+    /// Removes a scheduled message.
+    CancelScheduled {
+        id: String,
     },
     /// Adds or removes a message from the open selection.
     ToggleSelected {

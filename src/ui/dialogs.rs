@@ -35,10 +35,12 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ChatInfo(_) => 360.0,
                 Dialog::Forward { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
+                Dialog::ScheduleMessage(_) => 520.0,
             });
             ui.spacing_mut().item_spacing.y = 8.0;
             match dialog {
                 Dialog::CreatePoll(chat) => super::polls::create(app, ui, &chat),
+                Dialog::ScheduleMessage(chat) => super::schedule::show(app, ui, &chat),
                 Dialog::Shortcuts => shortcuts(app, ui),
                 Dialog::About => about(app, ui),
                 Dialog::ConfirmUnlink => confirm_unlink(app, ui),
@@ -172,7 +174,7 @@ fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, messages: &[String
     }
 }
 
-fn title(ui: &mut egui::Ui, app: &mut App, label: &str) {
+pub(crate) fn title(ui: &mut egui::Ui, app: &mut App, label: &str) {
     let palette = app.palette;
     ui.horizontal(|ui| {
         theme::text(ui, label, theme::bold(18.0), palette.text);

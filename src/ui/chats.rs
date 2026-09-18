@@ -1,6 +1,6 @@
 //! The left panel: the chat list.
 
-use egui::{Align, Frame, Layout, Margin, Rect, Sense, Vec2, pos2, vec2};
+use egui::{Align, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
 
 use crate::app::App;
 use crate::model::{Action, Chat, Contact, Dialog, Message, Page};
@@ -53,7 +53,21 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
         })
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                if app.show_archived {
+                if app.show_scheduled {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
+                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                } else if app.show_archived {
                     if theme::icon_button(
                         ui,
                         Icon::ArrowLeft,
@@ -87,6 +101,22 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                     theme::text(ui, "Chats", theme::bold(20.0), palette.text);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if theme::icon_button(
+                        ui,
+                        Icon::Clock,
+                        18.0,
+                        if app.show_scheduled {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        "Scheduled messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
                     if theme::icon_button(
                         ui,
                         Icon::Settings,
@@ -154,7 +184,21 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.set_min_height(44.0);
                 ui.add_space((inset - 14.0).max(0.0));
-                if app.show_archived {
+                if app.show_scheduled {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
+                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                } else if app.show_archived {
                     if theme::icon_button(
                         ui,
                         Icon::ArrowLeft,
@@ -218,8 +262,133 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
+/// The scheduled messages, in the place the chat list usually takes.
+fn scheduled_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let entries: Vec<crate::archive::Scheduled> = app.scheduled.clone();
+    if entries.is_empty() {
+        widgets::empty_state(
+            ui,
+            &palette,
+            Icon::Clock,
+            "No scheduled messages",
+            "Write a message and pick a time with the clock beside the composer.",
+        );
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for entry in &entries {
+                scheduled_row(app, ui, &palette, entry);
+            }
+        });
+}
+
+/// One scheduled message: where it goes, when, how it repeats, and a way to
+/// drop it.
+fn scheduled_row(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    entry: &crate::archive::Scheduled,
+) {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 62.0), Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 0.0, palette.surface_hover);
+    }
+    let failed = entry.state == "failed";
+    theme::paint_icon(
+        ui,
+        Icon::Clock,
+        egui::Rect::from_center_size(pos2(rect.left() + 30.0, rect.center().y), Vec2::splat(22.0)),
+        22.0,
+        if failed {
+            palette.danger
+        } else {
+            palette.accent
+        },
+    );
+    let name = app.display_name_or(&entry.chat, None);
+    let rule =
+        crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)
+            .map(|rule| rule.label())
+            .unwrap_or_else(|| "Once".to_owned());
+    let mut detail = format!("{} · {rule}", when_label(entry.next_at));
+    if let Some(error) = &entry.last_error {
+        detail.push_str(&format!(" · {error}"));
+    }
+    ui.painter().text(
+        pos2(rect.left() + 56.0, rect.center().y - 9.0),
+        egui::Align2::LEFT_CENTER,
+        name,
+        theme::medium(14.5),
+        palette.text,
+    );
+    ui.painter().text(
+        pos2(rect.left() + 56.0, rect.center().y + 9.0),
+        egui::Align2::LEFT_CENTER,
+        detail,
+        theme::regular(12.0),
+        palette.secondary,
+    );
+    let close = egui::Rect::from_center_size(
+        pos2(rect.right() - 24.0, rect.center().y),
+        Vec2::splat(26.0),
+    );
+    let cancel = ui.interact(
+        close,
+        egui::Id::new(("cancel-scheduled", entry.id.as_str())),
+        Sense::click(),
+    );
+    if cancel.hovered() {
+        ui.painter()
+            .circle_filled(close.center(), 13.0, palette.surface_active);
+    }
+    theme::paint_icon(
+        ui,
+        Icon::X,
+        close,
+        15.0,
+        if cancel.hovered() {
+            palette.text
+        } else {
+            palette.secondary
+        },
+    );
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        Stroke::new(1.0, palette.outline),
+    );
+    if cancel
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        app.actions.push(Action::CancelScheduled {
+            id: entry.id.clone(),
+        });
+    }
+}
+
+/// "Fri 18 Sep, 21:00" in the machine's time zone.
+fn when_label(instant: i64) -> String {
+    jiff::Timestamp::from_second(instant)
+        .ok()
+        .map(|moment| moment.to_zoned(jiff::tz::TimeZone::system()))
+        .map(|moment| moment.strftime("%a %d %b, %H:%M").to_string())
+        .unwrap_or_default()
+}
+
 fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
+    if app.show_scheduled {
+        scheduled_list(app, ui);
+        return;
+    }
     if !app.search.trim().is_empty() {
         results(app, ui);
         return;

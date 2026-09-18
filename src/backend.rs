@@ -160,6 +160,25 @@ pub enum Command {
         targets: Vec<(String, PathBuf)>,
         cancelled: bool,
     },
+    /// Stores a scheduled message.
+    ScheduleMessage {
+        chat: ChatId,
+        text: String,
+        kind: String,
+        hour: i8,
+        minute: i8,
+        weekday: Option<i8>,
+        day_of_month: Option<i8>,
+        nth: Option<i8>,
+        /// Unix seconds of the first attempt.
+        next_at: i64,
+    },
+    /// Asks for the scheduled list.
+    LoadScheduled,
+    /// Removes a scheduled message.
+    CancelScheduled {
+        id: String,
+    },
     /// Stars or unstars archived messages.
     SetStar {
         chat: ChatId,
@@ -551,6 +570,8 @@ pub enum Event {
         message: String,
         finished: bool,
     },
+    /// The scheduled messages, soonest first.
+    Scheduled(Vec<crate::archive::Scheduled>),
     /// A newer release than this build exists.
     UpdateAvailable {
         version: String,

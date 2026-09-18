@@ -180,6 +180,15 @@ pub struct App {
     pub open_message_menu: Option<String>,
     /// Messages picked while the selection bar is up.
     pub selecting: Option<crate::model::Selecting>,
+    /// Scheduled messages, soonest first, and whether the left panel lists them.
+    pub scheduled: Vec<crate::archive::Scheduled>,
+    pub show_scheduled: bool,
+    /// Draft of the schedule dialog: the day, the month shown, and the time.
+    pub schedule_day: jiff::civil::Date,
+    pub schedule_month: jiff::civil::Date,
+    pub schedule_hour: i8,
+    pub schedule_minute: i8,
+    pub schedule_repeat: crate::schedule::Repeat,
     /// Emoji-grid header to scroll into view.
     pub emoji_jump: Option<&'static str>,
     /// Attachments pending in the composer.
@@ -346,6 +355,7 @@ impl App {
                 _ => Palette::dark(),
             });
         let open_chat = settings.last_chat.clone();
+        let today = jiff::Zoned::now().date();
         let mut app = Self {
             dirs,
             settings,
@@ -397,6 +407,13 @@ impl App {
             reaction_anchor: None,
             open_message_menu: None,
             selecting: None,
+            scheduled: Vec::new(),
+            show_scheduled: false,
+            schedule_day: today,
+            schedule_month: today,
+            schedule_hour: 9,
+            schedule_minute: 0,
+            schedule_repeat: crate::schedule::Repeat::Once,
             emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
@@ -1191,6 +1208,7 @@ impl App {
                     message,
                     finished,
                 } => self.toast_progress(key, message, finished),
+                Event::Scheduled(list) => self.scheduled = list,
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -2041,6 +2059,41 @@ impl App {
                 });
                 self.selecting = None;
             }
+            Action::ToggleScheduled => {
+                self.show_scheduled = !self.show_scheduled;
+                if self.show_scheduled {
+                    self.backend.send(Command::LoadScheduled);
+                }
+            }
+            Action::CancelScheduled { id } => {
+                self.backend.send(Command::CancelScheduled { id });
+            }
+            Action::ScheduleText {
+                chat,
+                text,
+                kind,
+                hour,
+                minute,
+                weekday,
+                day_of_month,
+                nth,
+                next_at,
+            } => {
+                self.backend.send(Command::ScheduleMessage {
+                    chat,
+                    text,
+                    kind,
+                    hour,
+                    minute,
+                    weekday,
+                    day_of_month,
+                    nth,
+                    next_at,
+                });
+                self.dialog = None;
+                self.composer.clear();
+                self.composer_mentions.clear();
+            }
             Action::Edit(id) => {
                 let text = self
                     .open_chat
@@ -2358,6 +2411,16 @@ impl App {
                     self.new_contact_name.clear();
                     self.new_contact_last.clear();
                     self.new_contact_pending = false;
+                }
+                if matches!(&dialog, Dialog::ScheduleMessage(_)) {
+                    // Start on today, at the next hour, once.
+                    let now = jiff::Zoned::now();
+                    let today = now.date();
+                    self.schedule_day = today;
+                    self.schedule_month = today;
+                    self.schedule_hour = (now.hour() + 1).rem_euclid(24);
+                    self.schedule_minute = 0;
+                    self.schedule_repeat = crate::schedule::Repeat::Once;
                 }
                 self.contact_edit = None;
                 self.dialog = Some(dialog);
