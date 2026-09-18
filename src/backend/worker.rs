@@ -3113,47 +3113,77 @@ impl Worker {
     }
 
     /// Forwards archived messages to another chat, oldest first.
+    ///
+    /// The sends run one after another: each one starts only once the send
+    /// before it came back, which is what the first tick reports. Firing the
+    /// batch together lets light messages overtake heavy ones, so the pictures
+    /// and videos land after the text that came before them.
     fn forward_messages(&mut self, from_chat: ChatId, messages: Vec<String>, to_chat: ChatId) {
-        for message in messages {
-            self.forward_message(from_chat.clone(), message, to_chat.clone());
-        }
-    }
-
-    fn forward_message(&mut self, from_chat: ChatId, message_id: String, to_chat: ChatId) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&to_chat)) else {
             self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
             return;
         };
-        let Ok(Some(source)) = self.archive.message(&from_chat, &message_id) else {
+        let jobs: Vec<_> = messages
+            .iter()
+            .filter_map(|message| self.forward_job(&from_chat, message, &to_chat))
+            .collect();
+        if jobs.is_empty() {
+            return;
+        }
+        let commands = self.commands.clone();
+        tokio::spawn(async move {
+            for (id, message, expiration) in jobs {
+                send_outgoing(
+                    client.clone(),
+                    commands.clone(),
+                    to_chat.clone(),
+                    jid.clone(),
+                    id,
+                    message,
+                    expiration,
+                )
+                .await;
+            }
+        });
+    }
+
+    /// Prepares one forwarded message: its stored row and the outgoing
+    /// protobuf. `None` when it cannot be forwarded, reported to the user.
+    fn forward_job(
+        &mut self,
+        from_chat: &ChatId,
+        message_id: &str,
+        to_chat: &ChatId,
+    ) -> Option<(String, wa::Message, Option<u32>)> {
+        let Ok(Some(source)) = self.archive.message(from_chat, message_id) else {
             self.emit(Event::Error(
                 "This message is not stored on this computer".to_owned(),
             ));
-            return;
+            return None;
         };
         if matches!(
             source.content,
             Content::Revoked | Content::Unsupported { .. } | Content::Poll { .. }
         ) {
             self.emit(Event::Error("This message cannot be forwarded".to_owned()));
-            return;
+            return None;
         }
-        let Ok(Some(raw)) = self.archive.raw(&from_chat, &message_id) else {
+        let Ok(Some(raw)) = self.archive.raw(from_chat, message_id) else {
             self.emit(Event::Error(
                 "The original message data is not available to forward".to_owned(),
             ));
-            return;
+            return None;
         };
         let Ok(original) = wa::Message::decode_from_slice(&raw) else {
             self.emit(Event::Error(
                 "The original message data could not be read".to_owned(),
             ));
-            return;
+            return None;
         };
         // whatsapp-rust owns the forwarding rules: unwrap transient wrappers,
         // strip quote chains and secrets, and retain reusable media metadata.
-        let (message, expiration) =
-            outgoing_forward(&original, self.ephemeral_expiration(&to_chat));
-        let id = client.generate_message_id();
+        let (message, expiration) = outgoing_forward(&original, self.ephemeral_expiration(to_chat));
+        let id = self.client.as_ref()?.generate_message_id();
         let mentions = self.mentions_of(&mentioned_of(&message));
         let thumbnail = thumbnail_of(&message).or_else(|| source.thumbnail.clone());
         let row = forwarded_row(
@@ -3166,15 +3196,7 @@ impl Worker {
             thumbnail,
         );
         self.store_message(row, Some(message.encode_to_vec()), None);
-        tokio::spawn(send_outgoing(
-            client,
-            self.commands.clone(),
-            to_chat,
-            jid,
-            id,
-            message,
-            expiration,
-        ));
+        Some((id, message, expiration))
     }
 
     fn mark_read(&mut self, chat: ChatId, receipts: bool) {
