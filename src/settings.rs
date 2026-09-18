@@ -76,6 +76,10 @@ pub struct Settings {
     pub names_from_contacts: bool,
     /// Voice and audio playback speed multiplier.
     pub voice_speed: f32,
+    /// Send a forwarded batch one message at a time, in its original order.
+    pub forward_in_order: bool,
+    /// Show the Create poll button beside the composer.
+    pub show_poll_button: bool,
     /// Also add saved contacts to the phone's address book.
     pub save_contacts_to_phone: bool,
 }
@@ -104,6 +108,8 @@ impl Default for Settings {
             download_updates_automatically: false,
             names_from_contacts: true,
             save_contacts_to_phone: true,
+            forward_in_order: true,
+            show_poll_button: true,
             voice_speed: 1.0,
         }
     }
