@@ -1065,6 +1065,24 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 {
                     app.actions.push(Action::ShowDialog(Dialog::CreatePoll(chat.id.clone())));
                 }
+                if app.editing.is_none()
+                    && !app.composer.trim().is_empty()
+                    && app.pending.is_empty()
+                    && app.reply_to.is_none()
+                    && theme::icon_button(
+                        ui,
+                        Icon::Clock,
+                        20.0,
+                        palette.secondary,
+                        palette.text,
+                        "Schedule this message",
+                    )
+                    .clicked()
+                {
+                    app.actions.push(Action::ShowDialog(Dialog::ScheduleMessage(
+                        chat.id.clone(),
+                    )));
+                }
                 if app.editing.is_none() {
                     let smile = theme::icon_button(
                         ui,

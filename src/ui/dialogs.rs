@@ -26,7 +26,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .frame(frame)
         .backdrop_color(palette.shadow)
         .show(ctx, |ui| {
-            let width = match dialog {
+            ui.set_width(match dialog {
                 Dialog::Shortcuts => 540.0,
                 Dialog::About => 380.0,
                 Dialog::ConfirmUnlink => 380.0,
@@ -35,34 +35,20 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ChatInfo(_) => 360.0,
                 Dialog::Forward { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
-                Dialog::ScheduleMessage(_) => super::schedule::WIDTH,
-            };
-            // The content lives in a box of the declared width. Without it, a
-            // child that asks for the whole width (a right-aligned row, a
-            // centred calendar) measures against the screen and the modal
-            // stretches to the window.
-            ui.set_width(width);
-            // The box fixes the width. Its height only has to be real: a list
-            // that asks how much room it has would otherwise show a single row.
-            ui.allocate_ui_with_layout(
-                egui::vec2(width, (ui.ctx().content_rect().height() - 200.0).max(320.0)),
-                Layout::top_down(Align::Min),
-                |ui| {
-                    ui.set_max_width(width);
-                    ui.spacing_mut().item_spacing.y = 8.0;
-                    match dialog {
-                        Dialog::CreatePoll(chat) => super::polls::create(app, ui, &chat),
-                        Dialog::ScheduleMessage(chat) => super::schedule::show(app, ui, &chat),
-                        Dialog::Shortcuts => shortcuts(app, ui),
-                        Dialog::About => about(app, ui),
-                        Dialog::ConfirmUnlink => confirm_unlink(app, ui),
-                        Dialog::PairWithPhone => pair_with_phone(app, ui),
-                        Dialog::NewContact => new_contact(app, ui),
-                        Dialog::ChatInfo(id) => chat_info(app, ui, &id),
-                        Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
-                    }
-                },
-            );
+                Dialog::ScheduleMessage(_) => 520.0,
+            });
+            ui.spacing_mut().item_spacing.y = 8.0;
+            match dialog {
+                Dialog::CreatePoll(chat) => super::polls::create(app, ui, &chat),
+                Dialog::ScheduleMessage(chat) => super::schedule::show(app, ui, &chat),
+                Dialog::Shortcuts => shortcuts(app, ui),
+                Dialog::About => about(app, ui),
+                Dialog::ConfirmUnlink => confirm_unlink(app, ui),
+                Dialog::PairWithPhone => pair_with_phone(app, ui),
+                Dialog::NewContact => new_contact(app, ui),
+                Dialog::ChatInfo(id) => chat_info(app, ui, &id),
+                Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
+            }
         });
     if response.should_close() {
         app.actions.push(Action::CloseDialog);

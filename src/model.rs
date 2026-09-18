@@ -364,19 +364,6 @@ impl Content {
         }
     }
 
-    /// The message's own words, whole, for a place that draws it as the bubble
-    /// the chat shows. [`summary`](Self::summary) cuts at the first line.
-    pub fn body(&self) -> String {
-        match self {
-            Self::Text { text, .. } => text.clone(),
-            Self::Image { caption, .. } => with_whole_caption("Photo", caption),
-            Self::Video { caption, gif, .. } => {
-                with_whole_caption(if *gif { "GIF" } else { "Video" }, caption)
-            }
-            other => other.summary(),
-        }
-    }
-
     pub fn media(&self) -> Option<&Media> {
         match self {
             Self::Image { media, .. }
@@ -407,14 +394,6 @@ fn with_caption(label: &str, caption: &Option<String>) -> String {
     {
         Some(caption) if !caption.is_empty() => format!("{label}: {caption}"),
         _ => label.to_owned(),
-    }
-}
-
-/// The caption as written, with its own line breaks, for a bubble.
-fn with_whole_caption(label: &str, caption: &Option<String>) -> String {
-    match caption.as_deref().filter(|caption| !caption.is_empty()) {
-        Some(caption) => format!("{label}: {caption}"),
-        None => label.to_owned(),
     }
 }
 
@@ -649,8 +628,6 @@ pub enum Action {
     },
     /// Switches the left panel to the scheduled list, or back to the chats.
     ToggleScheduled,
-    /// Shows or hides the starred messages in the left panel.
-    ToggleStarred,
     /// Removes a scheduled message.
     CancelScheduled {
         id: String,

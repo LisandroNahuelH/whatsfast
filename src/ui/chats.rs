@@ -81,20 +81,6 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(20.0), palette.text);
-                } else if app.show_starred {
-                    if theme::icon_button(
-                        ui,
-                        Icon::ArrowLeft,
-                        18.0,
-                        palette.secondary,
-                        palette.text,
-                        "Back to chats",
-                    )
-                    .clicked()
-                    {
-                        app.actions.push(Action::ToggleStarred);
-                    }
-                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     let me = app.me.clone().unwrap_or_default();
                     let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
@@ -130,22 +116,6 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                     .clicked()
                     {
                         app.actions.push(Action::ToggleScheduled);
-                    }
-                    if theme::icon_button(
-                        ui,
-                        Icon::Star,
-                        18.0,
-                        if app.show_starred {
-                            palette.accent
-                        } else {
-                            palette.secondary
-                        },
-                        palette.text,
-                        "Starred messages",
-                    )
-                    .clicked()
-                    {
-                        app.actions.push(Action::ToggleStarred);
                     }
                     if theme::icon_button(
                         ui,
@@ -242,40 +212,10 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(16.0), palette.text);
-                } else if app.show_starred {
-                    if theme::icon_button(
-                        ui,
-                        Icon::ArrowLeft,
-                        18.0,
-                        palette.secondary,
-                        palette.text,
-                        "Back to chats",
-                    )
-                    .clicked()
-                    {
-                        app.actions.push(Action::ToggleStarred);
-                    }
-                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     theme::text(ui, "Chats", theme::bold(20.0), palette.text);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if theme::icon_button(
-                        ui,
-                        Icon::Star,
-                        18.0,
-                        if app.show_starred {
-                            palette.accent
-                        } else {
-                            palette.secondary
-                        },
-                        palette.text,
-                        "Starred messages",
-                    )
-                    .clicked()
-                    {
-                        app.actions.push(Action::ToggleStarred);
-                    }
                     if theme::icon_button(
                         ui,
                         Icon::SquarePen,
@@ -353,7 +293,7 @@ fn scheduled_row(
     palette: &Palette,
     entry: &crate::archive::Scheduled,
 ) {
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 62.0), Sense::click());
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -377,40 +317,24 @@ fn scheduled_row(
         crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)
             .map(|rule| rule.label())
             .unwrap_or_else(|| "Once".to_owned());
-    let when = when_label(entry.next_at);
-    let top = rect.top();
-    // First line: where it goes and how it repeats, with the time on the right.
+    let mut detail = format!("{} · {rule}", when_label(entry.next_at));
+    if let Some(error) = &entry.last_error {
+        detail.push_str(&format!(" · {error}"));
+    }
     ui.painter().text(
-        pos2(rect.left() + 56.0, top + 20.0),
+        pos2(rect.left() + 56.0, rect.center().y - 9.0),
         egui::Align2::LEFT_CENTER,
-        format!("{name} · {rule}"),
-        theme::medium(14.0),
+        name,
+        theme::medium(14.5),
         palette.text,
     );
     ui.painter().text(
-        pos2(rect.right() - 40.0, top + 20.0),
-        egui::Align2::RIGHT_CENTER,
-        when,
-        theme::regular(11.5),
-        palette.secondary,
-    );
-    // Second line: the message itself, with the reason it failed when it did.
-    ui.painter().text(
-        pos2(rect.left() + 56.0, top + 46.0),
+        pos2(rect.left() + 56.0, rect.center().y + 9.0),
         egui::Align2::LEFT_CENTER,
-        preview(&entry.text),
-        theme::regular(12.5),
+        detail,
+        theme::regular(12.0),
         palette.secondary,
     );
-    if let Some(error) = &entry.last_error {
-        ui.painter().text(
-            pos2(rect.right() - 40.0, top + 46.0),
-            egui::Align2::RIGHT_CENTER,
-            error,
-            theme::regular(11.5),
-            palette.danger,
-        );
-    }
     let close = egui::Rect::from_center_size(
         pos2(rect.right() - 24.0, rect.center().y),
         Vec2::splat(26.0),
@@ -450,16 +374,6 @@ fn scheduled_row(
     }
 }
 
-/// The message's own words, flattened to one line for the list.
-fn preview(text: &str) -> String {
-    let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut out: String = flat.chars().take(48).collect();
-    if flat.chars().count() > 48 {
-        out.push('…');
-    }
-    out
-}
-
 /// "Fri 18 Sep, 21:00" in the machine's time zone.
 fn when_label(instant: i64) -> String {
     jiff::Timestamp::from_second(instant)
@@ -469,133 +383,10 @@ fn when_label(instant: i64) -> String {
         .unwrap_or_default()
 }
 
-/// The starred messages, in the place the chat list usually takes. Newest
-/// star first, each row naming the chat, the moment, and the message.
-fn starred_list(app: &mut App, ui: &mut egui::Ui) {
-    let palette = app.palette;
-    let entries: Vec<crate::archive::Starred> = app.starred.clone();
-    if entries.is_empty() {
-        widgets::empty_state(
-            ui,
-            &palette,
-            Icon::Star,
-            "No starred messages",
-            "Pick messages in a chat and press Star to keep them here.",
-        );
-        return;
-    }
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            for entry in &entries {
-                starred_row(app, ui, &palette, entry);
-            }
-        });
-}
-
-/// One starred message: where it is, when it was starred, and the message
-/// itself drawn as the bubble it is in the chat. Clicking opens its chat at
-/// the message.
-fn starred_row(
-    app: &mut App,
-    ui: &mut egui::Ui,
-    palette: &Palette,
-    entry: &crate::archive::Starred,
-) {
-    let width = ui.available_width();
-    let clock = ui.painter().layout_no_wrap(
-        crate::util::clock(entry.sent_at),
-        theme::regular(11.0),
-        palette.secondary,
-    );
-    // The bubble wraps, so the row is as tall as the message needs. The text
-    // leaves room for the time in the corner, like the chat does.
-    let galley = ui.painter().layout(
-        entry.text.clone(),
-        theme::regular(13.0),
-        palette.text,
-        (width - 32.0 - 24.0 - clock.size().x - 10.0).max(60.0),
-    );
-    let bubble_height = galley.rect.height() + 12.0;
-    let (rect, response) =
-        ui.allocate_exact_size(vec2(width, 26.0 + bubble_height + 10.0), Sense::click());
-    if !ui.is_rect_visible(rect) {
-        return;
-    }
-    if response.hovered() {
-        ui.painter()
-            .rect_filled(rect, 6.0, palette.surface_hover.gamma_multiply(0.5));
-    }
-    let name = app.display_name_or(&entry.chat, None);
-    let when = when_label(entry.starred_at);
-    // First line: where the message is, with the moment it was starred.
-    ui.painter().text(
-        pos2(rect.left() + 16.0, rect.top() + 14.0),
-        egui::Align2::LEFT_CENTER,
-        name,
-        theme::medium(14.0),
-        palette.text,
-    );
-    ui.painter().text(
-        pos2(rect.right() - 16.0, rect.top() + 14.0),
-        egui::Align2::RIGHT_CENTER,
-        when,
-        theme::regular(11.5),
-        palette.secondary,
-    );
-    // The message itself, as the bubble the chat shows: same fill, same side,
-    // with the time in its bottom corner.
-    let bubble_width = (galley.rect.width() + 20.0 + clock.size().x + 6.0).min(width - 32.0);
-    let left = if entry.from_me {
-        rect.right() - 16.0 - bubble_width
-    } else {
-        rect.left() + 16.0
-    };
-    let bubble = Rect::from_min_size(
-        pos2(left, rect.top() + 26.0),
-        vec2(bubble_width, bubble_height),
-    );
-    ui.painter().rect_filled(
-        bubble,
-        10.0,
-        if entry.from_me {
-            palette.bubble_out
-        } else {
-            palette.bubble_in
-        },
-    );
-    ui.painter().galley(
-        pos2(bubble.left() + 10.0, bubble.top() + 6.0),
-        galley,
-        palette.text,
-    );
-    ui.painter().galley(
-        pos2(
-            bubble.right() - 10.0 - clock.size().x,
-            bubble.bottom() - 6.0 - clock.size().y,
-        ),
-        clock,
-        palette.secondary,
-    );
-    if response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
-    {
-        app.actions.push(Action::OpenMessage {
-            chat: entry.chat.clone(),
-            message: entry.id.clone(),
-        });
-    }
-}
-
 fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     if app.show_scheduled {
         scheduled_list(app, ui);
-        return;
-    }
-    if app.show_starred {
-        starred_list(app, ui);
         return;
     }
     if !app.search.trim().is_empty() {
