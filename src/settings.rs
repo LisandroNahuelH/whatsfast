@@ -80,6 +80,8 @@ pub struct Settings {
     pub forward_in_order: bool,
     /// Show the Create poll button beside the composer.
     pub show_poll_button: bool,
+    /// Ask where to save each attachment, instead of always using Downloads.
+    pub ask_where_to_save: bool,
     /// Also add saved contacts to the phone's address book.
     pub save_contacts_to_phone: bool,
 }
@@ -110,6 +112,7 @@ impl Default for Settings {
             save_contacts_to_phone: true,
             forward_in_order: true,
             show_poll_button: true,
+            ask_where_to_save: false,
             voice_speed: 1.0,
         }
     }

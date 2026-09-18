@@ -211,7 +211,11 @@ pub async fn run(
         pending_avatars: HashMap::new(),
         sticker_fetches: HashSet::new(),
         sticker_downloads: HashSet::new(),
-        save_after_download: HashSet::new(),
+        save_targets: HashMap::new(),
+        save_batch: None,
+        star_batch: None,
+        save_dialog_open: false,
+        forward_batch: None,
         read_sync: ReadSync::default(),
         poll_decrypting: 0,
         poll_history: Default::default(),
@@ -301,8 +305,16 @@ struct Worker {
     sticker_fetches: HashSet<String>,
     /// Active chat-sticker downloads by chat and message id.
     sticker_downloads: HashSet<(ChatId, String)>,
-    /// Attachments to copy into Downloads once their download lands.
-    save_after_download: HashSet<(ChatId, String)>,
+    /// Attachments to copy once their download lands, and where to.
+    save_targets: HashMap<(ChatId, String), PathBuf>,
+    /// Progress of the running save batch: (done, total).
+    save_batch: Option<(usize, usize)>,
+    /// Progress of the running star batch: (done, total).
+    star_batch: Option<(usize, usize)>,
+    /// A system save dialog is open; only one at a time.
+    save_dialog_open: bool,
+    /// Ids of a parallel forward batch, for its progress count.
+    forward_batch: Option<(HashSet<String>, usize)>,
 }
 
 /// Decoded history chunk waiting to be canonicalized and archived.
@@ -2440,24 +2452,56 @@ impl Worker {
                 to_chat,
                 in_order,
             } => self.forward_messages(from_chat, messages, to_chat, in_order),
-            Command::SaveMedia { chat, messages } => self.save_media(chat, messages),
+            Command::SaveMedia {
+                chat,
+                messages,
+                ask,
+            } => self.save_media(chat, messages, ask),
+            Command::SaveTargets {
+                chat,
+                targets,
+                cancelled,
+            } => self.finish_save_targets(chat, targets, cancelled),
             Command::SetStar {
                 chat,
-                message,
+                messages,
                 starred,
-            } => self.set_star(chat, message, starred),
+            } => {
+                self.star_batch = Some((0, messages.len()));
+                for message in messages {
+                    self.set_star(chat.clone(), message, starred);
+                }
+            }
             Command::Starred {
                 message: _,
                 starred,
                 result,
-            } => match result {
-                Ok(()) => self.emit(Event::Info(if starred {
-                    "Starred".to_owned()
-                } else {
-                    "Star removed".to_owned()
-                })),
-                Err(error) => self.emit(Event::Error(error)),
-            },
+            } => {
+                if let Err(error) = &result {
+                    self.emit(Event::Error(error.clone()));
+                }
+                // One toast for the whole batch, so a run of fifty stars does
+                // not stack fifty of them.
+                if let Some((done, total)) = self.star_batch {
+                    let done = done + 1;
+                    let finished = done >= total;
+                    let message = if total == 1 {
+                        if starred {
+                            "Starred".to_owned()
+                        } else {
+                            "Star removed".to_owned()
+                        }
+                    } else {
+                        format!("Starred {done} of {total}")
+                    };
+                    self.emit(Event::Progress {
+                        key: "star",
+                        message,
+                        finished,
+                    });
+                    self.star_batch = (!finished).then_some((done, total));
+                }
+            }
             Command::Composing { chat, composing } => {
                 let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
                     return;
@@ -2954,19 +2998,41 @@ impl Worker {
                 if let Some(error) = error {
                     self.emit(Event::Error(format!("Message not sent: {error}")));
                 }
+                // A parallel forward batch counts each landing here.
+                let progress = self.forward_batch.as_mut().and_then(|(ids, total)| {
+                    if !ids.remove(&id) {
+                        return None;
+                    }
+                    Some((*total - ids.len(), *total, ids.is_empty()))
+                });
+                if let Some((done, total, finished)) = progress {
+                    self.emit(Event::Progress {
+                        key: "forward",
+                        message: format!("Forwarded {done} of {total}"),
+                        finished,
+                    });
+                    if finished {
+                        self.forward_batch = None;
+                    }
+                }
             }
             Command::Downloaded { chat, id, result } => {
                 if let Ok(path) = &result {
                     let _ = self.archive.set_media_path(&chat, &id, path);
                 }
-                let saving = self.save_after_download.remove(&(chat.clone(), id.clone()));
-                if saving && let Ok(path) = &result {
-                    match self.copy_to_downloads(path) {
-                        Ok(saved) => {
-                            self.emit(Event::Info(format!("Saved to {}", saved.display())))
-                        }
-                        Err(error) => self.emit(Event::Error(error)),
+                if let Some(target) = self.save_targets.remove(&(chat.clone(), id.clone())) {
+                    match &result {
+                        Ok(source) => match self.copy_to(source, &target) {
+                            Ok(saved) => {
+                                self.emit(Event::Info(format!("Saved to {}", saved.display())));
+                            }
+                            Err(error) => self.emit(Event::Error(error)),
+                        },
+                        Err(_) => self.emit(Event::Error(
+                            "The download failed, so it was not saved".to_owned(),
+                        )),
                     }
+                    self.bump_save_progress();
                 }
                 let for_picker = self.sticker_downloads.remove(&(chat.clone(), id.clone()));
                 self.emit(Event::Media {
@@ -3141,6 +3207,9 @@ impl Worker {
         }
         let commands = self.commands.clone();
         if !in_order {
+            // Parallel batches count their landings in the Sent handler.
+            let ids: HashSet<String> = jobs.iter().map(|(id, _, _)| id.clone()).collect();
+            self.forward_batch = Some((ids, jobs.len()));
             for (id, message, expiration) in jobs {
                 tokio::spawn(send_outgoing(
                     client.clone(),
@@ -3154,8 +3223,11 @@ impl Worker {
             }
             return;
         }
+        let events = self.events.clone();
+        let waker = self.waker.clone();
         tokio::spawn(async move {
-            for (id, message, expiration) in jobs {
+            let total = jobs.len();
+            for (index, (id, message, expiration)) in jobs.into_iter().enumerate() {
                 send_outgoing(
                     client.clone(),
                     commands.clone(),
@@ -3166,6 +3238,15 @@ impl Worker {
                     expiration,
                 )
                 .await;
+                // Each send came back, so the next one starts now: this is the
+                // order the receiver sees, and the count the user sees.
+                let done = index + 1;
+                let _ = events.send(Event::Progress {
+                    key: "forward",
+                    message: format!("Forwarded {done} of {total}"),
+                    finished: done >= total,
+                });
+                waker.wake();
             }
         });
     }
@@ -3564,46 +3645,144 @@ impl Worker {
         });
     }
 
-    /// Copies picked attachments into the user's Downloads folder, downloading
-    /// the ones that are not on this computer yet.
-    fn save_media(&mut self, chat: ChatId, ids: Vec<String>) {
+    /// Saves picked attachments: into the user's Downloads folder, or wherever
+    /// the system save dialog sends them when the setting is on.
+    fn save_media(&mut self, chat: ChatId, ids: Vec<String>, ask: bool) {
+        let Some(downloads) = self.dirs.downloads_dir() else {
+            self.emit(Event::Error(
+                "No Downloads folder on this computer".to_owned(),
+            ));
+            return;
+        };
         let dir = self.dirs.media_cache_dir();
-        let mut saved = 0usize;
+        let mut files = Vec::new();
         for id in ids {
             let Some((mime, file_name)) = self.media_name(&chat, &id) else {
                 continue;
             };
             let source = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
+            let name = saved_name(&chat, &id, &mime, file_name.as_deref());
+            files.push((id, source, name));
+        }
+        if files.is_empty() {
+            return;
+        }
+        if ask {
+            self.ask_where_to_save(chat, files);
+            return;
+        }
+        let targets = files
+            .into_iter()
+            .map(|(id, _, name)| (id, free_path(&downloads, &name)))
+            .collect();
+        self.save_to_targets(chat, targets);
+    }
+
+    /// One system save dialog for the whole batch: a file name when a single
+    /// attachment is picked, a folder when there are several. It runs on a
+    /// blocking thread so the worker keeps answering commands meanwhile.
+    fn ask_where_to_save(&mut self, chat: ChatId, files: Vec<(String, PathBuf, String)>) {
+        if self.save_dialog_open {
+            self.emit(Event::Info("A save dialog is already open".to_owned()));
+            return;
+        }
+        let Some(downloads) = self.dirs.downloads_dir() else {
+            self.emit(Event::Error(
+                "No Downloads folder on this computer".to_owned(),
+            ));
+            return;
+        };
+        self.save_dialog_open = true;
+        let commands = self.commands.clone();
+        let single = files.len() == 1;
+        tokio::task::spawn_blocking(move || {
+            let dialog = rfd::FileDialog::new()
+                .set_title("Save attachment")
+                .set_directory(&downloads);
+            let targets = if single {
+                let (id, _, name) = files.into_iter().next().expect("a single file");
+                dialog
+                    .set_file_name(name)
+                    .save_file()
+                    .map(|path| vec![(id, path)])
+            } else {
+                dialog.pick_folder().map(|folder| {
+                    files
+                        .into_iter()
+                        .map(|(id, _, name)| (id, folder.join(name)))
+                        .collect()
+                })
+            };
+            let _ = commands.send(Command::SaveTargets {
+                chat,
+                cancelled: targets.is_none(),
+                targets: targets.unwrap_or_default(),
+            });
+        });
+    }
+
+    /// The save dialog answered: copy each attachment to its destination.
+    fn finish_save_targets(
+        &mut self,
+        chat: ChatId,
+        targets: Vec<(String, PathBuf)>,
+        cancelled: bool,
+    ) {
+        self.save_dialog_open = false;
+        if cancelled || targets.is_empty() {
+            self.emit(Event::Info("Save cancelled".to_owned()));
+            return;
+        }
+        self.save_to_targets(chat, targets);
+    }
+
+    /// Copies each attachment to its destination, downloading first the ones
+    /// that are not on this computer yet.
+    fn save_to_targets(&mut self, chat: ChatId, targets: Vec<(String, PathBuf)>) {
+        let dir = self.dirs.media_cache_dir();
+        self.save_batch = Some((0, targets.len()));
+        for (id, target) in targets {
+            let Some((mime, file_name)) = self.media_name(&chat, &id) else {
+                self.bump_save_progress();
+                continue;
+            };
+            let source = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
             if source.exists() {
-                match self.copy_to_downloads(&source) {
-                    Ok(_) => saved += 1,
+                match self.copy_to(&source, &target) {
+                    Ok(saved) => self.emit(Event::Info(format!("Saved to {}", saved.display()))),
                     Err(error) => self.emit(Event::Error(error)),
                 }
+                self.bump_save_progress();
             } else {
                 // The copy happens when the download lands.
-                self.save_after_download.insert((chat.clone(), id.clone()));
+                self.save_targets.insert((chat.clone(), id.clone()), target);
                 self.download(chat.clone(), id);
             }
         }
-        match saved {
-            0 => {}
-            1 => self.emit(Event::Info("Saved to Downloads".to_owned())),
-            many => self.emit(Event::Info(format!("{many} files saved to Downloads"))),
-        }
     }
 
-    /// Copies one downloaded attachment into the user's Downloads folder.
-    fn copy_to_downloads(&self, source: &Path) -> Result<PathBuf, String> {
-        let Some(downloads) = self.dirs.downloads_dir() else {
-            return Err("No Downloads folder on this computer".to_owned());
+    /// Advances the save batch's progress toast by one file.
+    fn bump_save_progress(&mut self) {
+        let Some((done, total)) = self.save_batch else {
+            return;
         };
-        let name = source
-            .file_name()
-            .ok_or_else(|| "The downloaded file has no name".to_owned())?;
-        std::fs::create_dir_all(&downloads).map_err(|error| error.to_string())?;
-        let target = downloads.join(name);
-        std::fs::copy(source, &target).map_err(|error| error.to_string())?;
-        Ok(target)
+        let done = done + 1;
+        let finished = done >= total;
+        self.emit(Event::Progress {
+            key: "download",
+            message: format!("Saving {done} of {total}"),
+            finished,
+        });
+        self.save_batch = (!finished).then_some((done, total));
+    }
+
+    /// Copies a downloaded attachment to the destination the user chose.
+    fn copy_to(&self, source: &Path, target: &Path) -> Result<PathBuf, String> {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        std::fs::copy(source, target).map_err(|error| error.to_string())?;
+        Ok(target.to_path_buf())
     }
 
     /// Mime type and original file name of a message's attachment, when it has
@@ -4606,6 +4785,43 @@ fn media_path(dir: &Path, chat: &str, id: &str, mime: &str, file_name: Option<&s
         None => format!("{}-{}", sanitize(chat), sanitize(id)),
     };
     dir.join(format!("{stem}.{extension}"))
+}
+
+/// The name an attachment takes when it is saved for the user: the document's
+/// own name when it has one, sanitized, with its extension kept (sanitize
+/// turns '.' into '_', so the extension is added after it).
+fn saved_name(chat: &str, id: &str, mime: &str, file_name: Option<&str>) -> String {
+    let extension = extension_for(mime, file_name);
+    let stem = match file_name.and_then(|name| Path::new(name).file_stem()?.to_str()) {
+        Some(name) => sanitize(name),
+        None => format!("{}-{}", sanitize(chat), sanitize(id)),
+    };
+    format!("{stem}.{extension}")
+}
+
+/// A path in `dir` that does not overwrite a file that is already there.
+fn free_path(dir: &Path, name: &str) -> PathBuf {
+    let mut target = dir.join(name);
+    if !target.exists() {
+        return target;
+    }
+    let path = Path::new(name);
+    let stem = path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name);
+    let extension = path.extension().and_then(|extension| extension.to_str());
+    for copy in 1.. {
+        let candidate = match extension {
+            Some(extension) => format!("{stem} ({copy}).{extension}"),
+            None => format!("{stem} ({copy})"),
+        };
+        target = dir.join(candidate);
+        if !target.exists() {
+            break;
+        }
+    }
+    target
 }
 
 fn media(
@@ -5723,6 +5939,29 @@ mod tests {
     }
 
     #[test]
+    fn saved_names_keep_their_extension_and_never_overwrite() {
+        assert_eq!(
+            saved_name(
+                "1@s.whatsapp.net",
+                "ABC",
+                "application/pdf",
+                Some("tax return.pdf")
+            ),
+            "tax_return.pdf"
+        );
+        assert_eq!(
+            saved_name("1@s.whatsapp.net", "ABC", "image/jpeg", None),
+            "1_s_whatsapp_net-ABC.jpg"
+        );
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let first = free_path(dir.path(), "tax_return.pdf");
+        assert_eq!(first.file_name().unwrap(), "tax_return.pdf");
+        std::fs::write(&first, b"x").expect("write");
+        let second = free_path(dir.path(), "tax_return.pdf");
+        assert_eq!(second.file_name().unwrap(), "tax_return (1).pdf");
+    }
+
+    #[test]
     fn classification_covers_text_and_media() {
         let text = wa::Message::text("hello");
         assert_eq!(classify(&text), Some(Content::text("hello")));
@@ -6073,7 +6312,11 @@ mod receipt_tests {
             pending_avatars: HashMap::new(),
             sticker_fetches: HashSet::new(),
             sticker_downloads: HashSet::new(),
-            save_after_download: HashSet::new(),
+            save_targets: HashMap::new(),
+            save_batch: None,
+            star_batch: None,
+            save_dialog_open: false,
+            forward_batch: None,
             read_sync: ReadSync::default(),
             poll_decrypting: 0,
             poll_history: Default::default(),

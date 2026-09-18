@@ -205,6 +205,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             }
                         },
                     );
+                    toggle(ui, app, "Ask where to save each file", "Open the system save dialog for every attachment you save from the selection bar, so you choose the folder and the file name. When off, saved files go to your Downloads folder.", |settings| &mut settings.ask_where_to_save);
                     let log = app.dirs.log_file();
                     widgets::setting_row(ui, &palette, "Log of this run", &log.display().to_string(), |ui| {
                         if theme::soft_button(ui, &palette, Some(Icon::FileText), "Open", false).clicked() {

@@ -57,6 +57,9 @@ Changes on the Settings page are saved to `settings.json` immediately:
 - **GIPHY API key**: required for GIF search unless the build includes one.
   Set `ZAPFAST_GIPHY_KEY` at compile time to include a default key.
   The earlier `FASTSAPP_GIPHY_KEY` remains a fallback for existing builds.
+- **Ask where to save each file**: open the system save dialog when you save
+  attachments from the selection bar, so you pick the folder (and the name,
+  for a single file). When off, they go to your Downloads folder.
 
 ## The log
 

@@ -1186,6 +1186,11 @@ impl App {
                     self.actions.push(Action::StartChat { id, name });
                 }
                 Event::Info(message) => self.toast(message),
+                Event::Progress {
+                    key,
+                    message,
+                    finished,
+                } => self.toast_progress(key, message, finished),
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -1646,8 +1651,16 @@ impl App {
             typers.retain(|(_, since)| now.duration_since(*since) < TYPING_TIMEOUT);
         }
         self.typing.retain(|_, typers| !typers.is_empty());
-        self.toasts
-            .retain(|toast| toast.created.elapsed() < Duration::from_millis(3200));
+        self.toasts.retain(|toast| {
+            // A progress toast lives while its batch does; 60 seconds without
+            // an update is the backstop for a batch that never closes.
+            let life = if toast.key.is_some() {
+                Duration::from_secs(60)
+            } else {
+                Duration::from_millis(3200)
+            };
+            toast.created.elapsed() < life
+        });
         if self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
@@ -2007,8 +2020,13 @@ impl App {
                 }
             }
             Action::DownloadSelected { chat, messages } => {
-                self.backend.send(Command::SaveMedia { chat, messages });
-                self.toast("Saving attachments");
+                self.backend.send(Command::SaveMedia {
+                    chat,
+                    messages,
+                    // Without a window there is nothing to hang a dialog on, so
+                    // the batch goes to Downloads.
+                    ask: self.settings.ask_where_to_save && !self.window_hidden,
+                });
                 self.selecting = None;
             }
             Action::StarSelected {
@@ -2016,13 +2034,11 @@ impl App {
                 messages,
                 starred,
             } => {
-                for message in messages {
-                    self.backend.send(Command::SetStar {
-                        chat: chat.clone(),
-                        message,
-                        starred,
-                    });
-                }
+                self.backend.send(Command::SetStar {
+                    chat,
+                    messages,
+                    starred,
+                });
                 self.selecting = None;
             }
             Action::Edit(id) => {
@@ -2526,8 +2542,39 @@ impl App {
             message: message.into(),
             kind: ToastKind::Info,
             created: Instant::now(),
+            key: None,
         });
         self.toasts.truncate(4);
+    }
+
+    /// Shows a batch's progress in one toast that updates in place: a newer
+    /// message replaces the older one with the same key instead of stacking,
+    /// and the key keeps it alive while the batch runs.
+    pub fn toast_progress(
+        &mut self,
+        key: &'static str,
+        message: impl Into<String>,
+        finished: bool,
+    ) {
+        let message = message.into();
+        match self.toasts.iter_mut().find(|toast| toast.key == Some(key)) {
+            Some(toast) => {
+                toast.message = message;
+                toast.created = Instant::now();
+                if finished {
+                    toast.key = None;
+                }
+            }
+            None => {
+                self.toasts.push(Toast {
+                    message,
+                    kind: ToastKind::Info,
+                    created: Instant::now(),
+                    key: (!finished).then_some(key),
+                });
+                self.toasts.truncate(4);
+            }
+        }
     }
 
     pub fn toast_error(&mut self, message: impl Into<String>) {
@@ -2537,7 +2584,9 @@ impl App {
             message,
             kind: ToastKind::Error,
             created: Instant::now(),
+            key: None,
         });
+        self.toasts.truncate(4);
     }
 
     /// Processes app state shared by windowed and headless modes.
@@ -2944,6 +2993,25 @@ mod tests {
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("zapfast-app-{}", std::process::id()));
         App::headless(AppDirs::under(&root), Settings::default()).0
+    }
+
+    #[test]
+    fn progress_toasts_replace_instead_of_stacking() {
+        let mut app = app();
+        app.toast_progress("forward", "Forwarded 1 of 3", false);
+        app.toast_progress("forward", "Forwarded 2 of 3", false);
+        assert_eq!(app.toasts.len(), 1, "one toast for the whole batch");
+        assert_eq!(app.toasts[0].message, "Forwarded 2 of 3");
+        assert_eq!(app.toasts[0].key, Some("forward"));
+        app.toast_progress("forward", "Forwarded 3 of 3", true);
+        assert_eq!(app.toasts.len(), 1);
+        assert_eq!(
+            app.toasts[0].key, None,
+            "a finished batch lets the toast expire"
+        );
+        // A different batch keeps its own toast.
+        app.toast_progress("star", "Starred 1 of 2", false);
+        assert_eq!(app.toasts.len(), 2);
     }
 
     #[test]

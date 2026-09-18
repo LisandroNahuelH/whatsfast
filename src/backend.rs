@@ -151,11 +151,19 @@ pub enum Command {
     SaveMedia {
         chat: ChatId,
         messages: Vec<String>,
+        /// Ask where to save, one dialog per batch, instead of Downloads.
+        ask: bool,
     },
-    /// Stars or unstars an archived message.
+    /// Destinations chosen in the system save dialog.
+    SaveTargets {
+        chat: ChatId,
+        targets: Vec<(String, PathBuf)>,
+        cancelled: bool,
+    },
+    /// Stars or unstars archived messages.
     SetStar {
         chat: ChatId,
-        message: String,
+        messages: Vec<String>,
         starred: bool,
     },
     /// Result of a star or unstar request.
@@ -536,6 +544,13 @@ pub enum Event {
     },
     /// Informational toast message.
     Info(String),
+    /// Progress of a batch the user started: forwards, saves, or stars.
+    /// Toasts sharing a key replace each other; `finished` releases it.
+    Progress {
+        key: &'static str,
+        message: String,
+        finished: bool,
+    },
     /// A newer release than this build exists.
     UpdateAvailable {
         version: String,

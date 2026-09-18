@@ -526,6 +526,9 @@ pub struct Toast {
     pub message: String,
     pub kind: ToastKind,
     pub created: Instant,
+    /// Progress toasts share a key: a newer one replaces the older, and the
+    /// key keeps it alive while its batch runs.
+    pub key: Option<&'static str>,
 }
 
 /// Actions queued by views and applied after drawing.
