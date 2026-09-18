@@ -872,6 +872,93 @@ mod tests {
     }
 
     #[test]
+    fn the_schedule_dialog_stacks_its_parts() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.composer = "See you at nine".to_owned();
+        app.dialog = Some(crate::model::Dialog::ScheduleMessage(chat));
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+
+        let months = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        let mut month: Option<Pos2> = None;
+        let mut numbers: Vec<(String, Pos2)> = Vec::new();
+        let mut time: Option<Pos2> = None;
+        let mut repeat: Option<Pos2> = None;
+        let mut schedule: Option<Pos2> = None;
+        for clipped in &output.shapes {
+            let egui::Shape::Text(text) = &clipped.shape else {
+                continue;
+            };
+            let content = text.galley.text();
+            assert!(
+                text.pos.x.is_finite() && text.pos.y.is_finite(),
+                "every label has a real position"
+            );
+            if months.iter().any(|name| content.starts_with(name)) {
+                month = Some(text.pos);
+            } else if content.parse::<u8>().is_ok() {
+                numbers.push((content.to_owned(), text.pos));
+            } else if content == "Time" {
+                time = Some(text.pos);
+            } else if content == "Repeat" {
+                repeat = Some(text.pos);
+            } else if content == "Schedule" {
+                schedule = Some(text.pos);
+            }
+        }
+        let month = month.expect("the month header is drawn");
+        let time = time.expect("the time row is drawn");
+        let repeat = repeat.expect("the repeat row is drawn");
+        schedule.expect("the schedule button is drawn");
+        // The calendar's days: the numbers between the month header and the
+        // time row, so numbers elsewhere on the screen do not count.
+        let days: Vec<Pos2> = numbers
+            .iter()
+            .filter(|(_, pos)| pos.y > month.y + 10.0 && pos.y < time.y)
+            .map(|(_, pos)| *pos)
+            .collect();
+        assert!(days.len() >= 28, "a month shows its days");
+        let first_day = days.iter().map(|pos| pos.y).fold(f32::MAX, f32::min);
+        let last_day = days.iter().map(|pos| pos.y).fold(f32::MIN, f32::max);
+        assert!(
+            month.y < first_day,
+            "the month header sits above the calendar, not beside it"
+        );
+        assert!(
+            time.y > last_day && repeat.y > last_day,
+            "the time and repeat rows sit under the calendar"
+        );
+        assert!(repeat.y > time.y, "repeat follows time");
+        // Seven to a row at most, and the month wraps onto several rows.
+        let mut rows: Vec<f32> = days.iter().map(|pos| pos.y).collect();
+        rows.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rows.dedup_by(|a, b| (*a - *b).abs() < 4.0);
+        assert!(rows.len() >= 4, "the days wrap onto several rows");
+        for row in &rows {
+            let count = days.iter().filter(|pos| (pos.y - row).abs() < 4.0).count();
+            assert!(count <= 7, "no row holds more than seven days");
+        }
+    }
+
+    #[test]
     fn a_click_on_a_row_picks_its_message() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
