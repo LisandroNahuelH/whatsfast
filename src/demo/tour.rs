@@ -959,6 +959,56 @@ mod tests {
     }
 
     #[test]
+    fn holding_a_pinned_row_starts_the_gesture_and_the_release_ends_it() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        for (index, chat) in app.chats.iter_mut().enumerate() {
+            chat.pinned = index < 2;
+            chat.pinned_at = 1_000 - index as i64;
+        }
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let title = app
+            .visible_chats()
+            .first()
+            .map(|chat| app.chat_title(chat))
+            .expect("a chat");
+        let from = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.text() == title && text.pos.x < 320.0 => {
+                    Some(text.pos + vec2(20.0, 6.0))
+                }
+                _ => None,
+            })
+            .expect("the pinned row is drawn in the list");
+        let press = [egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        }];
+        step_output(&mut app, &ctx, press.to_vec(), 0.1, true);
+        assert!(app.pin_drag.is_some(), "the press starts the gesture");
+        // A still pointer sends no events: only the clock moves.
+        step_output(&mut app, &ctx, Vec::new(), 0.5, true);
+        assert!(
+            app.pin_drag.as_ref().is_some_and(|drag| drag.active),
+            "holding past the threshold turns the gesture on"
+        );
+        let release = [egui::Event::PointerButton {
+            pos: from,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        }];
+        step_output(&mut app, &ctx, release.to_vec(), 0.6, true);
+        assert!(app.pin_drag.is_none(), "the release ends the gesture");
+    }
+
+    #[test]
     fn a_second_click_on_settings_closes_it() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

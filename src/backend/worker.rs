@@ -2497,6 +2497,7 @@ impl Worker {
             ),
             Command::LoadScheduled => self.emit_scheduled(),
             Command::LoadStarred => self.emit_starred(),
+            Command::ReorderPinned(order) => self.reorder_pinned(order),
             Command::CancelScheduled { id } => self.cancel_scheduled(id),
             Command::SetStar {
                 chat,
@@ -3219,6 +3220,47 @@ impl Worker {
             Ok(list) => self.emit(Event::StarredList(list)),
             Err(error) => self.emit(Event::Error(error.to_string())),
         }
+    }
+
+    /// Writes the order the user dragged the pinned chats into. Only the local
+    /// order changes: the phone keeps its own, and nothing goes to WhatsApp.
+    /// Each row gets a time above its own pin version, so the history sync
+    /// cannot pull it back to where it was.
+    fn reorder_pinned(&mut self, order: Vec<ChatId>) {
+        let pinned = match self.archive.pinned_order() {
+            Ok(list) => list,
+            Err(error) => {
+                self.emit(Event::Error(error.to_string()));
+                return;
+            }
+        };
+        // Only the chats still pinned, in the order asked for; anything the
+        // list did not name (pinned on the phone meanwhile) keeps its place
+        // at the end.
+        let mut wanted: Vec<String> = order
+            .into_iter()
+            .filter(|id| pinned.iter().any(|(known, _)| known == id))
+            .collect();
+        for (known, _) in &pinned {
+            if !wanted.contains(known) {
+                wanted.push(known.clone());
+            }
+        }
+        let base = pinned
+            .iter()
+            .map(|(_, version)| *version)
+            .max()
+            .unwrap_or(0);
+        let count = wanted.len() as i64;
+        for (index, id) in wanted.iter().enumerate() {
+            let stamp = base + count - index as i64;
+            if let Err(error) = self.archive.set_pinned_at(id, true, stamp) {
+                self.emit(Event::Error(error.to_string()));
+                return;
+            }
+        }
+        // The write is the truth: hand the list back in its new order.
+        self.emit_chats();
     }
 
     fn cancel_scheduled(&mut self, id: String) {

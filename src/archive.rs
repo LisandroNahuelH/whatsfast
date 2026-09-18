@@ -326,6 +326,21 @@ impl Archive {
         Ok(())
     }
 
+    /// The pinned chats with the version of their pin. The order the list
+    /// shows lives in `pinned_at`; a reorder needs these versions to stamp new
+    /// times the history sync will not overwrite.
+    pub fn pinned_order(&self) -> Result<Vec<(String, i64)>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id, COALESCE(pin_updated_at, 0) FROM chats WHERE pinned = 1")?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut list = Vec::new();
+        for row in rows {
+            list.push(row?);
+        }
+        Ok(list)
+    }
+
     pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<()> {
         self.set_pinned_at(id, pinned, jiff::Timestamp::now().as_millisecond())
     }
@@ -1475,6 +1490,70 @@ pub(crate) mod tests {
         assert_eq!(
             list[0].sent_at, 100,
             "the bubble can show the message's time"
+        );
+    }
+
+    #[test]
+    fn reorder_pinned_assigns_distinct_times_the_history_sync_cannot_overwrite() {
+        let archive = Archive::in_memory().unwrap();
+        for (id, pin) in [("a", 100), ("b", 200), ("c", 300)] {
+            archive.ensure_chat(id, id).unwrap();
+            archive.set_pinned_at(id, true, pin).unwrap();
+        }
+        let base = archive
+            .pinned_order()
+            .unwrap()
+            .iter()
+            .map(|(_, version)| *version)
+            .max()
+            .unwrap();
+        assert_eq!(base, 300, "the newest pin version is the base");
+        // What the worker writes for the order [c, a, b].
+        for (index, id) in ["c", "a", "b"].iter().enumerate() {
+            archive
+                .set_pinned_at(id, true, base + 3 - index as i64)
+                .unwrap();
+        }
+        let after = archive.pinned_order().unwrap();
+        let versions: Vec<i64> = ["c", "a", "b"]
+            .iter()
+            .map(|id| {
+                after
+                    .iter()
+                    .find(|(known, _)| known == id)
+                    .expect("the chat is still pinned")
+                    .1
+            })
+            .collect();
+        assert_eq!(
+            versions,
+            vec![303, 302, 301],
+            "the order lives in the times, top first"
+        );
+        // A history replay carries an old pin and must not move the rows.
+        for id in ["a", "b", "c"] {
+            let mut replay = Chat::new(id.to_owned(), id.to_owned());
+            replay.pinned = true;
+            replay.pinned_at = 123_000;
+            archive.upsert_chat(&replay).unwrap();
+        }
+        assert_eq!(
+            archive.pinned_order().unwrap(),
+            after,
+            "the sync cannot pull a reordered row back"
+        );
+    }
+
+    #[test]
+    fn reorder_pinned_same_timestamp_is_idempotent() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("a", "a").unwrap();
+        archive.set_pinned_at("a", true, 500).unwrap();
+        archive.set_pinned_at("a", true, 500).unwrap();
+        assert_eq!(
+            archive.pinned_order().unwrap(),
+            vec![("a".to_owned(), 500)],
+            "writing the same time twice leaves one pinned row"
         );
     }
 

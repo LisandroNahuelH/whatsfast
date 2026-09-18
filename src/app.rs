@@ -180,6 +180,8 @@ pub struct App {
     pub open_message_menu: Option<String>,
     /// Messages picked while the selection bar is up.
     pub selecting: Option<crate::model::Selecting>,
+    /// A pinned chat being held to move it, while the gesture lasts.
+    pub pin_drag: Option<crate::model::PinDrag>,
     /// Scheduled messages, soonest first, and whether the left panel lists them.
     pub scheduled: Vec<crate::archive::Scheduled>,
     pub show_scheduled: bool,
@@ -414,6 +416,7 @@ impl App {
             reaction_anchor: None,
             open_message_menu: None,
             selecting: None,
+            pin_drag: None,
             scheduled: Vec::new(),
             show_scheduled: false,
             starred: Vec::new(),
@@ -882,6 +885,16 @@ impl App {
             })
         });
         chats
+    }
+
+    /// Whether the pinned chats can be dragged into a new order: only in the
+    /// plain chat list, and only with something to reorder.
+    pub fn can_reorder_pinned(&self) -> bool {
+        self.search.trim().is_empty()
+            && !self.show_archived
+            && !self.show_scheduled
+            && !self.show_starred
+            && self.chats.iter().filter(|chat| chat.pinned).count() > 1
     }
 
     /// Matching individual contacts without an existing chat, sorted by name.
@@ -2116,6 +2129,9 @@ impl App {
                 } else {
                     self.page = Page::Settings;
                 }
+            }
+            Action::ReorderPinned(order) => {
+                self.backend.send(Command::ReorderPinned(order));
             }
             Action::CancelScheduled { id } => {
                 self.backend.send(Command::CancelScheduled { id });

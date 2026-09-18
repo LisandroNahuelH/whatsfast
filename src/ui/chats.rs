@@ -624,6 +624,15 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         return;
     }
     let row_height = theme::ROW_HEIGHT;
+    let stride = row_height + ui.spacing().item_spacing.y;
+    let list_top = ui.cursor().top();
+    let list_id = ui.make_persistent_id(egui::IdSalt::new("chat-list"));
+    let offset = egui::scroll_area::State::load(ui.ctx(), list_id)
+        .unwrap_or_default()
+        .offset
+        .y;
+    let pinned = chats.iter().filter(|chat| chat.pinned).count();
+    pin_gesture(app, ui, list_top, offset, pinned, stride);
     let total = chats.len() + usize::from(show_archive_row);
     let mut scroll_area = egui::ScrollArea::vertical()
         .id_salt("chat-list")
@@ -657,10 +666,84 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
                 continue;
             }
             let chat = &chats[index - usize::from(show_archive_row)];
+            let row_index = index - usize::from(show_archive_row);
             // Key by chat so an open menu survives list reordering.
-            ui.push_id(("chat", &chat.id), |ui| row(app, ui, chat));
+            ui.push_id(("chat", &chat.id), |ui| row(app, ui, chat, row_index));
         }
     });
+    // The slot the held chat would land in.
+    if let Some(drag) = app.pin_drag.as_ref().filter(|drag| drag.active) {
+        let y = list_top + drag.to as f32 * stride - offset;
+        ui.painter().hline(
+            (ui.max_rect().left() + 8.0)..=(ui.max_rect().right() - 8.0),
+            y,
+            Stroke::new(2.0, palette.accent),
+        );
+    }
+}
+
+/// How long a pinned row must be held before it can be moved.
+const PIN_HOLD: f64 = 0.35;
+
+/// Runs the pinned-chat gesture: the hold turns it on, the pointer picks the
+/// slot, and the release writes the new order. It runs before the rows are
+/// drawn, because `show_rows` stops drawing the rows that scroll out of view
+/// and a release read there would be lost.
+fn pin_gesture(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    top: f32,
+    offset: f32,
+    pinned: usize,
+    stride: f32,
+) {
+    let Some(mut drag) = app.pin_drag.clone() else {
+        return;
+    };
+    let (time, down, released, pointer) = ui.input(|input| {
+        (
+            input.time,
+            input.pointer.primary_down(),
+            input.pointer.any_released(),
+            input.pointer.interact_pos(),
+        )
+    });
+    if !drag.active && time - drag.since >= PIN_HOLD {
+        drag.active = true;
+    }
+    if drag.active
+        && let Some(pointer) = pointer
+    {
+        let slot = ((pointer.y - top + offset) / stride).floor();
+        drag.to = (slot.max(0.0) as usize).min(pinned.saturating_sub(1));
+    }
+    if !down || released {
+        if drag.active && drag.to != drag.from {
+            app.actions
+                .push(Action::ReorderPinned(pinned_order(app, drag.from, drag.to)));
+        }
+        app.pin_drag = None;
+        return;
+    }
+    // A still pointer sends no events, so the hold would never reach its
+    // threshold without asking for the next frame.
+    ui.ctx().request_repaint();
+    app.pin_drag = Some(drag);
+}
+
+/// The pinned chats, with the one at `from` moved to `to`, top first.
+fn pinned_order(app: &App, from: usize, to: usize) -> Vec<crate::model::ChatId> {
+    let mut ids: Vec<crate::model::ChatId> = app
+        .visible_chats()
+        .into_iter()
+        .filter(|chat| chat.pinned)
+        .map(|chat| chat.id.clone())
+        .collect();
+    if from < ids.len() {
+        let moved = ids.remove(from);
+        ids.insert(to.min(ids.len()), moved);
+    }
+    ids
 }
 
 /// Returns the smallest offset that fully reveals a fixed-height row.
@@ -707,7 +790,7 @@ fn results(app: &mut App, ui: &mut egui::Ui) {
                 for chat in &chats {
                     let reveal = app.scroll_chat_into_view.as_deref() == Some(chat.id.as_str());
                     let response = ui
-                        .push_id(("chat", &chat.id), |ui| row(app, ui, chat))
+                        .push_id(("chat", &chat.id), |ui| row(app, ui, chat, 0))
                         .inner;
                     if reveal {
                         response.scroll_to_me(None);
@@ -944,7 +1027,7 @@ fn archive_row(app: &mut App, ui: &mut egui::Ui, count: usize) {
     }
 }
 
-fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
+fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Response {
     let palette = app.palette;
     let title = app.chat_title(chat);
     let selected = app.open_chat.as_deref() == Some(chat.id.as_str());
@@ -954,14 +1037,58 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
         vec2(ui.available_width(), theme::ROW_HEIGHT),
         Sense::click(),
     );
+    // A press on a pinned row starts the hold that can move it. The rest of
+    // the gesture runs before the rows are drawn, in `pin_gesture`.
+    if chat.pinned
+        && app.can_reorder_pinned()
+        && app.pin_drag.is_none()
+        && response.is_pointer_button_down_on()
+        && ui.input(|input| input.pointer.primary_pressed())
+    {
+        app.pin_drag = Some(crate::model::PinDrag {
+            chat: chat.id.clone(),
+            from: index,
+            to: index,
+            since: ui.input(|input| input.time),
+            active: false,
+        });
+    }
+    // While a pinned chat is held, every pinned row shows its handle and the
+    // pointer says it can be grabbed.
+    let moving = app.pin_drag.as_ref().is_some_and(|drag| drag.active) && chat.pinned;
+    let response = response.on_hover_cursor(if moving {
+        egui::CursorIcon::Grabbing
+    } else {
+        egui::CursorIcon::PointingHand
+    });
     if ui.is_rect_visible(rect) {
         if selected {
             ui.painter().rect_filled(rect, 0.0, palette.surface_active);
+        } else if moving {
+            ui.painter()
+                .rect_filled(rect, 0.0, palette.accent.gamma_multiply(0.16));
         } else if response.hovered() {
             ui.painter().rect_filled(rect, 0.0, palette.surface_hover);
         }
-        let avatar_rect =
-            Rect::from_center_size(pos2(rect.left() + 38.0, rect.center().y), Vec2::splat(48.0));
+        if moving {
+            theme::paint_icon(
+                ui,
+                Icon::Menu,
+                Rect::from_center_size(
+                    pos2(rect.left() + 12.0, rect.center().y),
+                    Vec2::splat(16.0),
+                ),
+                16.0,
+                palette.dim,
+            );
+        }
+        let avatar_rect = Rect::from_center_size(
+            pos2(
+                rect.left() + if moving { 58.0 } else { 38.0 },
+                rect.center().y,
+            ),
+            Vec2::splat(48.0),
+        );
         let picture = app.avatar(&chat.id);
         widgets::paint_avatar(
             ui,
@@ -975,7 +1102,7 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
             widgets::paint_disappearing_badge(ui, &palette, avatar_rect);
         }
 
-        let left = rect.left() + 76.0;
+        let left = rect.left() + if moving { 96.0 } else { 76.0 };
         let right = rect.right() - 14.0;
         let stamp = if chat.last_activity > 0 {
             crate::util::chat_stamp(chat.last_activity)
@@ -1093,8 +1220,10 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat) -> egui::Response {
             egui::Stroke::new(1.0, palette.outline),
         );
     }
-    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.clicked() {
+    // While a pinned chat is held, a release moves it instead of opening it:
+    // egui still counts a hold of up to 0.8 s as a click.
+    let holding = app.pin_drag.as_ref().is_some_and(|drag| drag.active);
+    if !holding && response.clicked() {
         app.actions.push(Action::OpenChat(chat.id.clone()));
     }
     let menu_palette = palette;
@@ -1166,6 +1295,47 @@ mod tests {
     use super::*;
     use crate::paths::AppDirs;
     use crate::settings::Settings;
+
+    #[test]
+    fn moving_a_pinned_chat_rewrites_the_order() {
+        let root = std::env::temp_dir().join(format!(
+            "zapfast-pin-order-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let (mut app, _events) = App::headless(AppDirs::under(&root), Settings::default());
+        for index in 0..3 {
+            let mut chat = Chat::new(
+                format!("49170000{index:04}@s.whatsapp.net"),
+                format!("Chat {index}"),
+            );
+            chat.pinned = true;
+            chat.pinned_at = 100 - i64::from(index);
+            app.chats.push(chat);
+        }
+        let ids: Vec<String> = app
+            .visible_chats()
+            .iter()
+            .filter(|chat| chat.pinned)
+            .map(|chat| chat.id.clone())
+            .collect();
+        assert_eq!(ids.len(), 3, "three pinned chats, newest pin first");
+        assert_eq!(
+            pinned_order(&app, 0, 2),
+            vec![ids[1].clone(), ids[2].clone(), ids[0].clone()],
+            "the top row moved to the end"
+        );
+        assert_eq!(
+            pinned_order(&app, 2, 0),
+            vec![ids[2].clone(), ids[0].clone(), ids[1].clone()],
+            "the bottom row moved to the top"
+        );
+        assert_eq!(
+            pinned_order(&app, 1, 1),
+            ids,
+            "the same slot leaves it alone"
+        );
+    }
 
     #[test]
     fn alt_navigation_scrolls_the_destination_chat_into_view() {

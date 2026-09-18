@@ -187,6 +187,8 @@ pub enum Command {
     },
     /// Asks for the starred messages.
     LoadStarred,
+    /// Writes the new order of the pinned chats, top first.
+    ReorderPinned(Vec<ChatId>),
     /// Result of a star or unstar request.
     Starred {
         chat: ChatId,

@@ -476,6 +476,19 @@ pub enum Page {
     Settings,
 }
 
+/// A pinned chat being held to move it, and where it would land.
+#[derive(Clone, Debug)]
+pub struct PinDrag {
+    pub chat: ChatId,
+    /// The row the gesture started on, and the slot under the pointer now.
+    pub from: usize,
+    pub to: usize,
+    /// The frame time the press happened, for the hold threshold.
+    pub since: f64,
+    /// Set once the hold passed the threshold: the rows show their handles.
+    pub active: bool,
+}
+
 /// The tabs of the picker above the composer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PickerTab {
@@ -653,6 +666,8 @@ pub enum Action {
     ToggleScheduled,
     /// Shows or hides the starred messages in the left panel.
     ToggleStarred,
+    /// Writes the new order of the pinned chats, top first.
+    ReorderPinned(Vec<ChatId>),
     /// Removes a scheduled message.
     CancelScheduled {
         id: String,
