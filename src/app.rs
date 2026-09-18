@@ -1964,7 +1964,7 @@ impl App {
                     self.open_message_menu = None;
                     self.selecting = Some(crate::model::Selecting {
                         chat,
-                        ids: [message].into_iter().collect(),
+                        ids: message.into_iter().collect(),
                     });
                 }
             }

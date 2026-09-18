@@ -605,9 +605,9 @@ pub enum Action {
         messages: Vec<String>,
         to_chat: ChatId,
     },
-    /// Enters multi-message selection with this message picked.
+    /// Enters multi-message selection, picking this message when there is one.
     StartSelecting {
-        message: String,
+        message: Option<String>,
     },
     /// Adds or removes a message from the open selection.
     ToggleSelected {
