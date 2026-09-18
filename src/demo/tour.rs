@@ -809,6 +809,68 @@ mod tests {
             .collect()
     }
 
+    /// Runs one frame and hands back its output, for shape checks.
+    fn step_output(
+        app: &mut App,
+        ctx: &egui::Context,
+        events: Vec<Event>,
+        at: f32,
+        focused: bool,
+    ) -> egui::FullOutput {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            time: Some(at as f64),
+            focused,
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            app.background_frame(ctx);
+            app.frame_ui(ui);
+        });
+        output.textures_delta.clear();
+        output
+    }
+
+    /// Whether the composer's caret is painted in the composer's band.
+    fn caret_in(output: &egui::FullOutput, app: &App) -> bool {
+        output.shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::LineSegment { points, stroke }
+                if stroke.width >= 1.5
+                    && stroke.color == app.palette.accent
+                    && points[0].y > 700.0
+                    && points[1].y > 700.0)
+        })
+    }
+
+    #[test]
+    fn the_composer_shows_its_caret_while_the_window_has_focus() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        // egui hides a text field's caret when the raw input says the window
+        // lost focus, and eframe's native backends never set that flag, which
+        // is why the composer had no caret. Shell::raw_input_hook now mirrors
+        // the viewport's real focus into it.
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("composer-text")));
+        let focused = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        assert!(
+            ctx.memory(|memory| memory.has_focus(egui::Id::new("composer-text"))),
+            "the composer takes focus"
+        );
+        assert!(
+            caret_in(&focused, &app),
+            "the caret is painted in the composer while the window has focus"
+        );
+        let unfocused = step_output(&mut app, &ctx, Vec::new(), 0.2, false);
+        assert!(
+            !caret_in(&unfocused, &app),
+            "a window without focus keeps the caret hidden"
+        );
+    }
+
     #[test]
     fn a_click_on_a_row_picks_its_message() {
         let mut app = super::super::tests::app();
