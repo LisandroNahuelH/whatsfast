@@ -959,6 +959,56 @@ mod tests {
     }
 
     #[test]
+    fn the_scheduled_list_shows_the_message() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let now = crate::util::now();
+        app.show_scheduled = true;
+        app.scheduled = vec![crate::archive::Scheduled {
+            id: "sched-1".to_owned(),
+            chat,
+            text: "See you at nine".to_owned(),
+            kind: "daily".to_owned(),
+            hour: 9,
+            minute: 0,
+            weekday: None,
+            day_of_month: None,
+            nth: None,
+            next_at: now + 3600,
+            state: "pending".to_owned(),
+            message_id: None,
+            last_error: None,
+            created_at: now,
+            last_fired_at: None,
+        }];
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let texts: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.iter().any(|text| text == "Scheduled"),
+            "the panel header names the list"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("See you at nine")),
+            "the row shows the scheduled message itself"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("Every day")),
+            "the row shows how it repeats"
+        );
+    }
+
+    #[test]
     fn a_click_on_a_row_picks_its_message() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

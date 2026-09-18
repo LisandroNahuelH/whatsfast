@@ -293,7 +293,7 @@ fn scheduled_row(
     palette: &Palette,
     entry: &crate::archive::Scheduled,
 ) {
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 62.0), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -317,24 +317,40 @@ fn scheduled_row(
         crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)
             .map(|rule| rule.label())
             .unwrap_or_else(|| "Once".to_owned());
-    let mut detail = format!("{} · {rule}", when_label(entry.next_at));
-    if let Some(error) = &entry.last_error {
-        detail.push_str(&format!(" · {error}"));
-    }
+    let when = when_label(entry.next_at);
+    let top = rect.top();
+    // First line: where it goes and how it repeats, with the time on the right.
     ui.painter().text(
-        pos2(rect.left() + 56.0, rect.center().y - 9.0),
+        pos2(rect.left() + 56.0, top + 20.0),
         egui::Align2::LEFT_CENTER,
-        name,
-        theme::medium(14.5),
+        format!("{name} · {rule}"),
+        theme::medium(14.0),
         palette.text,
     );
     ui.painter().text(
-        pos2(rect.left() + 56.0, rect.center().y + 9.0),
-        egui::Align2::LEFT_CENTER,
-        detail,
-        theme::regular(12.0),
+        pos2(rect.right() - 40.0, top + 20.0),
+        egui::Align2::RIGHT_CENTER,
+        when,
+        theme::regular(11.5),
         palette.secondary,
     );
+    // Second line: the message itself, with the reason it failed when it did.
+    ui.painter().text(
+        pos2(rect.left() + 56.0, top + 46.0),
+        egui::Align2::LEFT_CENTER,
+        preview(&entry.text),
+        theme::regular(12.5),
+        palette.secondary,
+    );
+    if let Some(error) = &entry.last_error {
+        ui.painter().text(
+            pos2(rect.right() - 40.0, top + 46.0),
+            egui::Align2::RIGHT_CENTER,
+            error,
+            theme::regular(11.5),
+            palette.danger,
+        );
+    }
     let close = egui::Rect::from_center_size(
         pos2(rect.right() - 24.0, rect.center().y),
         Vec2::splat(26.0),
@@ -372,6 +388,16 @@ fn scheduled_row(
             id: entry.id.clone(),
         });
     }
+}
+
+/// The message's own words, flattened to one line for the list.
+fn preview(text: &str) -> String {
+    let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut out: String = flat.chars().take(48).collect();
+    if flat.chars().count() > 48 {
+        out.push('…');
+    }
+    out
 }
 
 /// "Fri 18 Sep, 21:00" in the machine's time zone.
