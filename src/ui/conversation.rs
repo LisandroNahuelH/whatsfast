@@ -1022,7 +1022,10 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 {
                     app.actions.push(Action::Attach);
                 }
-                if app.editing.is_none() && theme::icon_button(ui, Icon::ListChecks, 20.0, palette.secondary, palette.text, "Create poll").clicked() {
+                if app.editing.is_none()
+                    && app.settings.show_poll_button
+                    && theme::icon_button(ui, Icon::ListChecks, 20.0, palette.secondary, palette.text, "Create poll").clicked()
+                {
                     app.actions.push(Action::ShowDialog(Dialog::CreatePoll(chat.id.clone())));
                 }
                 if app.editing.is_none() {
