@@ -809,6 +809,249 @@ mod tests {
             .collect()
     }
 
+    /// Runs one frame and hands back its output, for shape checks.
+    fn step_output(
+        app: &mut App,
+        ctx: &egui::Context,
+        events: Vec<Event>,
+        at: f32,
+        focused: bool,
+    ) -> egui::FullOutput {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            time: Some(at as f64),
+            focused,
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            app.background_frame(ctx);
+            app.frame_ui(ui);
+        });
+        output.textures_delta.clear();
+        output
+    }
+
+    /// Whether the composer's caret is painted in the composer's band.
+    fn caret_in(output: &egui::FullOutput, app: &App) -> bool {
+        output.shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::Shape::LineSegment { points, stroke }
+                if stroke.width >= 1.5
+                    && stroke.color == app.palette.accent
+                    && points[0].y > 700.0
+                    && points[1].y > 700.0)
+        })
+    }
+
+    #[test]
+    fn the_composer_shows_its_caret_while_the_window_has_focus() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        // egui hides a text field's caret when the raw input says the window
+        // lost focus, and eframe's native backends never set that flag, which
+        // is why the composer had no caret. Shell::raw_input_hook now mirrors
+        // the viewport's real focus into it.
+        ctx.memory_mut(|memory| memory.request_focus(egui::Id::new("composer-text")));
+        let focused = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        assert!(
+            ctx.memory(|memory| memory.has_focus(egui::Id::new("composer-text"))),
+            "the composer takes focus"
+        );
+        assert!(
+            caret_in(&focused, &app),
+            "the caret is painted in the composer while the window has focus"
+        );
+        let unfocused = step_output(&mut app, &ctx, Vec::new(), 0.2, false);
+        assert!(
+            !caret_in(&unfocused, &app),
+            "a window without focus keeps the caret hidden"
+        );
+    }
+
+    #[test]
+    fn the_schedule_dialog_stacks_its_parts() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.composer = "See you at nine".to_owned();
+        app.dialog = Some(crate::model::Dialog::ScheduleMessage(chat));
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+
+        let months = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        let mut month: Option<Pos2> = None;
+        let mut numbers: Vec<(String, Pos2)> = Vec::new();
+        let mut time: Option<Pos2> = None;
+        let mut repeat: Option<Pos2> = None;
+        let mut schedule: Option<Pos2> = None;
+        for clipped in &output.shapes {
+            let egui::Shape::Text(text) = &clipped.shape else {
+                continue;
+            };
+            let content = text.galley.text();
+            assert!(
+                text.pos.x.is_finite() && text.pos.y.is_finite(),
+                "every label has a real position"
+            );
+            if months.iter().any(|name| content.starts_with(name)) {
+                month = Some(text.pos);
+            } else if content.parse::<u8>().is_ok() {
+                numbers.push((content.to_owned(), text.pos));
+            } else if content == "Time" {
+                time = Some(text.pos);
+            } else if content == "Repeat" {
+                repeat = Some(text.pos);
+            } else if content == "Schedule" {
+                schedule = Some(text.pos);
+            }
+        }
+        let month = month.expect("the month header is drawn");
+        let time = time.expect("the time row is drawn");
+        let repeat = repeat.expect("the repeat row is drawn");
+        schedule.expect("the schedule button is drawn");
+        // The calendar's days: the numbers between the month header and the
+        // time row, so numbers elsewhere on the screen do not count.
+        let days: Vec<Pos2> = numbers
+            .iter()
+            .filter(|(_, pos)| pos.y > month.y + 10.0 && pos.y < time.y)
+            .map(|(_, pos)| *pos)
+            .collect();
+        assert!(days.len() >= 28, "a month shows its days");
+        let first_day = days.iter().map(|pos| pos.y).fold(f32::MAX, f32::min);
+        let last_day = days.iter().map(|pos| pos.y).fold(f32::MIN, f32::max);
+        assert!(
+            month.y < first_day,
+            "the month header sits above the calendar, not beside it"
+        );
+        assert!(
+            time.y > last_day && repeat.y > last_day,
+            "the time and repeat rows sit under the calendar"
+        );
+        assert!(repeat.y > time.y, "repeat follows time");
+        // Seven to a row at most, and the month wraps onto several rows.
+        let mut rows: Vec<f32> = days.iter().map(|pos| pos.y).collect();
+        rows.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rows.dedup_by(|a, b| (*a - *b).abs() < 4.0);
+        assert!(rows.len() >= 4, "the days wrap onto several rows");
+        for row in &rows {
+            let count = days.iter().filter(|pos| (pos.y - row).abs() < 4.0).count();
+            assert!(count <= 7, "no row holds more than seven days");
+        }
+    }
+
+    #[test]
+    fn a_picked_row_keeps_its_highlight() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        // One frame registers the rows, the next paints their highlight.
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let first = app.conversations[&chat]
+            .messages
+            .iter()
+            .find(|message| {
+                ctx.data(|data| {
+                    data.get_temp::<(Rect, bool)>(egui::Id::new((
+                        "message-row",
+                        chat.as_str(),
+                        message.id.as_str(),
+                    )))
+                })
+                .is_some()
+            })
+            .expect("a row registered its rect")
+            .id
+            .clone();
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: [first].into_iter().collect(),
+        });
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let expected = app.palette.accent.gamma_multiply(0.16);
+        assert!(
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == expected)
+            }),
+            "a picked row keeps a highlight of its own"
+        );
+    }
+
+    #[test]
+    fn the_scheduled_list_shows_the_message() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let now = crate::util::now();
+        app.show_scheduled = true;
+        app.scheduled = vec![crate::archive::Scheduled {
+            id: "sched-1".to_owned(),
+            chat,
+            text: "See you at nine".to_owned(),
+            kind: "daily".to_owned(),
+            hour: 9,
+            minute: 0,
+            weekday: None,
+            day_of_month: None,
+            nth: None,
+            next_at: now + 3600,
+            state: "pending".to_owned(),
+            message_id: None,
+            last_error: None,
+            created_at: now,
+            last_fired_at: None,
+        }];
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let texts: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.iter().any(|text| text == "Scheduled"),
+            "the panel header names the list"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("See you at nine")),
+            "the row shows the scheduled message itself"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("Every day")),
+            "the row shows how it repeats"
+        );
+    }
+
     #[test]
     fn a_click_on_a_row_picks_its_message() {
         let mut app = super::super::tests::app();

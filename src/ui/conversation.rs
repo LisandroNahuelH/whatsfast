@@ -876,6 +876,22 @@ fn bar_button(ui: &mut egui::Ui, palette: &Palette, icon: Icon, label: &str) -> 
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// The wash a row gets while messages are being picked: its own tint when it
+/// is picked, a softer one under the pointer, and nothing otherwise.
+fn row_wash(palette: &Palette, picked: bool, hovered: bool) -> Option<egui::Color32> {
+    if picked {
+        Some(
+            palette
+                .accent
+                .gamma_multiply(if hovered { 0.24 } else { 0.16 }),
+        )
+    } else if hovered {
+        Some(palette.surface_hover.gamma_multiply(0.55))
+    } else {
+        None
+    }
+}
+
 /// The pick circle selection mode draws beside a message's row: left of our
 /// own rows, right of the received ones, so it never covers the bubble.
 fn paint_pick(ui: &egui::Ui, palette: &Palette, row: Rect, own: bool, picked: bool) {
@@ -1486,23 +1502,21 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 || previous.is_none_or(|previous| {
                                     previous.sender != message.sender || previous.from_me
                                 }));
-                        // Selection mode makes the whole row the target, with a
-                        // soft highlight under the pointer. The highlight paints
-                        // from the row's rect of the last frame, before the
-                        // bubble, so it never covers the message.
+                        // Selection mode makes the whole row the target: a
+                        // picked row keeps a wash of its own, and the pointer
+                        // adds a softer one. Both paint from the row's rect of
+                        // the last frame, before the bubble, so the highlight
+                        // never covers the message.
                         let row_id =
                             egui::Id::new(("message-row", chat.id.as_str(), message.id.as_str()));
                         let selecting = view.selecting.is_some();
+                        let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
                         if selecting
                             && let Some((rect, hovered)) =
                                 ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
-                            && hovered
+                            && let Some(wash) = row_wash(&palette, picked, hovered)
                         {
-                            ui.painter().rect_filled(
-                                rect,
-                                6.0,
-                                palette.surface_hover.gamma_multiply(0.55),
-                            );
+                            ui.painter().rect_filled(rect, 6.0, wash);
                         }
                         let row_top = ui.cursor().top();
                         if let Some(response) =
@@ -1521,8 +1535,6 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             ui.ctx().data_mut(|data| {
                                 data.insert_temp(row_id, (row, response.hovered()));
                             });
-                            let picked =
-                                view.selecting.is_some_and(|ids| ids.contains(&message.id));
                             paint_pick(ui, &palette, row, message.from_me, picked);
                             if response.clicked() {
                                 actions.push(Action::ToggleSelected {
@@ -3952,6 +3964,19 @@ mod tests {
         assert!(unknown.x > unknown.y);
         let tiny = frame_size(&media(Some(40), Some(40)), None, 340.0);
         assert!(tiny.x >= 120.0);
+    }
+
+    #[test]
+    fn a_picked_row_is_washed_and_a_hovered_one_less() {
+        let palette = Palette::dark();
+        assert!(row_wash(&palette, false, false).is_none());
+        let hover = row_wash(&palette, false, true).expect("a hover wash");
+        let picked = row_wash(&palette, true, false).expect("a picked wash");
+        assert_ne!(hover, picked, "picked rows do not read as hovered ones");
+        assert!(picked.a() > 0, "the picked wash is visible");
+        // Hovering a picked row deepens its wash instead of replacing it.
+        let both = row_wash(&palette, true, true).expect("both washes");
+        assert_ne!(both, picked);
     }
 
     #[test]
