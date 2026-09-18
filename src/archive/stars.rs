@@ -33,11 +33,14 @@ pub struct Starred {
     pub id: String,
     /// Unix seconds of the moment the star was confirmed.
     pub starred_at: i64,
-    /// The message's own words. Personal data: never logged.
+    /// The message's own words, whole, for the bubble in the list. Personal
+    /// data: never logged.
     pub text: String,
     /// Whether we sent it, so the list can draw it on the same side with the
     /// same colour as in the chat.
     pub from_me: bool,
+    /// Unix seconds of the message itself, for the time in its bubble.
+    pub sent_at: i64,
 }
 
 impl Archive {
@@ -76,7 +79,7 @@ impl Archive {
     /// anything deleted here, so the list never shows a ghost.
     pub fn starred(&self, limit: usize) -> Result<Vec<Starred>> {
         let mut statement = self.connection.prepare(
-            "SELECT s.chat, s.id, s.starred_at, m.content, m.from_me
+            "SELECT s.chat, s.id, s.starred_at, m.content, m.from_me, m.timestamp
              FROM stars s JOIN messages m ON m.chat = s.chat AND m.id = s.id
              ORDER BY s.starred_at DESC, s.rowid DESC LIMIT ?1",
         )?;
@@ -90,8 +93,9 @@ impl Archive {
                 chat: row.get(0)?,
                 id: row.get(1)?,
                 starred_at: row.get(2)?,
-                text: content.summary(),
+                text: content.body(),
                 from_me: row.get(4)?,
+                sent_at: row.get(5)?,
             })
         })?;
         let mut list = Vec::new();

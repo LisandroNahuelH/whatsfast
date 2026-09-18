@@ -503,12 +503,18 @@ fn starred_row(
     entry: &crate::archive::Starred,
 ) {
     let width = ui.available_width();
-    // The bubble wraps, so the row is as tall as the message needs.
+    let clock = ui.painter().layout_no_wrap(
+        crate::util::clock(entry.sent_at),
+        theme::regular(11.0),
+        palette.secondary,
+    );
+    // The bubble wraps, so the row is as tall as the message needs. The text
+    // leaves room for the time in the corner, like the chat does.
     let galley = ui.painter().layout(
         entry.text.clone(),
         theme::regular(13.0),
         palette.text,
-        (width - 32.0 - 24.0).max(60.0),
+        (width - 32.0 - 24.0 - clock.size().x - 10.0).max(60.0),
     );
     let bubble_height = galley.rect.height() + 12.0;
     let (rect, response) =
@@ -537,8 +543,9 @@ fn starred_row(
         theme::regular(11.5),
         palette.secondary,
     );
-    // The message itself, as the bubble the chat shows: same fill, same side.
-    let bubble_width = (galley.rect.width() + 20.0).min(width - 32.0);
+    // The message itself, as the bubble the chat shows: same fill, same side,
+    // with the time in its bottom corner.
+    let bubble_width = (galley.rect.width() + 20.0 + clock.size().x + 6.0).min(width - 32.0);
     let left = if entry.from_me {
         rect.right() - 16.0 - bubble_width
     } else {
@@ -561,6 +568,14 @@ fn starred_row(
         pos2(bubble.left() + 10.0, bubble.top() + 6.0),
         galley,
         palette.text,
+    );
+    ui.painter().galley(
+        pos2(
+            bubble.right() - 10.0 - clock.size().x,
+            bubble.bottom() - 6.0 - clock.size().y,
+        ),
+        clock,
+        palette.secondary,
     );
     if response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
