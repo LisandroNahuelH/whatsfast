@@ -493,14 +493,26 @@ fn starred_list(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
-/// One starred message. Clicking opens its chat at it.
+/// One starred message: where it is, when it was starred, and the message
+/// itself drawn as the bubble it is in the chat. Clicking opens its chat at
+/// the message.
 fn starred_row(
     app: &mut App,
     ui: &mut egui::Ui,
     palette: &Palette,
     entry: &crate::archive::Starred,
 ) {
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
+    let width = ui.available_width();
+    // The bubble wraps, so the row is as tall as the message needs.
+    let galley = ui.painter().layout(
+        entry.text.clone(),
+        theme::regular(13.0),
+        palette.text,
+        (width - 32.0 - 24.0).max(60.0),
+    );
+    let bubble_height = galley.rect.height() + 12.0;
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(width, 26.0 + bubble_height + 10.0), Sense::click());
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -510,29 +522,45 @@ fn starred_row(
     }
     let name = app.display_name_or(&entry.chat, None);
     let when = when_label(entry.starred_at);
-    let top = rect.top();
     // First line: where the message is, with the moment it was starred.
     ui.painter().text(
-        pos2(rect.left() + 16.0, top + 20.0),
+        pos2(rect.left() + 16.0, rect.top() + 14.0),
         egui::Align2::LEFT_CENTER,
         name,
         theme::medium(14.0),
         palette.text,
     );
     ui.painter().text(
-        pos2(rect.right() - 16.0, top + 20.0),
+        pos2(rect.right() - 16.0, rect.top() + 14.0),
         egui::Align2::RIGHT_CENTER,
         when,
         theme::regular(11.5),
         palette.secondary,
     );
-    // Second line: the message itself.
-    ui.painter().text(
-        pos2(rect.left() + 16.0, top + 46.0),
-        egui::Align2::LEFT_CENTER,
-        preview(&entry.text),
-        theme::regular(12.5),
-        palette.secondary,
+    // The message itself, as the bubble the chat shows: same fill, same side.
+    let bubble_width = (galley.rect.width() + 20.0).min(width - 32.0);
+    let left = if entry.from_me {
+        rect.right() - 16.0 - bubble_width
+    } else {
+        rect.left() + 16.0
+    };
+    let bubble = Rect::from_min_size(
+        pos2(left, rect.top() + 26.0),
+        vec2(bubble_width, bubble_height),
+    );
+    ui.painter().rect_filled(
+        bubble,
+        10.0,
+        if entry.from_me {
+            palette.bubble_out
+        } else {
+            palette.bubble_in
+        },
+    );
+    ui.painter().galley(
+        pos2(bubble.left() + 10.0, bubble.top() + 6.0),
+        galley,
+        palette.text,
     );
     if response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
