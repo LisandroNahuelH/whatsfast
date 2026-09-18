@@ -42,8 +42,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             // centred calendar) measures against the screen and the modal
             // stretches to the window.
             ui.set_width(width);
+            // The box fixes the width. Its height only has to be real: a list
+            // that asks how much room it has would otherwise show a single row.
             ui.allocate_ui_with_layout(
-                egui::vec2(width, 0.0),
+                egui::vec2(width, (ui.ctx().content_rect().height() - 200.0).max(320.0)),
                 Layout::top_down(Align::Min),
                 |ui| {
                     ui.set_max_width(width);

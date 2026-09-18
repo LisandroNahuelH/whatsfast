@@ -1003,6 +1003,42 @@ mod tests {
     }
 
     #[test]
+    fn the_forward_dialog_lists_several_chats() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.dialog = Some(crate::model::Dialog::Forward {
+            chat,
+            messages: vec!["m1".to_owned()],
+        });
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        // Only the dialog's own column, so the chat list behind it does not count.
+        let in_dialog: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.pos.x > 400.0 && text.pos.x < 880.0 => {
+                    Some(text.galley.text().to_owned())
+                }
+                _ => None,
+            })
+            .collect();
+        let titles: Vec<String> = app.chats.iter().map(|chat| app.chat_title(chat)).collect();
+        let shown = titles
+            .iter()
+            .filter(|title| in_dialog.iter().any(|text| text == *title))
+            .count();
+        assert!(
+            shown >= 3,
+            "the forward dialog lists several chats, not a single row"
+        );
+    }
+
+    #[test]
     fn the_starred_list_shows_the_message_and_the_mark() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
