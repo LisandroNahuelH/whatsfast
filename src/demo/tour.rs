@@ -1062,6 +1062,7 @@ mod tests {
             starred_at: crate::util::now(),
             text: "See you at nine".to_owned(),
             from_me: false,
+            sent_at: crate::util::now(),
         }];
         let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
         let texts: Vec<String> = output

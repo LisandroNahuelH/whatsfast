@@ -1460,6 +1460,25 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_starred_message_keeps_its_whole_text() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        let mut written = message("1@s.whatsapp.net", "m1", 100, false);
+        written.content = Content::text("first line\nsecond line");
+        archive.insert_message(&written, None).unwrap();
+        archive.star("1@s.whatsapp.net", "m1", 500).unwrap();
+        let list = archive.starred(50).unwrap();
+        assert_eq!(
+            list[0].text, "first line\nsecond line",
+            "the list draws the message as written, not only its first line"
+        );
+        assert_eq!(
+            list[0].sent_at, 100,
+            "the bubble can show the message's time"
+        );
+    }
+
+    #[test]
     fn existing_archives_request_preference_recovery_once_across_restarts() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("fixture.db");
