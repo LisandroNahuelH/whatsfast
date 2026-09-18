@@ -196,6 +196,23 @@ pub enum Command {
         starred: bool,
         result: Result<(), String>,
     },
+    /// Copies picked attachments to the Downloads folder.
+    SaveMedia {
+        chat: ChatId,
+        messages: Vec<String>,
+    },
+    /// Stars or unstars an archived message.
+    SetStar {
+        chat: ChatId,
+        message: String,
+        starred: bool,
+    },
+    /// Result of a star or unstar request.
+    Starred {
+        message: String,
+        starred: bool,
+        result: Result<(), String>,
+    },
     /// Updates our typing state in a chat.
     Composing {
         chat: ChatId,

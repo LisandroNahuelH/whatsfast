@@ -364,19 +364,6 @@ impl Content {
         }
     }
 
-    /// The message's own words, whole, for a place that draws it as the bubble
-    /// the chat shows. [`summary`](Self::summary) cuts at the first line.
-    pub fn body(&self) -> String {
-        match self {
-            Self::Text { text, .. } => text.clone(),
-            Self::Image { caption, .. } => with_whole_caption("Photo", caption),
-            Self::Video { caption, gif, .. } => {
-                with_whole_caption(if *gif { "GIF" } else { "Video" }, caption)
-            }
-            other => other.summary(),
-        }
-    }
-
     pub fn media(&self) -> Option<&Media> {
         match self {
             Self::Image { media, .. }
@@ -407,14 +394,6 @@ fn with_caption(label: &str, caption: &Option<String>) -> String {
     {
         Some(caption) if !caption.is_empty() => format!("{label}: {caption}"),
         _ => label.to_owned(),
-    }
-}
-
-/// The caption as written, with its own line breaks, for a bubble.
-fn with_whole_caption(label: &str, caption: &Option<String>) -> String {
-    match caption.as_deref().filter(|caption| !caption.is_empty()) {
-        Some(caption) => format!("{label}: {caption}"),
-        None => label.to_owned(),
     }
 }
 
@@ -476,22 +455,6 @@ pub enum Page {
     Settings,
 }
 
-/// A pinned chat being held to move it, and where it would land.
-#[derive(Clone, Debug)]
-pub struct PinDrag {
-    pub chat: ChatId,
-    /// The row the gesture started on, and the slot under the pointer now.
-    pub from: usize,
-    pub to: usize,
-    /// The frame time the press happened, for the hold threshold.
-    pub since: f64,
-    /// Set once the hold passed the threshold: the rows show their handles.
-    pub active: bool,
-    /// Where the pointer sat inside the row when it was pressed, so the held
-    /// row keeps that spot under the cursor.
-    pub grab_y: f32,
-}
-
 /// The tabs of the picker above the composer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PickerTab {
@@ -543,8 +506,6 @@ pub enum Dialog {
         messages: Vec<String>,
     },
     CreatePoll(ChatId),
-    /// Picks when the composer's text is sent, and whether it repeats.
-    ScheduleMessage(ChatId),
 }
 
 /// Messages picked in one chat while the selection bar is up.
@@ -565,17 +526,12 @@ pub struct Toast {
     pub message: String,
     pub kind: ToastKind,
     pub created: Instant,
-    /// Progress toasts share a key: a newer one replaces the older, and the
-    /// key keeps it alive while its batch runs.
-    pub key: Option<&'static str>,
 }
 
 /// Actions queued by views and applied after drawing.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     Open(Page),
-    /// Opens settings, or closes them when they are already showing.
-    ToggleSettings,
     OpenChat(ChatId),
     /// Creates and opens a chat for a contact without one.
     StartChat {
@@ -649,31 +605,9 @@ pub enum Action {
         messages: Vec<String>,
         to_chat: ChatId,
     },
-    /// Enters multi-message selection, picking this message when there is one.
+    /// Enters multi-message selection with this message picked.
     StartSelecting {
-        message: Option<String>,
-    },
-    /// Sends the composer's text now, without waiting for Enter.
-    ScheduleText {
-        chat: ChatId,
-        text: String,
-        kind: String,
-        hour: i8,
-        minute: i8,
-        weekday: Option<i8>,
-        day_of_month: Option<i8>,
-        nth: Option<i8>,
-        next_at: i64,
-    },
-    /// Switches the left panel to the scheduled list, or back to the chats.
-    ToggleScheduled,
-    /// Shows or hides the starred messages in the left panel.
-    ToggleStarred,
-    /// Writes the new order of the pinned chats, top first.
-    ReorderPinned(Vec<ChatId>),
-    /// Removes a scheduled message.
-    CancelScheduled {
-        id: String,
+        message: String,
     },
     /// Adds or removes a message from the open selection.
     ToggleSelected {

@@ -108,6 +108,12 @@ impl AppDirs {
         self.cache.join("media")
     }
 
+    /// The user's Downloads folder, where saved attachments land.
+    pub fn downloads_dir(&self) -> Option<PathBuf> {
+        directories::UserDirs::new()
+            .and_then(|dirs| dirs.download_dir().map(std::path::Path::to_path_buf))
+    }
+
     /// Profile pictures keyed by chat.
     pub fn avatar_cache_dir(&self) -> PathBuf {
         self.cache.join("avatars")

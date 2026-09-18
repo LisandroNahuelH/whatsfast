@@ -180,24 +180,6 @@ pub struct App {
     pub open_message_menu: Option<String>,
     /// Messages picked while the selection bar is up.
     pub selecting: Option<crate::model::Selecting>,
-    /// A pinned chat being held to move it, while the gesture lasts.
-    pub pin_drag: Option<crate::model::PinDrag>,
-    /// Scheduled messages, soonest first, and whether the left panel lists them.
-    pub scheduled: Vec<crate::archive::Scheduled>,
-    pub show_scheduled: bool,
-    /// Starred messages, newest star first, and whether the left panel lists
-    /// them. The three panels (chats, scheduled, starred) share one slot.
-    pub starred: Vec<crate::archive::Starred>,
-    pub show_starred: bool,
-    /// Ids of the starred messages of each chat, for the mark in the
-    /// conversation. Filled when a chat opens and on every confirmed star.
-    pub stars: HashMap<ChatId, HashSet<String>>,
-    /// Draft of the schedule dialog: the day, the month shown, and the time.
-    pub schedule_day: jiff::civil::Date,
-    pub schedule_month: jiff::civil::Date,
-    pub schedule_hour: i8,
-    pub schedule_minute: i8,
-    pub schedule_repeat: crate::schedule::Repeat,
     /// Emoji-grid header to scroll into view.
     pub emoji_jump: Option<&'static str>,
     /// Attachments pending in the composer.
@@ -364,7 +346,6 @@ impl App {
                 _ => Palette::dark(),
             });
         let open_chat = settings.last_chat.clone();
-        let today = jiff::Zoned::now().date();
         let mut app = Self {
             dirs,
             settings,
@@ -416,17 +397,6 @@ impl App {
             reaction_anchor: None,
             open_message_menu: None,
             selecting: None,
-            pin_drag: None,
-            scheduled: Vec::new(),
-            show_scheduled: false,
-            starred: Vec::new(),
-            show_starred: false,
-            stars: HashMap::new(),
-            schedule_day: today,
-            schedule_month: today,
-            schedule_hour: 9,
-            schedule_minute: 0,
-            schedule_repeat: crate::schedule::Repeat::Once,
             emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
@@ -887,16 +857,6 @@ impl App {
         chats
     }
 
-    /// Whether the pinned chats can be dragged into a new order: only in the
-    /// plain chat list, and only with something to reorder.
-    pub fn can_reorder_pinned(&self) -> bool {
-        self.search.trim().is_empty()
-            && !self.show_archived
-            && !self.show_scheduled
-            && !self.show_starred
-            && self.chats.iter().filter(|chat| chat.pinned).count() > 1
-    }
-
     /// Matching individual contacts without an existing chat, sorted by name.
     pub fn matching_contacts(&self) -> Vec<&Contact> {
         let needle = crate::util::search_key(self.search.trim());
@@ -1226,32 +1186,6 @@ impl App {
                     self.actions.push(Action::StartChat { id, name });
                 }
                 Event::Info(message) => self.toast(message),
-                Event::Progress {
-                    key,
-                    message,
-                    finished,
-                } => self.toast_progress(key, message, finished),
-                Event::Scheduled(list) => self.scheduled = list,
-                Event::Stars { chat, ids } => {
-                    self.stars.insert(chat, ids.into_iter().collect());
-                }
-                Event::StarChanged {
-                    chat,
-                    message,
-                    starred,
-                } => {
-                    let ids = self.stars.entry(chat).or_default();
-                    if starred {
-                        ids.insert(message);
-                    } else {
-                        ids.remove(&message);
-                    }
-                    // The open list would otherwise show the old state.
-                    if self.show_starred {
-                        self.backend.send(Command::LoadStarred);
-                    }
-                }
-                Event::StarredList(list) => self.starred = list,
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -1712,16 +1646,8 @@ impl App {
             typers.retain(|(_, since)| now.duration_since(*since) < TYPING_TIMEOUT);
         }
         self.typing.retain(|_, typers| !typers.is_empty());
-        self.toasts.retain(|toast| {
-            // A progress toast lives while its batch does; 60 seconds without
-            // an update is the backstop for a batch that never closes.
-            let life = if toast.key.is_some() {
-                Duration::from_secs(60)
-            } else {
-                Duration::from_millis(3200)
-            };
-            toast.created.elapsed() < life
-        });
+        self.toasts
+            .retain(|toast| toast.created.elapsed() < Duration::from_millis(3200));
         if self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
@@ -2028,7 +1954,6 @@ impl App {
                     from_chat,
                     messages,
                     to_chat,
-                    in_order: self.settings.forward_in_order,
                 });
                 self.dialog = None;
                 self.forward_search.clear();
@@ -2039,7 +1964,7 @@ impl App {
                     self.open_message_menu = None;
                     self.selecting = Some(crate::model::Selecting {
                         chat,
-                        ids: message.into_iter().collect(),
+                        ids: [message].into_iter().collect(),
                     });
                 }
             }
@@ -2081,13 +2006,8 @@ impl App {
                 }
             }
             Action::DownloadSelected { chat, messages } => {
-                self.backend.send(Command::SaveMedia {
-                    chat,
-                    messages,
-                    // Without a window there is nothing to hang a dialog on, so
-                    // the batch goes to Downloads.
-                    ask: self.settings.ask_where_to_save && !self.window_hidden,
-                });
+                self.backend.send(Command::SaveMedia { chat, messages });
+                self.toast("Saving attachments");
                 self.selecting = None;
             }
             Action::StarSelected {
@@ -2095,72 +2015,14 @@ impl App {
                 messages,
                 starred,
             } => {
-                self.backend.send(Command::SetStar {
-                    chat,
-                    messages,
-                    starred,
-                });
+                for message in messages {
+                    self.backend.send(Command::SetStar {
+                        chat: chat.clone(),
+                        message,
+                        starred,
+                    });
+                }
                 self.selecting = None;
-            }
-            Action::ToggleScheduled => {
-                self.show_scheduled = !self.show_scheduled;
-                if self.show_scheduled {
-                    // One panel at a time, so going back always lands on chats.
-                    self.show_archived = false;
-                    self.show_starred = false;
-                    self.backend.send(Command::LoadScheduled);
-                }
-            }
-            Action::ToggleStarred => {
-                self.show_starred = !self.show_starred;
-                if self.show_starred {
-                    self.show_archived = false;
-                    self.show_scheduled = false;
-                    self.backend.send(Command::LoadStarred);
-                }
-            }
-            Action::ToggleSettings => {
-                if self.page == Page::Settings {
-                    // The same button that opened settings closes them, and
-                    // closing lands on the empty window a fresh start shows.
-                    self.page = Page::Chats;
-                    self.open_chat = None;
-                    self.dialog = None;
-                } else {
-                    self.page = Page::Settings;
-                }
-            }
-            Action::ReorderPinned(order) => {
-                self.backend.send(Command::ReorderPinned(order));
-            }
-            Action::CancelScheduled { id } => {
-                self.backend.send(Command::CancelScheduled { id });
-            }
-            Action::ScheduleText {
-                chat,
-                text,
-                kind,
-                hour,
-                minute,
-                weekday,
-                day_of_month,
-                nth,
-                next_at,
-            } => {
-                self.backend.send(Command::ScheduleMessage {
-                    chat,
-                    text,
-                    kind,
-                    hour,
-                    minute,
-                    weekday,
-                    day_of_month,
-                    nth,
-                    next_at,
-                });
-                self.dialog = None;
-                self.composer.clear();
-                self.composer_mentions.clear();
             }
             Action::Edit(id) => {
                 let text = self
@@ -2480,16 +2342,6 @@ impl App {
                     self.new_contact_last.clear();
                     self.new_contact_pending = false;
                 }
-                if matches!(&dialog, Dialog::ScheduleMessage(_)) {
-                    // Start on today, at the next hour, once.
-                    let now = jiff::Zoned::now();
-                    let today = now.date();
-                    self.schedule_day = today;
-                    self.schedule_month = today;
-                    self.schedule_hour = (now.hour() + 1).rem_euclid(24);
-                    self.schedule_minute = 0;
-                    self.schedule_repeat = crate::schedule::Repeat::Once;
-                }
                 self.contact_edit = None;
                 self.dialog = Some(dialog);
             }
@@ -2673,39 +2525,8 @@ impl App {
             message: message.into(),
             kind: ToastKind::Info,
             created: Instant::now(),
-            key: None,
         });
         self.toasts.truncate(4);
-    }
-
-    /// Shows a batch's progress in one toast that updates in place: a newer
-    /// message replaces the older one with the same key instead of stacking,
-    /// and the key keeps it alive while the batch runs.
-    pub fn toast_progress(
-        &mut self,
-        key: &'static str,
-        message: impl Into<String>,
-        finished: bool,
-    ) {
-        let message = message.into();
-        match self.toasts.iter_mut().find(|toast| toast.key == Some(key)) {
-            Some(toast) => {
-                toast.message = message;
-                toast.created = Instant::now();
-                if finished {
-                    toast.key = None;
-                }
-            }
-            None => {
-                self.toasts.push(Toast {
-                    message,
-                    kind: ToastKind::Info,
-                    created: Instant::now(),
-                    key: (!finished).then_some(key),
-                });
-                self.toasts.truncate(4);
-            }
-        }
     }
 
     pub fn toast_error(&mut self, message: impl Into<String>) {
@@ -2715,9 +2536,7 @@ impl App {
             message,
             kind: ToastKind::Error,
             created: Instant::now(),
-            key: None,
         });
-        self.toasts.truncate(4);
     }
 
     /// Processes app state shared by windowed and headless modes.
@@ -3124,25 +2943,6 @@ mod tests {
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("zapfast-app-{}", std::process::id()));
         App::headless(AppDirs::under(&root), Settings::default()).0
-    }
-
-    #[test]
-    fn progress_toasts_replace_instead_of_stacking() {
-        let mut app = app();
-        app.toast_progress("forward", "Forwarded 1 of 3", false);
-        app.toast_progress("forward", "Forwarded 2 of 3", false);
-        assert_eq!(app.toasts.len(), 1, "one toast for the whole batch");
-        assert_eq!(app.toasts[0].message, "Forwarded 2 of 3");
-        assert_eq!(app.toasts[0].key, Some("forward"));
-        app.toast_progress("forward", "Forwarded 3 of 3", true);
-        assert_eq!(app.toasts.len(), 1);
-        assert_eq!(
-            app.toasts[0].key, None,
-            "a finished batch lets the toast expire"
-        );
-        // A different batch keeps its own toast.
-        app.toast_progress("star", "Starred 1 of 2", false);
-        assert_eq!(app.toasts.len(), 2);
     }
 
     #[test]
