@@ -876,9 +876,15 @@ fn bar_button(ui: &mut egui::Ui, palette: &Palette, icon: Icon, label: &str) -> 
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-/// The pick circle selection mode draws beside a bubble.
-fn paint_pick(ui: &egui::Ui, palette: &Palette, rect: Rect, picked: bool) {
-    let center = pos2(rect.left() - 20.0, rect.top() + 18.0);
+/// The pick circle selection mode draws beside a message's row: left of our
+/// own rows, right of the received ones, so it never covers the bubble.
+fn paint_pick(ui: &egui::Ui, palette: &Palette, row: Rect, own: bool, picked: bool) {
+    let x = if own {
+        row.left() + 11.0
+    } else {
+        row.right() - 11.0
+    };
+    let center = pos2(x, row.top() + 18.0);
     if picked {
         ui.painter().circle_filled(center, 11.0, palette.accent);
         theme::paint_icon(
@@ -1480,12 +1486,50 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 || previous.is_none_or(|previous| {
                                     previous.sender != message.sender || previous.from_me
                                 }));
+                        // Selection mode makes the whole row the target, with a
+                        // soft highlight under the pointer. The highlight paints
+                        // from the row's rect of the last frame, before the
+                        // bubble, so it never covers the message.
+                        let row_id =
+                            egui::Id::new(("message-row", chat.id.as_str(), message.id.as_str()));
+                        let selecting = view.selecting.is_some();
+                        if selecting
+                            && let Some((rect, hovered)) =
+                                ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
+                            && hovered
+                        {
+                            ui.painter().rect_filled(
+                                rect,
+                                6.0,
+                                palette.surface_hover.gamma_multiply(0.55),
+                            );
+                        }
+                        let row_top = ui.cursor().top();
                         if let Some(response) =
                             bubble(ui, &view, message, show_sender, &mut actions)
                             && view.anchor == Some(message.id.as_str())
                         {
                             response.scroll_to_me(Some(Align::Center));
                             anchored = true;
+                        }
+                        if selecting {
+                            let row = Rect::from_min_max(
+                                pos2(ui.max_rect().left(), row_top),
+                                pos2(ui.max_rect().right(), ui.cursor().top()),
+                            );
+                            let response = ui.interact(row, row_id, Sense::click());
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(row_id, (row, response.hovered()));
+                            });
+                            let picked =
+                                view.selecting.is_some_and(|ids| ids.contains(&message.id));
+                            paint_pick(ui, &palette, row, message.from_me, picked);
+                            if response.clicked() {
+                                actions.push(Action::ToggleSelected {
+                                    message: message.id.clone(),
+                                });
+                            }
+                            response.on_hover_cursor(egui::CursorIcon::PointingHand);
                         }
                         previous = Some(message);
                     }
@@ -2052,15 +2096,6 @@ fn bubble_frame(
     // Picking messages takes over the bubble's left click, and the menu stays
     // shut while the selection bar is up.
     let selecting = view.selecting.is_some();
-    if selecting {
-        if bubble.clicked() {
-            actions.push(Action::ToggleSelected {
-                message: message.id.clone(),
-            });
-        }
-        let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
-        paint_pick(ui, &palette, bubble.rect, picked);
-    }
     // Read right-click from input because inner widgets own their responses.
     // Open only when no floating layer covers the chat panel.
     let right_clicked = !selecting
