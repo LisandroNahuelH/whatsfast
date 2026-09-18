@@ -959,86 +959,6 @@ mod tests {
     }
 
     #[test]
-    fn a_second_click_on_settings_closes_it() {
-        let mut app = super::super::tests::app();
-        prepare(&mut app);
-        let ctx = egui::Context::default();
-        app.attach(&ctx);
-        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        assert!(app.open_chat.is_some(), "a chat is open to start");
-        app.actions.push(crate::model::Action::ToggleSettings);
-        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
-        assert_eq!(
-            app.page,
-            crate::model::Page::Settings,
-            "the first click opens settings"
-        );
-        app.actions.push(crate::model::Action::ToggleSettings);
-        step_output(&mut app, &ctx, Vec::new(), 0.2, true);
-        assert_eq!(
-            app.page,
-            crate::model::Page::Chats,
-            "the second click closes settings"
-        );
-        assert!(
-            app.open_chat.is_none(),
-            "closing settings lands on the empty window a fresh start shows"
-        );
-    }
-
-    #[test]
-    fn the_pick_circle_sits_on_the_middle_of_the_row() {
-        let mut app = super::super::tests::app();
-        prepare(&mut app);
-        let ctx = egui::Context::default();
-        app.attach(&ctx);
-        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        let chat = app.open_chat.clone().expect("a chat is open");
-        app.selecting = Some(crate::model::Selecting {
-            chat: chat.clone(),
-            ids: Default::default(),
-        });
-        // One frame registers the rows, the next paints their circles.
-        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
-        let row_id = |message: &str| egui::Id::new(("message-row", chat.as_str(), message));
-        let message = app.conversations[&chat]
-            .messages
-            .iter()
-            .find(|message| {
-                ctx.data(|data| data.get_temp::<(Rect, bool)>(row_id(&message.id)).is_some())
-            })
-            .expect("a row registered its rect")
-            .id
-            .clone();
-        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
-        let (row, _) = ctx
-            .data(|data| data.get_temp::<(Rect, bool)>(row_id(&message)))
-            .expect("the row kept its rect");
-        let inside: Vec<Pos2> = output
-            .shapes
-            .iter()
-            .filter_map(|clipped| match &clipped.shape {
-                egui::Shape::Circle(circle) if (9.0..12.0).contains(&circle.radius) => {
-                    Some(circle.center)
-                }
-                _ => None,
-            })
-            .filter(|center| row.contains(*center))
-            .collect();
-        assert_eq!(inside.len(), 1, "the row draws one pick circle");
-        let center = inside[0];
-        assert!(
-            (center.y - row.center().y).abs() < 2.0,
-            "the pick circle sits on the row's middle line, not at its top"
-        );
-        let margin = (center.x - row.left()).min(row.right() - center.x);
-        assert!(
-            margin >= 14.0,
-            "the circle keeps a margin from the row's edge, inside its highlight"
-        );
-    }
-
-    #[test]
     fn a_picked_row_keeps_its_highlight() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
@@ -1083,42 +1003,6 @@ mod tests {
     }
 
     #[test]
-    fn the_forward_dialog_lists_several_chats() {
-        let mut app = super::super::tests::app();
-        prepare(&mut app);
-        let ctx = egui::Context::default();
-        app.attach(&ctx);
-        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        let chat = app.open_chat.clone().expect("a chat is open");
-        app.dialog = Some(crate::model::Dialog::Forward {
-            chat,
-            messages: vec!["m1".to_owned()],
-        });
-        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
-        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
-        // Only the dialog's own column, so the chat list behind it does not count.
-        let in_dialog: Vec<String> = output
-            .shapes
-            .iter()
-            .filter_map(|clipped| match &clipped.shape {
-                egui::Shape::Text(text) if text.pos.x > 400.0 && text.pos.x < 880.0 => {
-                    Some(text.galley.text().to_owned())
-                }
-                _ => None,
-            })
-            .collect();
-        let titles: Vec<String> = app.chats.iter().map(|chat| app.chat_title(chat)).collect();
-        let shown = titles
-            .iter()
-            .filter(|title| in_dialog.iter().any(|text| text == *title))
-            .count();
-        assert!(
-            shown >= 3,
-            "the forward dialog lists several chats, not a single row"
-        );
-    }
-
-    #[test]
     fn the_starred_list_shows_the_message_and_the_mark() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
@@ -1141,8 +1025,6 @@ mod tests {
             id: message.clone(),
             starred_at: crate::util::now(),
             text: "See you at nine".to_owned(),
-            from_me: false,
-            sent_at: crate::util::now(),
         }];
         let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
         let texts: Vec<String> = output

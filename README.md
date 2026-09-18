@@ -68,9 +68,25 @@ See **[zapfast.rocks](https://zapfast.rocks)** for downloads and guides.
   an emoji without leaving the composer, or `@` in a group to mention a member.
   Reply, react with any emoji, edit, forward, delete, and check when a message was sent,
   delivered, or read. Right-click a message to pick it and then others, and forward,
-  download, or star the batch from the bar below. A forwarded batch leaves one message
-  at a time, so mixed text, pictures, and videos arrive in their original order; turn
-  that off in Settings under Chats.
+  download, or star the batch from the bar below; a toast in the corner counts the
+  batch as it goes. A forwarded batch leaves one message at a time, so mixed text,
+  pictures, and videos arrive in their original order; turn that off in Settings under
+  Chats. Saved attachments keep the document's own name, and you can have the system
+  save dialog ask for the folder and the name each time (Settings, Files).
+- **Scheduled messages.** Write a message and pick the clock beside the
+  composer: a calendar, an hour, and a repeat rule (once, every day, every
+  week, every month, or the first to fourth weekday of the month). The clock
+  in the chat list header lists what is waiting, with where it goes and when;
+  a message the app could not send while it was closed goes out the next time
+  it opens, once, never twice.
+- **Starred messages.** Star the messages you want to find again: pick them in
+  a chat (right-click, Select messages) and press Star. A small star appears
+  beside the time of every starred message, and the star in the chat list
+  header opens the list of them, newest star first, each row showing the chat,
+  when it was starred, and the message. Clicking a row opens that chat at the
+  message, and the same button removes the stars when every picked message is
+  already starred. The list lives on this computer: stars you set on your phone
+  are not imported yet.
 - **Disappearing-message timers.** Outgoing messages use the chat's known
   timer, including replies, attachments, edits, and forwards. Forwarded copies
   use the destination chat's timer. Received messages remain in the local archive

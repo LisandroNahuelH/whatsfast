@@ -1,9 +1,9 @@
 //! The left panel: the chat list.
 
-use egui::{Align, Frame, Layout, Margin, Rect, Sense, Vec2, pos2, vec2};
+use egui::{Align, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
 
 use crate::app::App;
-use crate::model::{Action, Chat, ChatFilter, Contact, Dialog, Message, Page};
+use crate::model::{Action, Chat, Contact, Dialog, Message, Page};
 use crate::theme::{self, Icon, Palette};
 
 use super::widgets;
@@ -53,7 +53,21 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
         })
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                if app.show_archived {
+                if app.show_scheduled {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
+                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                } else if app.show_archived {
                     if theme::icon_button(
                         ui,
                         Icon::ArrowLeft,
@@ -67,6 +81,20 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(20.0), palette.text);
+                } else if app.show_starred {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
+                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     let me = app.me.clone().unwrap_or_default();
                     let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
@@ -81,7 +109,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                             .on_hover_text(tooltip)
                             .on_hover_cursor(egui::CursorIcon::PointingHand);
                     if response.clicked() {
-                        app.actions.push(Action::ToggleSettings);
+                        app.actions.push(Action::Open(Page::Settings));
                     }
                     ui.add_space(2.0);
                     theme::text(ui, "Chats", theme::bold(20.0), palette.text);
@@ -89,19 +117,47 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if theme::icon_button(
                         ui,
-                        Icon::Settings,
+                        Icon::Clock,
                         18.0,
-                        if app.page == Page::Settings {
+                        if app.show_scheduled {
                             palette.accent
                         } else {
                             palette.secondary
                         },
                         palette.text,
+                        "Scheduled messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
+                    if theme::icon_button(
+                        ui,
+                        Icon::Star,
+                        18.0,
+                        if app.show_starred {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        "Starred messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
+                    if theme::icon_button(
+                        ui,
+                        Icon::Settings,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
                         "Settings (Ctrl+,)",
                     )
                     .clicked()
                     {
-                        app.actions.push(Action::ToggleSettings);
+                        app.actions.push(Action::Open(Page::Settings));
                     }
                     if theme::icon_button(
                         ui,
@@ -142,7 +198,6 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                 app.focus_search = false;
                 response.request_focus();
             }
-            filter_chips(app, ui);
         });
 }
 
@@ -159,7 +214,21 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.set_min_height(44.0);
                 ui.add_space((inset - 14.0).max(0.0));
-                if app.show_archived {
+                if app.show_scheduled {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleScheduled);
+                    }
+                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                } else if app.show_archived {
                     if theme::icon_button(
                         ui,
                         Icon::ArrowLeft,
@@ -173,10 +242,40 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         app.show_archived = false;
                     }
                     theme::text(ui, "Archived", theme::bold(16.0), palette.text);
+                } else if app.show_starred {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Back to chats",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
+                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
                 } else {
                     theme::text(ui, "Chats", theme::bold(20.0), palette.text);
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if theme::icon_button(
+                        ui,
+                        Icon::Star,
+                        18.0,
+                        if app.show_starred {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        "Starred messages",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::ToggleStarred);
+                    }
                     if theme::icon_button(
                         ui,
                         Icon::SquarePen,
@@ -220,68 +319,252 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                 app.focus_search = false;
                 response.request_focus();
             }
-            filter_chips(app, ui);
         });
 }
 
-/// Stable main-list row id used by interaction tests.
-pub fn chat_row_id(chat: &str) -> egui::Id {
-    egui::Id::new(("chat-row", chat))
-}
-
-/// Stable filter-chip id used by interaction tests.
-pub fn filter_chip_id(filter: ChatFilter) -> egui::Id {
-    egui::Id::new(("chat-filter", filter.label()))
-}
-
-/// Filter chips under the search field. Search and the archive list every
-/// match, so the chips hide there.
-fn filter_chips(app: &mut App, ui: &mut egui::Ui) {
-    if app.show_archived || !app.search.trim().is_empty() {
+/// The scheduled messages, in the place the chat list usually takes.
+fn scheduled_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let entries: Vec<crate::archive::Scheduled> = app.scheduled.clone();
+    if entries.is_empty() {
+        widgets::empty_state(
+            ui,
+            &palette,
+            Icon::Clock,
+            "No scheduled messages",
+            "Write a message and pick a time with the clock beside the composer.",
+        );
         return;
     }
-    let palette = app.palette;
-    ui.add_space(8.0);
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
-        for filter in ChatFilter::EVERY {
-            let count = match filter {
-                ChatFilter::All => 0,
-                _ => app.unread_chats(filter),
-            };
-            let selected = app.chat_filter == filter;
-            let chip = widgets::filter_chip(ui, &palette, filter.label(), count, selected);
-            // Store the chip rect for interaction tests.
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(filter_chip_id(filter), chip.rect));
-            if chip.clicked() {
-                // A second click on the active chip returns to every chat.
-                let next = if selected { ChatFilter::All } else { filter };
-                app.actions.push(Action::SetChatFilter(next));
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for entry in &entries {
+                scheduled_row(app, ui, &palette, entry);
             }
-        }
-    });
+        });
+}
+
+/// One scheduled message: where it goes, when, how it repeats, and a way to
+/// drop it.
+fn scheduled_row(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    entry: &crate::archive::Scheduled,
+) {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 0.0, palette.surface_hover);
+    }
+    let failed = entry.state == "failed";
+    theme::paint_icon(
+        ui,
+        Icon::Clock,
+        egui::Rect::from_center_size(pos2(rect.left() + 30.0, rect.center().y), Vec2::splat(22.0)),
+        22.0,
+        if failed {
+            palette.danger
+        } else {
+            palette.accent
+        },
+    );
+    let name = app.display_name_or(&entry.chat, None);
+    let rule =
+        crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)
+            .map(|rule| rule.label())
+            .unwrap_or_else(|| "Once".to_owned());
+    let when = when_label(entry.next_at);
+    let top = rect.top();
+    // First line: where it goes and how it repeats, with the time on the right.
+    ui.painter().text(
+        pos2(rect.left() + 56.0, top + 20.0),
+        egui::Align2::LEFT_CENTER,
+        format!("{name} · {rule}"),
+        theme::medium(14.0),
+        palette.text,
+    );
+    ui.painter().text(
+        pos2(rect.right() - 40.0, top + 20.0),
+        egui::Align2::RIGHT_CENTER,
+        when,
+        theme::regular(11.5),
+        palette.secondary,
+    );
+    // Second line: the message itself, with the reason it failed when it did.
+    ui.painter().text(
+        pos2(rect.left() + 56.0, top + 46.0),
+        egui::Align2::LEFT_CENTER,
+        preview(&entry.text),
+        theme::regular(12.5),
+        palette.secondary,
+    );
+    if let Some(error) = &entry.last_error {
+        ui.painter().text(
+            pos2(rect.right() - 40.0, top + 46.0),
+            egui::Align2::RIGHT_CENTER,
+            error,
+            theme::regular(11.5),
+            palette.danger,
+        );
+    }
+    let close = egui::Rect::from_center_size(
+        pos2(rect.right() - 24.0, rect.center().y),
+        Vec2::splat(26.0),
+    );
+    let cancel = ui.interact(
+        close,
+        egui::Id::new(("cancel-scheduled", entry.id.as_str())),
+        Sense::click(),
+    );
+    if cancel.hovered() {
+        ui.painter()
+            .circle_filled(close.center(), 13.0, palette.surface_active);
+    }
+    theme::paint_icon(
+        ui,
+        Icon::X,
+        close,
+        15.0,
+        if cancel.hovered() {
+            palette.text
+        } else {
+            palette.secondary
+        },
+    );
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom(),
+        Stroke::new(1.0, palette.outline),
+    );
+    if cancel
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        app.actions.push(Action::CancelScheduled {
+            id: entry.id.clone(),
+        });
+    }
+}
+
+/// The message's own words, flattened to one line for the list.
+fn preview(text: &str) -> String {
+    let flat: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut out: String = flat.chars().take(48).collect();
+    if flat.chars().count() > 48 {
+        out.push('…');
+    }
+    out
+}
+
+/// "Fri 18 Sep, 21:00" in the machine's time zone.
+fn when_label(instant: i64) -> String {
+    jiff::Timestamp::from_second(instant)
+        .ok()
+        .map(|moment| moment.to_zoned(jiff::tz::TimeZone::system()))
+        .map(|moment| moment.strftime("%a %d %b, %H:%M").to_string())
+        .unwrap_or_default()
+}
+
+/// The starred messages, in the place the chat list usually takes. Newest
+/// star first, each row naming the chat, the moment, and the message.
+fn starred_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let entries: Vec<crate::archive::Starred> = app.starred.clone();
+    if entries.is_empty() {
+        widgets::empty_state(
+            ui,
+            &palette,
+            Icon::Star,
+            "No starred messages",
+            "Pick messages in a chat and press Star to keep them here.",
+        );
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for entry in &entries {
+                starred_row(app, ui, &palette, entry);
+            }
+        });
+}
+
+/// One starred message. Clicking opens its chat at it.
+fn starred_row(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    entry: &crate::archive::Starred,
+) {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    if response.hovered() {
+        ui.painter()
+            .rect_filled(rect, 6.0, palette.surface_hover.gamma_multiply(0.5));
+    }
+    let name = app.display_name_or(&entry.chat, None);
+    let when = when_label(entry.starred_at);
+    let top = rect.top();
+    // First line: where the message is, with the moment it was starred.
+    ui.painter().text(
+        pos2(rect.left() + 16.0, top + 20.0),
+        egui::Align2::LEFT_CENTER,
+        name,
+        theme::medium(14.0),
+        palette.text,
+    );
+    ui.painter().text(
+        pos2(rect.right() - 16.0, top + 20.0),
+        egui::Align2::RIGHT_CENTER,
+        when,
+        theme::regular(11.5),
+        palette.secondary,
+    );
+    // Second line: the message itself.
+    ui.painter().text(
+        pos2(rect.left() + 16.0, top + 46.0),
+        egui::Align2::LEFT_CENTER,
+        preview(&entry.text),
+        theme::regular(12.5),
+        palette.secondary,
+    );
+    if response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+    {
+        app.actions.push(Action::OpenMessage {
+            chat: entry.chat.clone(),
+            message: entry.id.clone(),
+        });
+    }
 }
 
 fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
+    if app.show_scheduled {
+        scheduled_list(app, ui);
+        return;
+    }
+    if app.show_starred {
+        starred_list(app, ui);
+        return;
+    }
     if !app.search.trim().is_empty() {
         results(app, ui);
         return;
     }
     let chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
     let archived = app.archived_count();
-    let show_archive_row = !app.show_archived && archived > 0 && app.chat_filter == ChatFilter::All;
+    let show_archive_row = !app.show_archived && archived > 0;
     if chats.is_empty() && !show_archive_row {
         let (title, body) = if app.show_archived {
             ("Nothing archived", "Archived chats appear here.")
-        } else if app.chat_filter != ChatFilter::All {
-            let title = match app.chat_filter {
-                ChatFilter::Unread => "No unread chats",
-                ChatFilter::Private => "No private chats",
-                _ => "No groups",
-            };
-            (title, "Choose All to see every chat.")
         } else if app.syncing {
             ("Loading your chats", "Receiving history from your phone.")
         } else {
@@ -328,15 +611,7 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
             }
             let chat = &chats[index - usize::from(show_archive_row)];
             // Key by chat so an open menu survives list reordering.
-            let response = ui
-                .push_id(("chat", &chat.id), |ui| row(app, ui, chat))
-                .inner;
-            // Store the row rect for interaction tests.
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(chat_row_id(&chat.id), response.rect));
-            if response.clicked() && !app.show_archived {
-                app.actions.push(Action::KeepUnread(chat.id.clone()));
-            }
+            ui.push_id(("chat", &chat.id), |ui| row(app, ui, chat));
         }
     });
 }

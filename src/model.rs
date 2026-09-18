@@ -30,39 +30,6 @@ impl ChatKind {
     }
 }
 
-/// Chat-list filter chosen from the chips under the search field.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ChatFilter {
-    #[default]
-    All,
-    Unread,
-    /// One-to-one chats: neither groups nor broadcasts.
-    Private,
-    Groups,
-}
-
-impl ChatFilter {
-    pub const EVERY: [Self; 4] = [Self::All, Self::Unread, Self::Private, Self::Groups];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::All => "All",
-            Self::Unread => "Unread",
-            Self::Private => "Private",
-            Self::Groups => "Groups",
-        }
-    }
-
-    pub fn matches(self, chat: &Chat) -> bool {
-        match self {
-            Self::All => true,
-            Self::Unread => chat.unread > 0,
-            Self::Private => chat.kind == ChatKind::Direct,
-            Self::Groups => chat.kind == ChatKind::Group,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chat {
     pub id: ChatId,
@@ -533,12 +500,21 @@ pub enum Dialog {
     /// Manually entered number for messaging or saving a contact.
     NewContact,
     ChatInfo(ChatId),
-    /// Chooses a destination for an archived message.
+    /// Chooses a destination for archived messages.
     Forward {
         chat: ChatId,
-        message: String,
+        messages: Vec<String>,
     },
     CreatePoll(ChatId),
+    /// Picks when the composer's text is sent, and whether it repeats.
+    ScheduleMessage(ChatId),
+}
+
+/// Messages picked in one chat while the selection bar is up.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Selecting {
+    pub chat: ChatId,
+    pub ids: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -552,14 +528,15 @@ pub struct Toast {
     pub message: String,
     pub kind: ToastKind,
     pub created: Instant,
+    /// Progress toasts share a key: a newer one replaces the older, and the
+    /// key keeps it alive while its batch runs.
+    pub key: Option<&'static str>,
 }
 
 /// Actions queued by views and applied after drawing.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
     Open(Page),
-    /// Opens settings, or closes them when they are already showing.
-    ToggleSettings,
     OpenChat(ChatId),
     /// Creates and opens a chat for a contact without one.
     StartChat {
@@ -627,11 +604,54 @@ pub enum Action {
     /// Starts a reply to a message in the open chat.
     Reply(String),
     CancelReply,
-    /// Forwards an archived message to another chat.
+    /// Forwards archived messages to another chat.
     Forward {
         from_chat: ChatId,
-        message: String,
+        messages: Vec<String>,
         to_chat: ChatId,
+    },
+    /// Enters multi-message selection, picking this message when there is one.
+    StartSelecting {
+        message: Option<String>,
+    },
+    /// Sends the composer's text now, without waiting for Enter.
+    ScheduleText {
+        chat: ChatId,
+        text: String,
+        kind: String,
+        hour: i8,
+        minute: i8,
+        weekday: Option<i8>,
+        day_of_month: Option<i8>,
+        nth: Option<i8>,
+        next_at: i64,
+    },
+    /// Switches the left panel to the scheduled list, or back to the chats.
+    ToggleScheduled,
+    /// Shows or hides the starred messages in the left panel.
+    ToggleStarred,
+    /// Removes a scheduled message.
+    CancelScheduled {
+        id: String,
+    },
+    /// Adds or removes a message from the open selection.
+    ToggleSelected {
+        message: String,
+    },
+    /// Leaves the selection and drops it.
+    ClearSelection,
+    /// Picks every message in the open chat.
+    SelectAllMessages,
+    /// Saves the picked messages' attachments to the Downloads folder.
+    DownloadSelected {
+        chat: ChatId,
+        messages: Vec<String>,
+    },
+    /// Stars or unstars the picked messages.
+    StarSelected {
+        chat: ChatId,
+        messages: Vec<String>,
+        starred: bool,
     },
     /// Loads an outgoing message into the composer for editing.
     Edit(String),
@@ -713,9 +733,6 @@ pub enum Action {
     ShowDialog(Dialog),
     CloseDialog,
     ToggleSidebar,
-    SetChatFilter(ChatFilter),
-    /// A chat opened from the main list, kept there under the Unread filter.
-    KeepUnread(ChatId),
     FocusSearch,
     FocusComposer,
     HideShortcutHints,

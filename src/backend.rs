@@ -139,13 +139,60 @@ pub enum Command {
         quoting: Option<String>,
         mentions: Vec<String>,
     },
-    /// Forwards an archived message to another chat.
+    /// Forwards archived messages to another chat.
     Forward {
         from_chat: ChatId,
-        message: String,
+        messages: Vec<String>,
         to_chat: ChatId,
         /// One at a time, waiting for each message's first tick.
         in_order: bool,
+    },
+    /// Copies picked attachments to the Downloads folder.
+    SaveMedia {
+        chat: ChatId,
+        messages: Vec<String>,
+        /// Ask where to save, one dialog per batch, instead of Downloads.
+        ask: bool,
+    },
+    /// Destinations chosen in the system save dialog.
+    SaveTargets {
+        chat: ChatId,
+        targets: Vec<(String, PathBuf)>,
+        cancelled: bool,
+    },
+    /// Stores a scheduled message.
+    ScheduleMessage {
+        chat: ChatId,
+        text: String,
+        kind: String,
+        hour: i8,
+        minute: i8,
+        weekday: Option<i8>,
+        day_of_month: Option<i8>,
+        nth: Option<i8>,
+        /// Unix seconds of the first attempt.
+        next_at: i64,
+    },
+    /// Asks for the scheduled list.
+    LoadScheduled,
+    /// Removes a scheduled message.
+    CancelScheduled {
+        id: String,
+    },
+    /// Stars or unstars archived messages.
+    SetStar {
+        chat: ChatId,
+        messages: Vec<String>,
+        starred: bool,
+    },
+    /// Asks for the starred messages.
+    LoadStarred,
+    /// Result of a star or unstar request.
+    Starred {
+        chat: ChatId,
+        message: String,
+        starred: bool,
+        result: Result<(), String>,
     },
     /// Updates our typing state in a chat.
     Composing {
@@ -519,6 +566,28 @@ pub enum Event {
     },
     /// Informational toast message.
     Info(String),
+    /// Progress of a batch the user started: forwards, saves, or stars.
+    /// Toasts sharing a key replace each other; `finished` releases it.
+    Progress {
+        key: &'static str,
+        message: String,
+        finished: bool,
+    },
+    /// The scheduled messages, soonest first.
+    Scheduled(Vec<crate::archive::Scheduled>),
+    /// The starred messages of one chat, for the mark in the conversation.
+    Stars {
+        chat: ChatId,
+        ids: Vec<String>,
+    },
+    /// A star the server accepted, or refused, for one message.
+    StarChanged {
+        chat: ChatId,
+        message: String,
+        starred: bool,
+    },
+    /// The starred messages, newest star first.
+    StarredList(Vec<crate::archive::Starred>),
     /// A newer release than this build exists.
     UpdateAvailable {
         version: String,

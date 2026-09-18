@@ -36,12 +36,30 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         empty(app, ui);
         return;
     };
+    // A right click anywhere in the chat, away from a bubble or a control,
+    // opens the chat's own menu. Registered before the header, the composer
+    // and the rows so each of those keeps its own clicks.
+    let background = ui.interact(
+        ui.max_rect(),
+        egui::Id::new(("chat-background", &chat.id)),
+        Sense::click(),
+    );
     header(app, ui, &chat);
     if theme::macos_chrome(ui.ctx()) {
         super::banner(app, ui);
     }
-    composer(app, ui, &chat);
+    if app
+        .selecting
+        .as_ref()
+        .is_some_and(|selecting| selecting.chat == chat.id)
+    {
+        selection_bar(app, ui, &chat);
+    } else {
+        composer(app, ui, &chat);
+    }
     messages(app, ui, &chat);
+    let palette = app.palette;
+    chat_menu(ui, &palette, &background, &mut app.actions);
 }
 
 fn empty(app: &mut App, ui: &mut egui::Ui) {
@@ -696,6 +714,227 @@ fn mention_picker(app: &mut App, ui: &mut egui::Ui, chat: &Chat, field: egui::Id
     }
 }
 
+/// The chat's own menu, for a right click that is not on a bubble.
+fn chat_menu(
+    ui: &egui::Ui,
+    palette: &Palette,
+    background: &egui::Response,
+    actions: &mut Vec<Action>,
+) {
+    // Ignore the click when a floating layer covers the chat panel.
+    let right_clicked = background.secondary_clicked()
+        && ui
+            .input(|input| input.pointer.interact_pos())
+            .is_some_and(|pos| {
+                ui.ctx()
+                    .layer_id_at(pos)
+                    .is_none_or(|layer| layer == background.layer_id)
+            });
+    let open = if right_clicked {
+        Some(egui::SetOpenCommand::Bool(true))
+    } else if background.clicked() {
+        Some(egui::SetOpenCommand::Bool(false))
+    } else {
+        None
+    };
+    let width = widgets::menu_width(ui, &["Select messages", "Select all", "Close chat"], true);
+    egui::Popup::menu(background)
+        .open_memory(open)
+        .width(width)
+        .frame(widgets::menu_frame(palette))
+        .at_pointer_fixed()
+        .show(|ui| {
+            if widgets::menu_item(ui, palette, Some(Icon::SquareCheck), "Select messages") {
+                actions.push(Action::StartSelecting { message: None });
+                ui.close();
+            }
+            if widgets::menu_item(ui, palette, Some(Icon::ListChecks), "Select all") {
+                actions.push(Action::StartSelecting { message: None });
+                actions.push(Action::SelectAllMessages);
+                ui.close();
+            }
+            widgets::menu_separator(ui, palette);
+            if widgets::menu_item(ui, palette, Some(Icon::X), "Close chat") {
+                actions.push(Action::CloseChat);
+                ui.close();
+            }
+        });
+}
+
+/// Replaces the composer while messages are picked: what to do with them.
+fn selection_bar(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
+    let palette = app.palette;
+    let picked = app
+        .selecting
+        .as_ref()
+        .filter(|selecting| selecting.chat == chat.id)
+        .map(|selecting| picked_messages(app, chat, &selecting.ids))
+        .unwrap_or_default();
+    let count = picked.len();
+    egui::Panel::bottom("selection-bar")
+        .show_separator_line(false)
+        .frame(
+            Frame::new()
+                .fill(palette.panel)
+                .inner_margin(Margin::symmetric(12, 8)),
+        )
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let close = theme::icon_button(
+                    ui,
+                    Icon::X,
+                    20.0,
+                    palette.secondary,
+                    palette.text,
+                    "Cancel selection",
+                );
+                if close.clicked() {
+                    app.actions.push(Action::ClearSelection);
+                }
+                theme::text(
+                    ui,
+                    format!("{count} selected"),
+                    theme::semibold(13.5),
+                    palette.text,
+                );
+                if bar_button(ui, &palette, Icon::SquareCheck, "Select all").clicked() {
+                    app.actions.push(Action::SelectAllMessages);
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    // The same button adds and removes: it only removes when
+                    // every picked message is already starred.
+                    let removing = app
+                        .stars
+                        .get(&chat.id)
+                        .is_some_and(|ids| unstars(&picked, ids));
+                    if bar_button(
+                        ui,
+                        &palette,
+                        Icon::Star,
+                        if removing { "Unstar" } else { "Star" },
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::StarSelected {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                            starred: !removing,
+                        });
+                    }
+                    if bar_button(ui, &palette, Icon::Download, "Download").clicked() {
+                        app.actions.push(Action::DownloadSelected {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                        });
+                    }
+                    if bar_button(ui, &palette, Icon::Forward, "Forward").clicked() {
+                        app.actions.push(Action::ShowDialog(Dialog::Forward {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                        }));
+                    }
+                });
+            });
+        });
+}
+
+/// The picked ids in the order the chat shows them, so forwarding keeps the
+/// conversation's order.
+fn picked_messages(app: &App, chat: &Chat, ids: &HashSet<String>) -> Vec<String> {
+    app.conversations
+        .get(&chat.id)
+        .map(|conversation| {
+            conversation
+                .messages
+                .iter()
+                .filter(|message| ids.contains(&message.id))
+                .map(|message| message.id.clone())
+                .collect()
+        })
+        .unwrap_or_else(|| ids.iter().cloned().collect())
+}
+
+/// An icon with its label, the shape of the selection bar's buttons.
+fn bar_button(ui: &mut egui::Ui, palette: &Palette, icon: Icon, label: &str) -> egui::Response {
+    let font = theme::medium(13.0);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER);
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hovered = response.hovered();
+        let colour = if hovered {
+            palette.accent
+        } else {
+            palette.text
+        };
+        if hovered {
+            ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
+        }
+        theme::paint_icon(
+            ui,
+            icon,
+            Rect::from_center_size(pos2(rect.left() + 11.0, rect.center().y), Vec2::splat(18.0)),
+            16.0,
+            colour,
+        );
+        ui.painter().galley(
+            pos2(rect.left() + 26.0, rect.center().y - galley.size().y / 2.0),
+            galley,
+            colour,
+        );
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Whether the star button should take the stars away: only when there is
+/// something picked and every picked message is already starred.
+fn unstars(picked: &[String], starred: &HashSet<String>) -> bool {
+    !picked.is_empty() && picked.iter().all(|id| starred.contains(id))
+}
+
+/// The wash a row gets while messages are being picked: its own tint when it
+/// is picked, a softer one under the pointer, and nothing otherwise.
+fn row_wash(palette: &Palette, picked: bool, hovered: bool) -> Option<egui::Color32> {
+    if picked {
+        Some(
+            palette
+                .accent
+                .gamma_multiply(if hovered { 0.24 } else { 0.16 }),
+        )
+    } else if hovered {
+        Some(palette.surface_hover.gamma_multiply(0.55))
+    } else {
+        None
+    }
+}
+
+/// The pick circle selection mode draws beside a message's row: left of our
+/// own rows, right of the received ones, so it never covers the bubble.
+fn paint_pick(ui: &egui::Ui, palette: &Palette, row: Rect, own: bool, picked: bool) {
+    let x = if own {
+        row.left() + 11.0
+    } else {
+        row.right() - 11.0
+    };
+    let center = pos2(x, row.top() + 18.0);
+    if picked {
+        ui.painter().circle_filled(center, 11.0, palette.accent);
+        theme::paint_icon(
+            ui,
+            Icon::Check,
+            Rect::from_center_size(center, Vec2::splat(22.0)),
+            14.0,
+            palette.on_accent,
+        );
+    } else {
+        ui.painter()
+            .circle_stroke(center, 10.0, Stroke::new(1.5, palette.dim));
+    }
+}
+
 fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let palette = app.palette;
     egui::Panel::bottom("composer")
@@ -823,6 +1062,24 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     && theme::icon_button(ui, Icon::ListChecks, 20.0, palette.secondary, palette.text, "Create poll").clicked()
                 {
                     app.actions.push(Action::ShowDialog(Dialog::CreatePoll(chat.id.clone())));
+                }
+                if app.editing.is_none()
+                    && !app.composer.trim().is_empty()
+                    && app.pending.is_empty()
+                    && app.reply_to.is_none()
+                    && theme::icon_button(
+                        ui,
+                        Icon::Clock,
+                        20.0,
+                        palette.secondary,
+                        palette.text,
+                        "Schedule this message",
+                    )
+                    .clicked()
+                {
+                    app.actions.push(Action::ShowDialog(Dialog::ScheduleMessage(
+                        chat.id.clone(),
+                    )));
                 }
                 if app.editing.is_none() {
                     let smile = theme::icon_button(
@@ -1160,6 +1417,10 @@ struct View<'a> {
     anchor: Option<&'a str>,
     /// Demo/test: keep this message's context menu open.
     open_menu: Option<&'a str>,
+    /// Ids of the picked messages while the selection bar is up.
+    selecting: Option<&'a HashSet<String>>,
+    /// Ids of the starred messages of this chat, for the mark in the footer.
+    starred: Option<&'a HashSet<String>>,
     /// Resolves a name with the message's stored name as fallback.
     names_or: &'a dyn Fn(&str, Option<&str>) -> String,
     /// Resolves mention names without replacing our name with "You".
@@ -1206,6 +1467,12 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             app.scroll_anchor.as_deref()
         },
         open_menu: app.open_message_menu.as_deref(),
+        selecting: app
+            .selecting
+            .as_ref()
+            .filter(|selecting| selecting.chat == chat.id)
+            .map(|selecting| &selecting.ids),
+        starred: app.stars.get(&chat.id),
         names_or: &names_or,
         mention_names: &mention_names,
         avatars: &avatars,
@@ -1278,12 +1545,46 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 || previous.is_none_or(|previous| {
                                     previous.sender != message.sender || previous.from_me
                                 }));
+                        // Selection mode makes the whole row the target: a
+                        // picked row keeps a wash of its own, and the pointer
+                        // adds a softer one. Both paint from the row's rect of
+                        // the last frame, before the bubble, so the highlight
+                        // never covers the message.
+                        let row_id =
+                            egui::Id::new(("message-row", chat.id.as_str(), message.id.as_str()));
+                        let selecting = view.selecting.is_some();
+                        let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
+                        if selecting
+                            && let Some((rect, hovered)) =
+                                ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
+                            && let Some(wash) = row_wash(&palette, picked, hovered)
+                        {
+                            ui.painter().rect_filled(rect, 6.0, wash);
+                        }
+                        let row_top = ui.cursor().top();
                         if let Some(response) =
                             bubble(ui, &view, message, show_sender, &mut actions)
                             && view.anchor == Some(message.id.as_str())
                         {
                             response.scroll_to_me(Some(Align::Center));
                             anchored = true;
+                        }
+                        if selecting {
+                            let row = Rect::from_min_max(
+                                pos2(ui.max_rect().left(), row_top),
+                                pos2(ui.max_rect().right(), ui.cursor().top()),
+                            );
+                            let response = ui.interact(row, row_id, Sense::click());
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(row_id, (row, response.hovered()));
+                            });
+                            paint_pick(ui, &palette, row, message.from_me, picked);
+                            if response.clicked() {
+                                actions.push(Action::ToggleSelected {
+                                    message: message.id.clone(),
+                                });
+                            }
+                            response.on_hover_cursor(egui::CursorIcon::PointingHand);
                         }
                         previous = Some(message);
                     }
@@ -1526,15 +1827,6 @@ fn bubble(
             0.0
         })
     .max(0.0);
-    // Register the empty strip beside the bubble from its previous rect, before
-    // the row, so the avatar, the bubble, and the reactions win clicks.
-    let id = bubble_id(&view.chat.id, &message.id);
-    let previous = ui.ctx().data(|data| data.get_temp::<Rect>(id.with("rect")));
-    if let Some(rect) = previous {
-        let strip = Rect::from_x_y_ranges(ui.max_rect().x_range(), rect.y_range());
-        let strip = ui.interact(strip, id.with("row"), Sense::click());
-        reply_on_double_click(&strip, message, actions);
-    }
     let mut response = None;
     ui.with_layout(
         Layout::top_down(if own { Align::Max } else { Align::Min }),
@@ -1753,13 +2045,6 @@ pub fn edge_scroll(pointer: f32, top: f32, bottom: f32) -> f32 {
     }
 }
 
-/// Starts a reply when the response was double-clicked, as the menu's "Reply".
-fn reply_on_double_click(response: &egui::Response, message: &Message, actions: &mut Vec<Action>) {
-    if response.double_clicked() && !matches!(message.content, Content::Revoked) {
-        actions.push(Action::Reply(message.id.clone()));
-    }
-}
-
 /// Stable message-bubble id used by interaction tests.
 pub fn bubble_id(chat: &str, message: &str) -> egui::Id {
     egui::Id::new(("bubble", chat, message))
@@ -1857,30 +2142,38 @@ fn bubble_frame(
                 }
                 None => content(ui, view, message, cap, reserve, actions),
             };
-            footer(ui, &palette, message, slot);
+            footer(
+                ui,
+                &palette,
+                message,
+                slot,
+                view.starred.is_some_and(|ids| ids.contains(&message.id)),
+            );
         });
     ui.ctx()
         .data_mut(|data| data.insert_temp(rect_id, inner.response.rect));
     let bubble =
         early.unwrap_or_else(|| ui.interact(inner.response.rect, bubble_id, Sense::click()));
-    // Inner widgets own their clicks, so this fires only on the bubble's padding
-    // and footer. Double-click on the body keeps selecting the word.
-    reply_on_double_click(&bubble, message, actions);
+    // Picking messages takes over the bubble's left click, and the menu stays
+    // shut while the selection bar is up.
+    let selecting = view.selecting.is_some();
     // Read right-click from input because inner widgets own their responses.
     // Open only when no floating layer covers the chat panel.
-    let right_clicked = ui.input(|input| {
-        input.pointer.secondary_clicked()
-            && input
-                .pointer
-                .interact_pos()
-                .is_some_and(|pos| bubble.rect.contains(pos))
-    }) && ui
-        .input(|input| input.pointer.interact_pos())
-        .is_some_and(|pos| {
-            ui.ctx()
-                .layer_id_at(pos)
-                .is_none_or(|layer| layer == bubble.layer_id)
-        });
+    let right_clicked = !selecting
+        && ui.input(|input| {
+            input.pointer.secondary_clicked()
+                && input
+                    .pointer
+                    .interact_pos()
+                    .is_some_and(|pos| bubble.rect.contains(pos))
+        })
+        && ui
+            .input(|input| input.pointer.interact_pos())
+            .is_some_and(|pos| {
+                ui.ctx()
+                    .layer_id_at(pos)
+                    .is_none_or(|layer| layer == bubble.layer_id)
+            });
     let force_menu = view.open_menu == Some(message.id.as_str());
     let quick = quick_reactions(message).len() as f32 + 1.0;
     let width = widgets::menu_width(
@@ -2066,6 +2359,10 @@ fn mirrored_row(
     });
 }
 
+/// Room the footer keeps for the star mark, so a starred message does not
+/// change the bubble's width when the star appears.
+const STAR_MARK: f32 = 16.0;
+
 /// Width of the message footer.
 fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     let font = theme::regular(11.0);
@@ -2087,11 +2384,17 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 }
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + STAR_MARK
 }
 
 /// Paints the time and ticks at the bubble's right edge without widening it.
-fn footer(ui: &mut egui::Ui, palette: &Palette, message: &Message, slot: Option<Rect>) {
+fn footer(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    message: &Message,
+    slot: Option<Rect>,
+    starred: bool,
+) {
     let font = theme::regular(11.0);
     let time = ui.painter().layout_no_wrap(
         crate::util::clock(message.timestamp),
@@ -2131,6 +2434,21 @@ fn footer(ui: &mut egui::Ui, palette: &Palette, message: &Message, slot: Option<
             pos2(x, rect.center().y - edited.size().y / 2.0),
             edited,
             palette.dim,
+        );
+    }
+    if starred {
+        // A passive mark, left of the time. The footer already reserved its
+        // room, so showing it never changes the bubble's width.
+        x -= STAR_MARK;
+        theme::paint_icon(
+            ui,
+            Icon::Star,
+            Rect::from_center_size(
+                pos2(x + STAR_MARK / 2.0, rect.center().y),
+                Vec2::splat(13.0),
+            ),
+            13.0,
+            palette.secondary,
         );
     }
 }
@@ -2294,6 +2612,12 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         },
     );
     widgets::menu_separator(ui, &palette);
+    if widgets::menu_item(ui, &palette, Some(Icon::SquareCheck), "Select messages") {
+        actions.push(Action::StartSelecting {
+            message: Some(message.id.clone()),
+        });
+        ui.close();
+    }
     if !matches!(message.content, Content::Revoked)
         && widgets::menu_item(ui, &palette, Some(Icon::Reply), "Reply")
     {
@@ -2306,7 +2630,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
     {
         actions.push(Action::ShowDialog(Dialog::Forward {
             chat: chat.clone(),
-            message: message.id.clone(),
+            messages: vec![message.id.clone()],
         }));
     }
     let text = match &message.content {
@@ -3387,6 +3711,11 @@ fn voice_player(
         vec2(width.max(0.0), button),
         Layout::left_to_right(Align::Center),
         |ui| {
+            // The centre the play button aligns to. The waveform and its
+            // duration stretch the row past this height, and the chip comes
+            // after them, so the chip centres on this instead of the
+            // stretched rect, which would leave it below the button.
+            let row_center = ui.max_rect().center().y;
             ui.spacing_mut().item_spacing.x = 10.0;
             match (&media.path, &media.state) {
                 (None, MediaState::Downloading) => waiting(ui),
@@ -3518,8 +3847,15 @@ fn voice_player(
                 // The label follows the click at once, faded until this
                 // clip actually plays at that speed.
                 let preparing = view.player.preparing_speed(&message.id);
-                let (rect, response) = ui.allocate_exact_size(vec2(chip, 20.0), Sense::click());
-                if ui.is_rect_visible(rect) {
+                let (rect, response) = ui.allocate_exact_size(vec2(chip, 20.0), Sense::hover());
+                // The pill rests on the play button's centre line; the
+                // allocation only reserves the width and carries the id.
+                let pill = Rect::from_center_size(
+                    egui::pos2(rect.center().x, row_center),
+                    vec2(chip, 20.0),
+                );
+                let response = ui.interact(pill, response.id, Sense::click());
+                if ui.is_rect_visible(pill) {
                     let hovered = response.hovered();
                     // The resting fill uses the hover step because incoming
                     // bubbles share the resting surface colour.
@@ -3532,7 +3868,7 @@ fn voice_player(
                     } else {
                         palette.surface_hover
                     };
-                    ui.painter().rect_filled(rect, rect.height() / 2.0, fill);
+                    ui.painter().rect_filled(pill, pill.height() / 2.0, fill);
                     let colour = if active {
                         palette.accent
                     } else {
@@ -3549,7 +3885,7 @@ fn voice_player(
                         colour,
                     );
                     ui.painter()
-                        .galley(rect.center() - galley.size() / 2.0, galley, colour);
+                        .galley(pill.center() - galley.size() / 2.0, galley, colour);
                 }
                 if response.clicked() {
                     actions.push(Action::CycleVoiceSpeed);
@@ -3702,6 +4038,66 @@ mod tests {
         assert!(unknown.x > unknown.y);
         let tiny = frame_size(&media(Some(40), Some(40)), None, 340.0);
         assert!(tiny.x >= 120.0);
+    }
+
+    #[test]
+    fn the_star_button_removes_only_when_every_pick_is_starred() {
+        let starred: HashSet<String> = ["a".to_owned(), "b".to_owned()].into_iter().collect();
+        let picked = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>();
+        assert!(
+            unstars(&picked(&["a"]), &starred),
+            "picking only starred messages means the button removes them"
+        );
+        assert!(
+            !unstars(&picked(&["a", "c"]), &starred),
+            "one unstarred message means the button adds"
+        );
+        assert!(unstars(&picked(&["a", "b"]), &starred));
+        assert!(
+            !unstars(&picked(&[]), &starred),
+            "nothing picked does nothing"
+        );
+    }
+
+    #[test]
+    fn the_footer_reserves_room_for_the_star_mark() {
+        let ctx = egui::Context::default();
+        let mut incoming = 0.0;
+        let mut own = 0.0;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 200.0))),
+                ..Default::default()
+            },
+            |ui| {
+                let from_them = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
+                let from_me = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, true);
+                incoming = footer_width(ui, &from_them);
+                own = footer_width(ui, &from_me);
+            },
+        );
+        output.textures_delta.clear();
+        assert!(
+            incoming >= STAR_MARK,
+            "the footer keeps room for the star mark before a message is starred"
+        );
+        assert!(
+            own > incoming,
+            "our own messages also keep room for the delivery ticks"
+        );
+    }
+
+    #[test]
+    fn a_picked_row_is_washed_and_a_hovered_one_less() {
+        let palette = Palette::dark();
+        assert!(row_wash(&palette, false, false).is_none());
+        let hover = row_wash(&palette, false, true).expect("a hover wash");
+        let picked = row_wash(&palette, true, false).expect("a picked wash");
+        assert_ne!(hover, picked, "picked rows do not read as hovered ones");
+        assert!(picked.a() > 0, "the picked wash is visible");
+        // Hovering a picked row deepens its wash instead of replacing it.
+        let both = row_wash(&palette, true, true).expect("both washes");
+        assert_ne!(both, picked);
     }
 
     #[test]
