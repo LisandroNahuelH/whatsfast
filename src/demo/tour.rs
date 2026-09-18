@@ -959,6 +959,34 @@ mod tests {
     }
 
     #[test]
+    fn a_second_click_on_settings_closes_it() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        assert!(app.open_chat.is_some(), "a chat is open to start");
+        app.actions.push(crate::model::Action::ToggleSettings);
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        assert_eq!(
+            app.page,
+            crate::model::Page::Settings,
+            "the first click opens settings"
+        );
+        app.actions.push(crate::model::Action::ToggleSettings);
+        step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        assert_eq!(
+            app.page,
+            crate::model::Page::Chats,
+            "the second click closes settings"
+        );
+        assert!(
+            app.open_chat.is_none(),
+            "closing settings lands on the empty window a fresh start shows"
+        );
+    }
+
+    #[test]
     fn the_pick_circle_sits_on_the_middle_of_the_row() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
