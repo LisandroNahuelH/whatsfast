@@ -13,8 +13,10 @@ mod encryption;
 mod polls;
 mod receipts;
 mod scheduled;
+mod stars;
 pub use polls::PollVote;
 pub use scheduled::{Outcome as ScheduledOutcome, Scheduled};
+pub use stars::Starred;
 
 /// Recent phone sticker metadata, last-used time, and optional local file.
 #[derive(Clone, Debug)]
@@ -237,6 +239,7 @@ impl Archive {
         connection.execute_batch(SCHEMA)?;
         connection.execute_batch(polls::SCHEMA)?;
         connection.execute_batch(scheduled::SCHEMA)?;
+        connection.execute_batch(stars::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -321,6 +324,21 @@ impl Archive {
             params![id, archived],
         )?;
         Ok(())
+    }
+
+    /// The pinned chats with the version of their pin. The order the list
+    /// shows lives in `pinned_at`; a reorder needs these versions to stamp new
+    /// times the history sync will not overwrite.
+    pub fn pinned_order(&self) -> Result<Vec<(String, i64)>> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id, COALESCE(pin_updated_at, 0) FROM chats WHERE pinned = 1")?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut list = Vec::new();
+        for row in rows {
+            list.push(row?);
+        }
+        Ok(list)
     }
 
     pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<()> {
@@ -932,6 +950,10 @@ impl Archive {
     }
 
     pub fn delete_message(&self, chat: &str, id: &str) -> Result<bool> {
+        self.connection.execute(
+            "DELETE FROM stars WHERE chat = ?1 AND id = ?2",
+            params![chat, id],
+        )?;
         let deleted = self.connection.execute(
             "DELETE FROM messages WHERE chat = ?1 AND id = ?2",
             params![chat, id],
@@ -1210,7 +1232,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM scheduled; DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids;",
+            "DELETE FROM stars; DELETE FROM scheduled; DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids;",
         )
     }
 }
@@ -1390,6 +1412,148 @@ pub(crate) mod tests {
         assert_eq!(
             archive.chat(chat).expect("chat").expect("exists").name,
             "Rust Berlin"
+        );
+    }
+
+    #[test]
+    fn starring_a_message_survives_a_restart() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("fixture.db");
+        let key = [7; 32];
+        {
+            let archive = Archive::open_with_key(&path, &key).unwrap();
+            archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+            archive
+                .insert_message(&message("1@s.whatsapp.net", "m1", 100, false), None)
+                .unwrap();
+            archive.star("1@s.whatsapp.net", "m1", 500).unwrap();
+        }
+        let archive = Archive::open_with_key(&path, &key).unwrap();
+        assert!(
+            archive
+                .starred_ids("1@s.whatsapp.net")
+                .unwrap()
+                .contains("m1")
+        );
+        let list = archive.starred(50).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].starred_at, 500);
+        assert_eq!(list[0].text, "message m1");
+        archive.unstar("1@s.whatsapp.net", "m1").unwrap();
+        assert!(archive.starred(50).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_deleted_message_leaves_the_starred_list() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        archive
+            .insert_message(&message("1@s.whatsapp.net", "m1", 100, false), None)
+            .unwrap();
+        archive.star("1@s.whatsapp.net", "m1", 500).unwrap();
+        assert_eq!(archive.starred(50).unwrap().len(), 1);
+        assert!(archive.delete_message("1@s.whatsapp.net", "m1").unwrap());
+        assert!(
+            archive.starred(50).unwrap().is_empty(),
+            "the list hides a message deleted here"
+        );
+    }
+
+    #[test]
+    fn starred_messages_come_back_newest_star_first() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        for (id, at) in [("old", 100), ("new", 900)] {
+            archive
+                .insert_message(&message("1@s.whatsapp.net", id, 50, false), None)
+                .unwrap();
+            archive.star("1@s.whatsapp.net", id, at).unwrap();
+        }
+        let list = archive.starred(50).unwrap();
+        let ids: Vec<&str> = list.iter().map(|entry| entry.id.as_str()).collect();
+        assert_eq!(ids, vec!["new", "old"]);
+    }
+
+    #[test]
+    fn a_starred_message_keeps_its_whole_text() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        let mut written = message("1@s.whatsapp.net", "m1", 100, false);
+        written.content = Content::text("first line\nsecond line");
+        archive.insert_message(&written, None).unwrap();
+        archive.star("1@s.whatsapp.net", "m1", 500).unwrap();
+        let list = archive.starred(50).unwrap();
+        assert_eq!(
+            list[0].text, "first line\nsecond line",
+            "the list draws the message as written, not only its first line"
+        );
+        assert_eq!(
+            list[0].sent_at, 100,
+            "the bubble can show the message's time"
+        );
+    }
+
+    #[test]
+    fn reorder_pinned_assigns_distinct_times_the_history_sync_cannot_overwrite() {
+        let archive = Archive::in_memory().unwrap();
+        for (id, pin) in [("a", 100), ("b", 200), ("c", 300)] {
+            archive.ensure_chat(id, id).unwrap();
+            archive.set_pinned_at(id, true, pin).unwrap();
+        }
+        let base = archive
+            .pinned_order()
+            .unwrap()
+            .iter()
+            .map(|(_, version)| *version)
+            .max()
+            .unwrap();
+        assert_eq!(base, 300, "the newest pin version is the base");
+        // What the worker writes for the order [c, a, b].
+        for (index, id) in ["c", "a", "b"].iter().enumerate() {
+            archive
+                .set_pinned_at(id, true, base + 3 - index as i64)
+                .unwrap();
+        }
+        let after = archive.pinned_order().unwrap();
+        let versions: Vec<i64> = ["c", "a", "b"]
+            .iter()
+            .map(|id| {
+                after
+                    .iter()
+                    .find(|(known, _)| known == id)
+                    .expect("the chat is still pinned")
+                    .1
+            })
+            .collect();
+        assert_eq!(
+            versions,
+            vec![303, 302, 301],
+            "the order lives in the times, top first"
+        );
+        // A history replay carries an old pin and must not move the rows.
+        for id in ["a", "b", "c"] {
+            let mut replay = Chat::new(id.to_owned(), id.to_owned());
+            replay.pinned = true;
+            replay.pinned_at = 123_000;
+            archive.upsert_chat(&replay).unwrap();
+        }
+        assert_eq!(
+            archive.pinned_order().unwrap(),
+            after,
+            "the sync cannot pull a reordered row back"
+        );
+    }
+
+    #[test]
+    fn reorder_pinned_same_timestamp_is_idempotent() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("a", "a").unwrap();
+        archive.set_pinned_at("a", true, 500).unwrap();
+        archive.set_pinned_at("a", true, 500).unwrap();
+        assert_eq!(
+            archive.pinned_order().unwrap(),
+            vec![("a".to_owned(), 500)],
+            "writing the same time twice leaves one pinned row"
         );
     }
 
