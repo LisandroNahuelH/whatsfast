@@ -48,6 +48,8 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
             actions.push(Action::CloseUpdate);
         } else if app.dialog.is_some() {
             actions.push(Action::CloseDialog);
+        } else if app.selecting.is_some() {
+            actions.push(Action::ClearSelection);
         } else if app.recording.is_some() {
             actions.push(Action::CancelRecording);
         } else if app.picker.is_some() || app.reaction_target.is_some() {

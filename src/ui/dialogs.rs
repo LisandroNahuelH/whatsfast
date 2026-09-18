@@ -45,7 +45,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::PairWithPhone => pair_with_phone(app, ui),
                 Dialog::NewContact => new_contact(app, ui),
                 Dialog::ChatInfo(id) => chat_info(app, ui, &id),
-                Dialog::Forward { chat, message } => forward(app, ui, &chat, &message),
+                Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
             }
         });
     if response.should_close() {
@@ -53,9 +53,18 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, message: &str) {
+fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, messages: &[String]) {
     let palette = app.palette;
-    title(ui, app, "Forward message");
+    title(
+        ui,
+        app,
+        if messages.len() == 1 {
+            "Forward message".to_owned()
+        } else {
+            format!("Forward {} messages", messages.len())
+        }
+        .as_str(),
+    );
     let width = ui.available_width();
     let search = super::widgets::search_field(
         ui,
@@ -157,7 +166,7 @@ fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, message: &str) {
     if let Some(to_chat) = destination {
         app.actions.push(Action::Forward {
             from_chat: from_chat.to_owned(),
-            message: message.to_owned(),
+            messages: messages.to_vec(),
             to_chat,
         });
     }

@@ -40,7 +40,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if theme::macos_chrome(ui.ctx()) {
         super::banner(app, ui);
     }
-    composer(app, ui, &chat);
+    if app
+        .selecting
+        .as_ref()
+        .is_some_and(|selecting| selecting.chat == chat.id)
+    {
+        selection_bar(app, ui, &chat);
+    } else {
+        composer(app, ui, &chat);
+    }
     messages(app, ui, &chat);
 }
 
@@ -696,6 +704,139 @@ fn mention_picker(app: &mut App, ui: &mut egui::Ui, chat: &Chat, field: egui::Id
     }
 }
 
+/// Replaces the composer while messages are picked: what to do with them.
+fn selection_bar(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
+    let palette = app.palette;
+    let picked = app
+        .selecting
+        .as_ref()
+        .filter(|selecting| selecting.chat == chat.id)
+        .map(|selecting| picked_messages(app, chat, &selecting.ids))
+        .unwrap_or_default();
+    let count = picked.len();
+    egui::Panel::bottom("selection-bar")
+        .show_separator_line(false)
+        .frame(
+            Frame::new()
+                .fill(palette.panel)
+                .inner_margin(Margin::symmetric(12, 8)),
+        )
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let close = theme::icon_button(
+                    ui,
+                    Icon::X,
+                    20.0,
+                    palette.secondary,
+                    palette.text,
+                    "Cancel selection",
+                );
+                if close.clicked() {
+                    app.actions.push(Action::ClearSelection);
+                }
+                theme::text(
+                    ui,
+                    format!("{count} selected"),
+                    theme::semibold(13.5),
+                    palette.text,
+                );
+                if bar_button(ui, &palette, Icon::SquareCheck, "Select all").clicked() {
+                    app.actions.push(Action::SelectAllMessages);
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    if bar_button(ui, &palette, Icon::Star, "Star").clicked() {
+                        app.actions.push(Action::StarSelected {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                            starred: true,
+                        });
+                    }
+                    if bar_button(ui, &palette, Icon::Download, "Download").clicked() {
+                        app.actions.push(Action::DownloadSelected {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                        });
+                    }
+                    if bar_button(ui, &palette, Icon::Forward, "Forward").clicked() {
+                        app.actions.push(Action::ShowDialog(Dialog::Forward {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                        }));
+                    }
+                });
+            });
+        });
+}
+
+/// The picked ids in the order the chat shows them, so forwarding keeps the
+/// conversation's order.
+fn picked_messages(app: &App, chat: &Chat, ids: &HashSet<String>) -> Vec<String> {
+    app.conversations
+        .get(&chat.id)
+        .map(|conversation| {
+            conversation
+                .messages
+                .iter()
+                .filter(|message| ids.contains(&message.id))
+                .map(|message| message.id.clone())
+                .collect()
+        })
+        .unwrap_or_else(|| ids.iter().cloned().collect())
+}
+
+/// An icon with its label, the shape of the selection bar's buttons.
+fn bar_button(ui: &mut egui::Ui, palette: &Palette, icon: Icon, label: &str) -> egui::Response {
+    let font = theme::medium(13.0);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, Color32::PLACEHOLDER);
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hovered = response.hovered();
+        let colour = if hovered {
+            palette.accent
+        } else {
+            palette.text
+        };
+        if hovered {
+            ui.painter().rect_filled(rect, 8.0, palette.surface_hover);
+        }
+        theme::paint_icon(
+            ui,
+            icon,
+            Rect::from_center_size(pos2(rect.left() + 11.0, rect.center().y), Vec2::splat(18.0)),
+            16.0,
+            colour,
+        );
+        ui.painter().galley(
+            pos2(rect.left() + 26.0, rect.center().y - galley.size().y / 2.0),
+            galley,
+            colour,
+        );
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// The pick circle selection mode draws beside a bubble.
+fn paint_pick(ui: &egui::Ui, palette: &Palette, rect: Rect, picked: bool) {
+    let center = pos2(rect.left() - 20.0, rect.top() + 18.0);
+    if picked {
+        ui.painter().circle_filled(center, 11.0, palette.accent);
+        theme::paint_icon(
+            ui,
+            Icon::Check,
+            Rect::from_center_size(center, Vec2::splat(22.0)),
+            14.0,
+            palette.on_accent,
+        );
+    } else {
+        ui.painter()
+            .circle_stroke(center, 10.0, Stroke::new(1.5, palette.dim));
+    }
+}
+
 fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let palette = app.palette;
     egui::Panel::bottom("composer")
@@ -1157,6 +1298,8 @@ struct View<'a> {
     anchor: Option<&'a str>,
     /// Demo/test: keep this message's context menu open.
     open_menu: Option<&'a str>,
+    /// Ids of the picked messages while the selection bar is up.
+    selecting: Option<&'a HashSet<String>>,
     /// Resolves a name with the message's stored name as fallback.
     names_or: &'a dyn Fn(&str, Option<&str>) -> String,
     /// Resolves mention names without replacing our name with "You".
@@ -1203,6 +1346,11 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             app.scroll_anchor.as_deref()
         },
         open_menu: app.open_message_menu.as_deref(),
+        selecting: app
+            .selecting
+            .as_ref()
+            .filter(|selecting| selecting.chat == chat.id)
+            .map(|selecting| &selecting.ids),
         names_or: &names_or,
         mention_names: &mention_names,
         avatars: &avatars,
@@ -1844,21 +1992,35 @@ fn bubble_frame(
         .data_mut(|data| data.insert_temp(rect_id, inner.response.rect));
     let bubble =
         early.unwrap_or_else(|| ui.interact(inner.response.rect, bubble_id, Sense::click()));
+    // Picking messages takes over the bubble's left click, and the menu stays
+    // shut while the selection bar is up.
+    let selecting = view.selecting.is_some();
+    if selecting {
+        if bubble.clicked() {
+            actions.push(Action::ToggleSelected {
+                message: message.id.clone(),
+            });
+        }
+        let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
+        paint_pick(ui, &palette, bubble.rect, picked);
+    }
     // Read right-click from input because inner widgets own their responses.
     // Open only when no floating layer covers the chat panel.
-    let right_clicked = ui.input(|input| {
-        input.pointer.secondary_clicked()
-            && input
-                .pointer
-                .interact_pos()
-                .is_some_and(|pos| bubble.rect.contains(pos))
-    }) && ui
-        .input(|input| input.pointer.interact_pos())
-        .is_some_and(|pos| {
-            ui.ctx()
-                .layer_id_at(pos)
-                .is_none_or(|layer| layer == bubble.layer_id)
-        });
+    let right_clicked = !selecting
+        && ui.input(|input| {
+            input.pointer.secondary_clicked()
+                && input
+                    .pointer
+                    .interact_pos()
+                    .is_some_and(|pos| bubble.rect.contains(pos))
+        })
+        && ui
+            .input(|input| input.pointer.interact_pos())
+            .is_some_and(|pos| {
+                ui.ctx()
+                    .layer_id_at(pos)
+                    .is_none_or(|layer| layer == bubble.layer_id)
+            });
     let force_menu = view.open_menu == Some(message.id.as_str());
     let quick = quick_reactions(message).len() as f32 + 1.0;
     let width = widgets::menu_width(
@@ -2272,6 +2434,12 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         },
     );
     widgets::menu_separator(ui, &palette);
+    if widgets::menu_item(ui, &palette, Some(Icon::SquareCheck), "Select messages") {
+        actions.push(Action::StartSelecting {
+            message: message.id.clone(),
+        });
+        ui.close();
+    }
     if !matches!(message.content, Content::Revoked)
         && widgets::menu_item(ui, &palette, Some(Icon::Reply), "Reply")
     {
@@ -2284,7 +2452,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
     {
         actions.push(Action::ShowDialog(Dialog::Forward {
             chat: chat.clone(),
-            message: message.id.clone(),
+            messages: vec![message.id.clone()],
         }));
     }
     let text = match &message.content {

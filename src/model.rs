@@ -500,12 +500,19 @@ pub enum Dialog {
     /// Manually entered number for messaging or saving a contact.
     NewContact,
     ChatInfo(ChatId),
-    /// Chooses a destination for an archived message.
+    /// Chooses a destination for archived messages.
     Forward {
         chat: ChatId,
-        message: String,
+        messages: Vec<String>,
     },
     CreatePoll(ChatId),
+}
+
+/// Messages picked in one chat while the selection bar is up.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Selecting {
+    pub chat: ChatId,
+    pub ids: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -592,11 +599,34 @@ pub enum Action {
     /// Starts a reply to a message in the open chat.
     Reply(String),
     CancelReply,
-    /// Forwards an archived message to another chat.
+    /// Forwards archived messages to another chat.
     Forward {
         from_chat: ChatId,
-        message: String,
+        messages: Vec<String>,
         to_chat: ChatId,
+    },
+    /// Enters multi-message selection with this message picked.
+    StartSelecting {
+        message: String,
+    },
+    /// Adds or removes a message from the open selection.
+    ToggleSelected {
+        message: String,
+    },
+    /// Leaves the selection and drops it.
+    ClearSelection,
+    /// Picks every message in the open chat.
+    SelectAllMessages,
+    /// Saves the picked messages' attachments to the Downloads folder.
+    DownloadSelected {
+        chat: ChatId,
+        messages: Vec<String>,
+    },
+    /// Stars or unstars the picked messages.
+    StarSelected {
+        chat: ChatId,
+        messages: Vec<String>,
+        starred: bool,
     },
     /// Loads an outgoing message into the composer for editing.
     Edit(String),

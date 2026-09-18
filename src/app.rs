@@ -178,6 +178,8 @@ pub struct App {
     pub reaction_anchor: Option<egui::Rect>,
     /// Demo/test: keep this message's context menu open.
     pub open_message_menu: Option<String>,
+    /// Messages picked while the selection bar is up.
+    pub selecting: Option<crate::model::Selecting>,
     /// Emoji-grid header to scroll into view.
     pub emoji_jump: Option<&'static str>,
     /// Attachments pending in the composer.
@@ -394,6 +396,7 @@ impl App {
             reaction_target: None,
             reaction_anchor: None,
             open_message_menu: None,
+            selecting: None,
             emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
@@ -1387,6 +1390,8 @@ impl App {
             self.reaction_target = None;
             self.reaction_anchor = None;
             self.emoji_jump = None;
+            // A selection belongs to the chat it was made in.
+            self.selecting = None;
             if let Some(previous) = self.open_chat.take() {
                 let draft = std::mem::take(&mut self.composer);
                 // Discard an unfinished edit instead of keeping it as a draft.
@@ -1842,6 +1847,7 @@ impl App {
                 }
             }
             Action::CloseChat => {
+                self.selecting = None;
                 if let Some(chat) = self.open_chat.take() {
                     self.stop_composing(&chat);
                     let draft = std::mem::take(&mut self.composer);
@@ -1941,16 +1947,82 @@ impl App {
             Action::CancelReply => self.reply_to = None,
             Action::Forward {
                 from_chat,
-                message,
+                messages,
                 to_chat,
             } => {
                 self.backend.send(Command::Forward {
                     from_chat,
-                    message,
+                    messages,
                     to_chat,
                 });
                 self.dialog = None;
                 self.forward_search.clear();
+                self.selecting = None;
+            }
+            Action::StartSelecting { message } => {
+                if let Some(chat) = self.open_chat.clone() {
+                    self.open_message_menu = None;
+                    self.selecting = Some(crate::model::Selecting {
+                        chat,
+                        ids: [message].into_iter().collect(),
+                    });
+                }
+            }
+            Action::ToggleSelected { message } => {
+                if let Some(selecting) = self.selecting.as_mut() {
+                    if !selecting.ids.remove(&message) {
+                        selecting.ids.insert(message);
+                    }
+                }
+                if self
+                    .selecting
+                    .as_ref()
+                    .is_some_and(|selecting| selecting.ids.is_empty())
+                {
+                    self.selecting = None;
+                }
+            }
+            Action::ClearSelection => self.selecting = None,
+            Action::SelectAllMessages => {
+                if let Some(chat) = self
+                    .selecting
+                    .as_ref()
+                    .map(|selecting| selecting.chat.clone())
+                {
+                    let ids: std::collections::HashSet<String> = self
+                        .conversations
+                        .get(&chat)
+                        .map(|conversation| {
+                            conversation
+                                .messages
+                                .iter()
+                                .map(|message| message.id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if let Some(selecting) = self.selecting.as_mut() {
+                        selecting.ids = ids;
+                    }
+                }
+            }
+            Action::DownloadSelected { chat, messages } => {
+                self.backend.send(Command::SaveMedia { chat, messages });
+                self.toast("Saving attachments");
+                self.selecting = None;
+            }
+            Action::StarSelected {
+                chat,
+                messages,
+                starred,
+            } => {
+                for message in messages {
+                    self.backend.send(Command::SetStar {
+                        chat: chat.clone(),
+                        message,
+                        starred,
+                    });
+                }
+                self.selecting = None;
             }
             Action::Edit(id) => {
                 let text = self
