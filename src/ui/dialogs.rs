@@ -26,7 +26,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .frame(frame)
         .backdrop_color(palette.shadow)
         .show(ctx, |ui| {
-            ui.set_width(match dialog {
+            let width = match dialog {
                 Dialog::Shortcuts => 540.0,
                 Dialog::About => 380.0,
                 Dialog::ConfirmUnlink => 380.0,
@@ -35,27 +35,52 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ChatInfo(_) => 360.0,
                 Dialog::Forward { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
-            });
-            ui.spacing_mut().item_spacing.y = 8.0;
-            match dialog {
-                Dialog::CreatePoll(chat) => super::polls::create(app, ui, &chat),
-                Dialog::Shortcuts => shortcuts(app, ui),
-                Dialog::About => about(app, ui),
-                Dialog::ConfirmUnlink => confirm_unlink(app, ui),
-                Dialog::PairWithPhone => pair_with_phone(app, ui),
-                Dialog::NewContact => new_contact(app, ui),
-                Dialog::ChatInfo(id) => chat_info(app, ui, &id),
-                Dialog::Forward { chat, message } => forward(app, ui, &chat, &message),
-            }
+                Dialog::ScheduleMessage(_) => super::schedule::WIDTH,
+            };
+            // The content lives in a box of the declared width. Without it, a
+            // child that asks for the whole width (a right-aligned row, a
+            // centred calendar) measures against the screen and the modal
+            // stretches to the window.
+            ui.set_width(width);
+            // The box fixes the width. Its height only has to be real: a list
+            // that asks how much room it has would otherwise show a single row.
+            ui.allocate_ui_with_layout(
+                egui::vec2(width, (ui.ctx().content_rect().height() - 200.0).max(320.0)),
+                Layout::top_down(Align::Min),
+                |ui| {
+                    ui.set_max_width(width);
+                    ui.spacing_mut().item_spacing.y = 8.0;
+                    match dialog {
+                        Dialog::CreatePoll(chat) => super::polls::create(app, ui, &chat),
+                        Dialog::ScheduleMessage(chat) => super::schedule::show(app, ui, &chat),
+                        Dialog::Shortcuts => shortcuts(app, ui),
+                        Dialog::About => about(app, ui),
+                        Dialog::ConfirmUnlink => confirm_unlink(app, ui),
+                        Dialog::PairWithPhone => pair_with_phone(app, ui),
+                        Dialog::NewContact => new_contact(app, ui),
+                        Dialog::ChatInfo(id) => chat_info(app, ui, &id),
+                        Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
+                    }
+                },
+            );
         });
     if response.should_close() {
         app.actions.push(Action::CloseDialog);
     }
 }
 
-fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, message: &str) {
+fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, messages: &[String]) {
     let palette = app.palette;
-    title(ui, app, "Forward message");
+    title(
+        ui,
+        app,
+        if messages.len() == 1 {
+            "Forward message".to_owned()
+        } else {
+            format!("Forward {} messages", messages.len())
+        }
+        .as_str(),
+    );
     let width = ui.available_width();
     let search = super::widgets::search_field(
         ui,
@@ -157,13 +182,13 @@ fn forward(app: &mut App, ui: &mut egui::Ui, from_chat: &str, message: &str) {
     if let Some(to_chat) = destination {
         app.actions.push(Action::Forward {
             from_chat: from_chat.to_owned(),
-            message: message.to_owned(),
+            messages: messages.to_vec(),
             to_chat,
         });
     }
 }
 
-fn title(ui: &mut egui::Ui, app: &mut App, label: &str) {
+pub(crate) fn title(ui: &mut egui::Ui, app: &mut App, label: &str) {
     let palette = app.palette;
     ui.horizontal(|ui| {
         theme::text(ui, label, theme::bold(18.0), palette.text);
