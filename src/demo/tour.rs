@@ -959,6 +959,50 @@ mod tests {
     }
 
     #[test]
+    fn a_picked_row_keeps_its_highlight() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        // One frame registers the rows, the next paints their highlight.
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let first = app.conversations[&chat]
+            .messages
+            .iter()
+            .find(|message| {
+                ctx.data(|data| {
+                    data.get_temp::<(Rect, bool)>(egui::Id::new((
+                        "message-row",
+                        chat.as_str(),
+                        message.id.as_str(),
+                    )))
+                })
+                .is_some()
+            })
+            .expect("a row registered its rect")
+            .id
+            .clone();
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: [first].into_iter().collect(),
+        });
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let expected = app.palette.accent.gamma_multiply(0.16);
+        assert!(
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == expected)
+            }),
+            "a picked row keeps a highlight of its own"
+        );
+    }
+
+    #[test]
     fn the_scheduled_list_shows_the_message() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
