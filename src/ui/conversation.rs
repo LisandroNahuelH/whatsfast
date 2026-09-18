@@ -26,6 +26,8 @@ const AUTO_DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;
 /// Group-message avatar size.
 const SENDER_AVATAR: f32 = 28.0;
 const BODY_SIZE: f32 = 14.5;
+/// Room the composer field keeps for the schedule clock at its right edge.
+const CLOCK_ROOM: f32 = 26.0;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let Some(chat) = app.current_chat().cloned() else {
@@ -1063,24 +1065,6 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 {
                     app.actions.push(Action::ShowDialog(Dialog::CreatePoll(chat.id.clone())));
                 }
-                if app.editing.is_none()
-                    && !app.composer.trim().is_empty()
-                    && app.pending.is_empty()
-                    && app.reply_to.is_none()
-                    && theme::icon_button(
-                        ui,
-                        Icon::Clock,
-                        20.0,
-                        palette.secondary,
-                        palette.text,
-                        "Schedule this message",
-                    )
-                    .clicked()
-                {
-                    app.actions.push(Action::ShowDialog(Dialog::ScheduleMessage(
-                        chat.id.clone(),
-                    )));
-                }
                 if app.editing.is_none() {
                     let smile = theme::icon_button(
                         ui,
@@ -1100,12 +1084,13 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     }
                 }
                 let field_width = (ui.available_width() - button_width - 10.0).max(0.0);
-                Frame::new()
+                let field = Frame::new()
                     .fill(palette.surface)
                     .corner_radius(CornerRadius::same(theme::RADIUS + 4))
                     .inner_margin(Margin::symmetric(12, 7))
                     .show(ui, |ui| {
-                        ui.set_width((field_width - 24.0).max(0.0));
+                        // Keep the text clear of the clock at the right edge.
+                        ui.set_width((field_width - 24.0 - CLOCK_ROOM).max(0.0));
                         // Grow from one to six lines, then scroll.
                         egui::ScrollArea::vertical()
                             .id_salt("composer-scroll")
@@ -1233,6 +1218,39 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 }
                             });
                     });
+                // The schedule clock lives inside the field, at its right
+                // edge, and appears once there is something to schedule.
+                if app.editing.is_none()
+                    && !app.composer.trim().is_empty()
+                    && app.pending.is_empty()
+                    && app.reply_to.is_none()
+                {
+                    let rect = field.response.rect;
+                    let hit = Rect::from_center_size(
+                        pos2(rect.right() - 20.0, rect.top() + 7.0 + line_height / 2.0),
+                        Vec2::splat(26.0),
+                    );
+                    let response = ui
+                        .interact(hit, ui.id().with("schedule-clock"), Sense::click())
+                        .on_hover_text("Schedule this message")
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    theme::paint_icon(
+                        ui,
+                        Icon::Clock,
+                        hit,
+                        18.0,
+                        if response.hovered() {
+                            palette.text
+                        } else {
+                            palette.secondary
+                        },
+                    );
+                    if response.clicked() {
+                        app.actions.push(Action::ShowDialog(Dialog::ScheduleMessage(
+                            chat.id.clone(),
+                        )));
+                    }
+                }
                 let ready = !app.composer.trim().is_empty() || !app.pending.is_empty();
                 let (fill, hover, icon) = if ready {
                     (palette.accent, palette.accent_hover, palette.on_accent)
