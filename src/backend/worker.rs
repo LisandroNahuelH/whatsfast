@@ -211,6 +211,7 @@ pub async fn run(
         pending_avatars: HashMap::new(),
         sticker_fetches: HashSet::new(),
         sticker_downloads: HashSet::new(),
+        save_after_download: HashSet::new(),
         read_sync: ReadSync::default(),
         poll_decrypting: 0,
         poll_history: Default::default(),
@@ -300,6 +301,8 @@ struct Worker {
     sticker_fetches: HashSet<String>,
     /// Active chat-sticker downloads by chat and message id.
     sticker_downloads: HashSet<(ChatId, String)>,
+    /// Attachments to copy into Downloads once their download lands.
+    save_after_download: HashSet<(ChatId, String)>,
 }
 
 /// Decoded history chunk waiting to be canonicalized and archived.
@@ -2433,9 +2436,27 @@ impl Worker {
             } => self.send_text(chat, text, quoting, mentions),
             Command::Forward {
                 from_chat,
-                message,
+                messages,
                 to_chat,
-            } => self.forward_message(from_chat, message, to_chat),
+            } => self.forward_messages(from_chat, messages, to_chat),
+            Command::SaveMedia { chat, messages } => self.save_media(chat, messages),
+            Command::SetStar {
+                chat,
+                message,
+                starred,
+            } => self.set_star(chat, message, starred),
+            Command::Starred {
+                message: _,
+                starred,
+                result,
+            } => match result {
+                Ok(()) => self.emit(Event::Info(if starred {
+                    "Starred".to_owned()
+                } else {
+                    "Star removed".to_owned()
+                })),
+                Err(error) => self.emit(Event::Error(error)),
+            },
             Command::Composing { chat, composing } => {
                 let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
                     return;
@@ -2937,6 +2958,15 @@ impl Worker {
                 if let Ok(path) = &result {
                     let _ = self.archive.set_media_path(&chat, &id, path);
                 }
+                let saving = self.save_after_download.remove(&(chat.clone(), id.clone()));
+                if saving && let Ok(path) = &result {
+                    match self.copy_to_downloads(path) {
+                        Ok(saved) => {
+                            self.emit(Event::Info(format!("Saved to {}", saved.display())))
+                        }
+                        Err(error) => self.emit(Event::Error(error)),
+                    }
+                }
                 let for_picker = self.sticker_downloads.remove(&(chat.clone(), id.clone()));
                 self.emit(Event::Media {
                     chat,
@@ -3082,41 +3112,78 @@ impl Worker {
         ));
     }
 
-    fn forward_message(&mut self, from_chat: ChatId, message_id: String, to_chat: ChatId) {
+    /// Forwards archived messages to another chat, oldest first.
+    ///
+    /// The sends run one after another: each one starts only once the send
+    /// before it came back, which is what the first tick reports. Firing the
+    /// batch together lets light messages overtake heavy ones, so the pictures
+    /// and videos land after the text that came before them.
+    fn forward_messages(&mut self, from_chat: ChatId, messages: Vec<String>, to_chat: ChatId) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&to_chat)) else {
             self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
             return;
         };
-        let Ok(Some(source)) = self.archive.message(&from_chat, &message_id) else {
+        let jobs: Vec<_> = messages
+            .iter()
+            .filter_map(|message| self.forward_job(&from_chat, message, &to_chat))
+            .collect();
+        if jobs.is_empty() {
+            return;
+        }
+        let commands = self.commands.clone();
+        tokio::spawn(async move {
+            for (id, message, expiration) in jobs {
+                send_outgoing(
+                    client.clone(),
+                    commands.clone(),
+                    to_chat.clone(),
+                    jid.clone(),
+                    id,
+                    message,
+                    expiration,
+                )
+                .await;
+            }
+        });
+    }
+
+    /// Prepares one forwarded message: its stored row and the outgoing
+    /// protobuf. `None` when it cannot be forwarded, reported to the user.
+    fn forward_job(
+        &mut self,
+        from_chat: &ChatId,
+        message_id: &str,
+        to_chat: &ChatId,
+    ) -> Option<(String, wa::Message, Option<u32>)> {
+        let Ok(Some(source)) = self.archive.message(from_chat, message_id) else {
             self.emit(Event::Error(
                 "This message is not stored on this computer".to_owned(),
             ));
-            return;
+            return None;
         };
         if matches!(
             source.content,
             Content::Revoked | Content::Unsupported { .. } | Content::Poll { .. }
         ) {
             self.emit(Event::Error("This message cannot be forwarded".to_owned()));
-            return;
+            return None;
         }
-        let Ok(Some(raw)) = self.archive.raw(&from_chat, &message_id) else {
+        let Ok(Some(raw)) = self.archive.raw(from_chat, message_id) else {
             self.emit(Event::Error(
                 "The original message data is not available to forward".to_owned(),
             ));
-            return;
+            return None;
         };
         let Ok(original) = wa::Message::decode_from_slice(&raw) else {
             self.emit(Event::Error(
                 "The original message data could not be read".to_owned(),
             ));
-            return;
+            return None;
         };
         // whatsapp-rust owns the forwarding rules: unwrap transient wrappers,
         // strip quote chains and secrets, and retain reusable media metadata.
-        let (message, expiration) =
-            outgoing_forward(&original, self.ephemeral_expiration(&to_chat));
-        let id = client.generate_message_id();
+        let (message, expiration) = outgoing_forward(&original, self.ephemeral_expiration(to_chat));
+        let id = self.client.as_ref()?.generate_message_id();
         let mentions = self.mentions_of(&mentioned_of(&message));
         let thumbnail = thumbnail_of(&message).or_else(|| source.thumbnail.clone());
         let row = forwarded_row(
@@ -3129,15 +3196,7 @@ impl Worker {
             thumbnail,
         );
         self.store_message(row, Some(message.encode_to_vec()), None);
-        tokio::spawn(send_outgoing(
-            client,
-            self.commands.clone(),
-            to_chat,
-            jid,
-            id,
-            message,
-            expiration,
-        ));
+        Some((id, message, expiration))
     }
 
     fn mark_read(&mut self, chat: ChatId, receipts: bool) {
@@ -3479,6 +3538,109 @@ impl Worker {
                 }
             };
             let _ = commands.send(Command::Downloaded { chat, id, result });
+        });
+    }
+
+    /// Copies picked attachments into the user's Downloads folder, downloading
+    /// the ones that are not on this computer yet.
+    fn save_media(&mut self, chat: ChatId, ids: Vec<String>) {
+        let dir = self.dirs.media_cache_dir();
+        let mut saved = 0usize;
+        for id in ids {
+            let Some((mime, file_name)) = self.media_name(&chat, &id) else {
+                continue;
+            };
+            let source = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
+            if source.exists() {
+                match self.copy_to_downloads(&source) {
+                    Ok(_) => saved += 1,
+                    Err(error) => self.emit(Event::Error(error)),
+                }
+            } else {
+                // The copy happens when the download lands.
+                self.save_after_download.insert((chat.clone(), id.clone()));
+                self.download(chat.clone(), id);
+            }
+        }
+        match saved {
+            0 => {}
+            1 => self.emit(Event::Info("Saved to Downloads".to_owned())),
+            many => self.emit(Event::Info(format!("{many} files saved to Downloads"))),
+        }
+    }
+
+    /// Copies one downloaded attachment into the user's Downloads folder.
+    fn copy_to_downloads(&self, source: &Path) -> Result<PathBuf, String> {
+        let Some(downloads) = self.dirs.downloads_dir() else {
+            return Err("No Downloads folder on this computer".to_owned());
+        };
+        let name = source
+            .file_name()
+            .ok_or_else(|| "The downloaded file has no name".to_owned())?;
+        std::fs::create_dir_all(&downloads).map_err(|error| error.to_string())?;
+        let target = downloads.join(name);
+        std::fs::copy(source, &target).map_err(|error| error.to_string())?;
+        Ok(target)
+    }
+
+    /// Mime type and original file name of a message's attachment, when it has
+    /// one. Mirrors the media the download knows how to fetch.
+    fn media_name(&self, chat: &ChatId, id: &str) -> Option<(String, Option<String>)> {
+        let raw = self.archive.raw(chat, id).ok().flatten()?;
+        let message = wa::Message::decode_from_slice(&raw).ok()?;
+        let base = message.get_base_message().clone();
+        if let Some(image) = base.image_message.as_option() {
+            Some((image.mimetype.clone().unwrap_or_default(), None))
+        } else if let Some(video) = base
+            .video_message
+            .as_option()
+            .or(base.ptv_message.as_option())
+        {
+            Some((video.mimetype.clone().unwrap_or_default(), None))
+        } else if let Some(audio) = base.audio_message.as_option() {
+            Some((audio.mimetype.clone().unwrap_or_default(), None))
+        } else if let Some(document) = base.document_message.as_option() {
+            Some((
+                document.mimetype.clone().unwrap_or_default(),
+                document.file_name.clone(),
+            ))
+        } else {
+            base.sticker_message
+                .as_option()
+                .map(|sticker| (sticker.mimetype.clone().unwrap_or_default(), None))
+        }
+    }
+
+    /// Stars or unstars one message for every linked device.
+    fn set_star(&mut self, chat: ChatId, id: String, starred: bool) {
+        let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
+            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            return;
+        };
+        let Ok(Some(target)) = self.archive.message(&chat, &id) else {
+            return;
+        };
+        let from_me = target.from_me;
+        let participant = (jid.is_group() && !from_me)
+            .then(|| target.sender.clone())
+            .and_then(|sender| Self::jid_of(&sender));
+        let commands = self.commands.clone();
+        tokio::spawn(async move {
+            let actions = client.chat_actions();
+            let result = if starred {
+                actions
+                    .star_message(&jid, participant.as_ref(), &id, from_me)
+                    .await
+            } else {
+                actions
+                    .unstar_message(&jid, participant.as_ref(), &id, from_me)
+                    .await
+            };
+            let _ = commands.send(Command::Starred {
+                message: id,
+                starred,
+                result: result.map_err(|error| error.to_string()),
+            });
         });
     }
 
@@ -5888,6 +6050,7 @@ mod receipt_tests {
             pending_avatars: HashMap::new(),
             sticker_fetches: HashSet::new(),
             sticker_downloads: HashSet::new(),
+            save_after_download: HashSet::new(),
             read_sync: ReadSync::default(),
             poll_decrypting: 0,
             poll_history: Default::default(),
