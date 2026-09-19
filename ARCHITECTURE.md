@@ -33,7 +33,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
-  incoming message clears the flag.
+  incoming message clears the flag. `chats.favorite` and the `chat_lists` /
+  `chat_list_members` / `chat_list_pins` tables are local list filters. Pins
+  in All stay on `chats.pinned` and still sync with the phone. Pins on any
+  other chip live only in `chat_list_pins`.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 
 See root `AGENTS.md` for invariants (privacy, polls, receipts, selection, updates).
