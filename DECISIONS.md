@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Chat doodle wallpaper is Auto by theme, with a Settings override | Native WhatsApp uses a low-contrast doodle behind bubbles; five families match bundled palettes and more PNGs can land in the same folders | Solid `palette.chat` fill only |
 | 2026-09-19 | Chat-list chips are local filters; All pins stay the WhatsApp pin | Custom lists and favorites must not pretend to be WhatsApp labels or groups | One global pin list for every sidebar view |
 | 2026-09-19 | App version is `0.15.(100 + N)` and every git commit bumps the patch by 1 | Agents left `0.15.1` stuck; the millesimal patch tracks `git rev-list --count HEAD` | Bumping `Cargo.toml` only when cutting a GitHub release |
 | 2026-09-19 | Failed attachment prefetch retries with backoff for 30 days | A one-shot skip left holes when CDN links expired; the phone can re-upload later | Permanent `media_skip` until reconnect |
