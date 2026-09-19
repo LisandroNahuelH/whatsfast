@@ -6,6 +6,8 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 
 ## Work order (every file change)
 
+**New complete feature:** update `README.md` in the same turn and **push** to `origin/main` so GitHub shows the addition. No README, no done.
+
 1. **Backup** files you will edit.
 2. **Build** — full checks in *Definition of done* below.
 2.1 **Debug exe** — after the last Rust change of the turn, run
@@ -18,7 +20,7 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 3.1 **Push** — when the user asked for repository changes, push to `origin/main` in the same turn after commits (and after build or jev when they apply). Do not wait for a separate "push" request.
 4. **AGENTS.md** — operating facts only.
 5. **ARCHITECTURE.md** — structural facts only.
-6. **Other owners** — `README.md` when user-visible behavior changes (same PR).
+6. **README** — every new complete, working user-facing feature (and any other user-visible change) goes in `README.md` this turn, then push (3.1).
 7. **Cleanup** temps in `AGENTS/` when the task closes.
 
 Working artifacts go in `AGENTS/`. No `CLAUDE.md`. Push commits directly to
