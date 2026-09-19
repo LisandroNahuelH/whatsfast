@@ -183,13 +183,6 @@ pub struct App {
     /// Scheduled messages, soonest first, and whether the left panel lists them.
     pub scheduled: Vec<crate::archive::Scheduled>,
     pub show_scheduled: bool,
-    /// Starred messages, newest star first, and whether the left panel lists
-    /// them. The three panels (chats, scheduled, starred) share one slot.
-    pub starred: Vec<crate::archive::Starred>,
-    pub show_starred: bool,
-    /// Ids of the starred messages of each chat, for the mark in the
-    /// conversation. Filled when a chat opens and on every confirmed star.
-    pub stars: HashMap<ChatId, HashSet<String>>,
     /// Draft of the schedule dialog: the day, the month shown, and the time.
     pub schedule_day: jiff::civil::Date,
     pub schedule_month: jiff::civil::Date,
@@ -416,9 +409,6 @@ impl App {
             selecting: None,
             scheduled: Vec::new(),
             show_scheduled: false,
-            starred: Vec::new(),
-            show_starred: false,
-            stars: HashMap::new(),
             schedule_day: today,
             schedule_month: today,
             schedule_hour: 9,
@@ -1219,26 +1209,6 @@ impl App {
                     finished,
                 } => self.toast_progress(key, message, finished),
                 Event::Scheduled(list) => self.scheduled = list,
-                Event::Stars { chat, ids } => {
-                    self.stars.insert(chat, ids.into_iter().collect());
-                }
-                Event::StarChanged {
-                    chat,
-                    message,
-                    starred,
-                } => {
-                    let ids = self.stars.entry(chat).or_default();
-                    if starred {
-                        ids.insert(message);
-                    } else {
-                        ids.remove(&message);
-                    }
-                    // The open list would otherwise show the old state.
-                    if self.show_starred {
-                        self.backend.send(Command::LoadStarred);
-                    }
-                }
-                Event::StarredList(list) => self.starred = list,
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -2092,18 +2062,7 @@ impl App {
             Action::ToggleScheduled => {
                 self.show_scheduled = !self.show_scheduled;
                 if self.show_scheduled {
-                    // One panel at a time, so going back always lands on chats.
-                    self.show_archived = false;
-                    self.show_starred = false;
                     self.backend.send(Command::LoadScheduled);
-                }
-            }
-            Action::ToggleStarred => {
-                self.show_starred = !self.show_starred;
-                if self.show_starred {
-                    self.show_archived = false;
-                    self.show_scheduled = false;
-                    self.backend.send(Command::LoadStarred);
                 }
             }
             Action::CancelScheduled { id } => {
