@@ -1,8 +1,27 @@
-# ZapFast agent guide
+# WhatsFast agent guide
 
-ZapFast is a small native WhatsApp client: Rust, egui, and the
-[whatsapp-rust](https://github.com/oxidezap/whatsapp-rust) library for the
-protocol. These notes are for coding agents and new contributors.
+WhatsFast is a Windows-focused native WhatsApp client: Rust, egui, and
+[whatsapp-rust](https://github.com/oxidezap/whatsapp-rust). These notes are for
+coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Work order (every file change)
+
+1. **Backup** files you will edit.
+2. **Build** — full checks in *Definition of done* below.
+2.5 **Jev gate** when Rust source changed (quota; skip if no key).
+3. **Commits** — atomic, English conventional messages.
+4. **AGENTS.md** — operating facts only.
+5. **ARCHITECTURE.md** — structural facts only.
+6. **Other owners** — `README.md` when user-visible behavior changes (same PR).
+7. **Cleanup** temps in `AGENTS/` when the task closes.
+
+Working artifacts go in `AGENTS/`. No `CLAUDE.md`. Internal features merge via
+GitHub PRs on `origin` (portfolio). Upstream optional; always rebrand after sync.
+
+## Product boundaries
+
+WhatsFast is a small native client. No browser engine, no telemetry, no hosted
+backend. **Windows desktop** is the supported release platform.
 
 ## Product boundaries
 
@@ -26,26 +45,9 @@ protocol. These notes are for coding agents and new contributors.
   level that ships (see the definition of done); treat existing
   captures of them the same way.
 
-## Architecture
+## Architecture (summary)
 
-- `src/ui/` draws views and pushes `model::Action`s; `src/app.rs` applies
-  them after the frame. Never mutate application state from inside a view
-  beyond the view's own fields (composer text, search text, flags).
-- `src/backend.rs` is the interface's handle to a tokio runtime on its own
-  thread; `src/backend/worker.rs` runs there. It owns the whatsapp-rust
-  `Bot`, the message archive, downloads, and profile pictures. The two
-  sides talk only through `Command` (interface to runtime) and `Event`
-  (runtime to interface); every event wakes the window through `Waker`.
-- `src/archive.rs` is the SQLite store of chats, messages, contacts, and
-  privacy-id mappings. WhatsApp replays history once, at link time, so the
-  archive is the only copy. It keeps each message's raw protobuf because
-  the keys to fetch an attachment live in it. `src/archive/encryption.rs` opens
-  the archive with SQLCipher and a random key stored in the OS keyring. Plaintext
-  migration checkpoints the old WAL and verifies an encrypted staging file before
-  atomic replacement. A locked or missing key stops linking; never fall back to
-  a disposable archive. Tests use fixtures and mock credentials only.
-- `src/model.rs` holds the app's own types. Views never touch a protobuf;
-  the worker translates in `classify()` and `parse_conversation()`.
+Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
 - Poll creation, voting, and decryption use whatsapp-rust's `Client::polls()`.
   `backend/worker/polls.rs` retains the original creator identity and key in the
   encrypted archive; `archive/polls.rs` keeps each voter's latest timestamp and
