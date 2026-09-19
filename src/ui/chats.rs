@@ -632,7 +632,7 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .offset
         .y;
     let pinned = chats.iter().filter(|chat| chat.pinned).count();
-    pin_gesture(app, ui, list_top, offset, pinned, stride);
+    let finished = pin_gesture(app, ui, list_top, offset, pinned, stride);
     let total = chats.len() + usize::from(show_archive_row);
     let mut scroll_area = egui::ScrollArea::vertical()
         .id_salt("chat-list")
@@ -680,6 +680,11 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
             Stroke::new(2.0, palette.accent),
         );
     }
+    // The rows have drawn with the gesture still set, so the release cannot
+    // read as a click that opens the chat.
+    if finished {
+        app.pin_drag = None;
+    }
 }
 
 /// How long a pinned row must be held before it can be moved.
@@ -696,9 +701,9 @@ fn pin_gesture(
     offset: f32,
     pinned: usize,
     stride: f32,
-) {
+) -> bool {
     let Some(mut drag) = app.pin_drag.clone() else {
-        return;
+        return false;
     };
     let (time, down, released, pointer) = ui.input(|input| {
         (
@@ -722,13 +727,17 @@ fn pin_gesture(
             app.actions
                 .push(Action::ReorderPinned(pinned_order(app, drag.from, drag.to)));
         }
-        app.pin_drag = None;
-        return;
+        // The rows still read the gesture while they draw this frame: egui
+        // counts a hold of up to 0.8 s as a click, so clearing it here would
+        // let the release open the chat. `list` clears it once they are drawn.
+        app.pin_drag = Some(drag);
+        return true;
     }
     // A still pointer sends no events, so the hold would never reach its
     // threshold without asking for the next frame.
     ui.ctx().request_repaint();
     app.pin_drag = Some(drag);
+    false
 }
 
 /// The pinned chats, with the one at `from` moved to `to`, top first.
