@@ -2106,17 +2106,6 @@ impl App {
                     self.backend.send(Command::LoadStarred);
                 }
             }
-            Action::ToggleSettings => {
-                if self.page == Page::Settings {
-                    // The same button that opened settings closes them, and
-                    // closing lands on the empty window a fresh start shows.
-                    self.page = Page::Chats;
-                    self.open_chat = None;
-                    self.dialog = None;
-                } else {
-                    self.page = Page::Settings;
-                }
-            }
             Action::CancelScheduled { id } => {
                 self.backend.send(Command::CancelScheduled { id });
             }
