@@ -96,7 +96,10 @@ fn main() -> eframe::Result<()> {
         match single_instance::acquire(&waker) {
             single_instance::Outcome::Only(guard) => Some(guard),
             single_instance::Outcome::Surfaced => {
-                eprintln!("WhatsFast or FastsApp is already running; asked it to show its window");
+                eprintln!("WhatsFast is already running. This launch only showed that window.");
+                eprintln!(
+                    "Close the running copy if you meant to test this build, then start again."
+                );
                 return Ok(());
             }
         }
