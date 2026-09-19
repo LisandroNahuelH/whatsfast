@@ -921,6 +921,42 @@ mod tests {
     }
 
     #[test]
+    fn the_empty_composer_is_taller_than_one_line_and_clear_of_the_window_edge() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        for at in 0..3 {
+            step_output(&mut app, &ctx, Vec::new(), at as f32 * 0.05, true);
+        }
+        let rect = ctx
+            .read_response(egui::Id::new("composer-bubble"))
+            .expect("composer bubble")
+            .rect;
+        let line = ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(
+                    "x".to_owned(),
+                    crate::theme::regular(14.5),
+                    app.palette.text,
+                )
+                .size()
+                .y
+        });
+        assert!(
+            rect.height() + 0.5 >= line * 1.35,
+            "empty composer height {} should be at least 35% taller than one line {}",
+            rect.height(),
+            line
+        );
+        assert!(
+            800.0 - rect.bottom() >= 10.0,
+            "composer sits above the window edge, gap {}",
+            800.0 - rect.bottom()
+        );
+    }
+
+    #[test]
     fn the_schedule_dialog_stacks_its_parts() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

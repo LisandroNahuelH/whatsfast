@@ -26,6 +26,10 @@ const AUTO_DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;
 /// Group-message avatar size.
 const SENDER_AVATAR: f32 = 28.0;
 const BODY_SIZE: f32 = 14.5;
+/// Empty/one-line composer is taller than one text line so the first line sits in the middle.
+const COMPOSER_MIN_HEIGHT_FACTOR: f32 = 1.35;
+/// Panel gap under the composer bubble. Was 8; 20% more is 10.
+const COMPOSER_BOTTOM_INSET: i8 = 10;
 /// How far the pick circle sits from the row's edge, so it reads inside the
 /// row's highlight instead of on its border.
 const PICK_INSET: f32 = 18.0;
@@ -933,7 +937,12 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         .frame(
             Frame::new()
                 .fill(palette.panel)
-                .inner_margin(Margin::symmetric(12, 8)),
+                .inner_margin(Margin {
+                    left: 12,
+                    right: 12,
+                    top: 8,
+                    bottom: COMPOSER_BOTTOM_INSET,
+                }),
         )
         .show(ui, |ui| {
             if chat.read_only {
@@ -1021,16 +1030,18 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 .size()
                 .y;
             // Match the button to a one-line field. The field grows to six
-            // lines while the row stays bottom-aligned.
+            // lines while the row stays bottom-aligned. The empty field is
+            // 35% taller so the first line sits in the middle.
             let field_padding = 14.0;
             let button_width = line_height + field_padding;
-            let text_height = ui
+            let min_row = (line_height + field_padding) * COMPOSER_MIN_HEIGHT_FACTOR;
+            let galley_h = ui
                 .ctx()
-                .read_response(id)
-                .map(|previous| previous.rect.height())
-                .unwrap_or(line_height)
-                .clamp(line_height, line_height * 6.0);
-            let row_height = (text_height + field_padding).max(button_width);
+                .data(|data| data.get_temp::<f32>(id.with("galley-h")))
+                .unwrap_or(line_height);
+            let text_height = galley_h.clamp(line_height, line_height * 6.0);
+            let row_height = (text_height + field_padding).max(min_row).max(button_width);
+            let min_text = (row_height - field_padding).max(line_height);
             ui.allocate_ui_with_layout(
                 vec2(ui.available_width(), row_height),
                 Layout::left_to_right(Align::Max),
@@ -1090,13 +1101,21 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                     .inner_margin(Margin::symmetric(12, 7))
                     .show(ui, |ui| {
                         ui.set_width((field_width - 24.0).max(0.0));
+                        let size = vec2(ui.available_width(), min_text);
+                        let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                        ui.interact(rect, egui::Id::new("composer-bubble"), Sense::hover());
+                        let mut field = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(rect)
+                                .layout(Layout::left_to_right(Align::Center)),
+                        );
                         // Grow from one to six lines, then scroll.
                         egui::ScrollArea::vertical()
                             .id_salt("composer-scroll")
-                            .max_height(line_height * 6.0)
-                            .min_scrolled_height(0.0)
-                            .auto_shrink([false, true])
-                            .show(ui, |ui| {
+                            .max_height(min_text)
+                            .min_scrolled_height(min_text)
+                            .auto_shrink([false, false])
+                            .show(&mut field, |ui| {
                                 // Replace emoji with placeholders in the galley, then
                                 // paint their color bitmaps over the field.
                                 let mut clusters: Vec<(usize, usize, String)> = Vec::new();
@@ -1121,6 +1140,8 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     .id(id)
                                     .frame(Frame::NONE)
                                     .margin(Margin::ZERO)
+                                    .min_size(vec2(0.0, min_text))
+                                    .vertical_align(Align::Center)
                                     .hint_text(
                                         egui::RichText::new(if app.pending.is_empty() {
                                             "Type a message"
@@ -1215,6 +1236,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     app.focus_composer = false;
                                     response.request_focus();
                                 }
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(id.with("galley-h"), output.galley.size().y);
+                                });
                             });
                     });
                 let ready = !app.composer.trim().is_empty() || !app.pending.is_empty();
