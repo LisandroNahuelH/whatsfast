@@ -8,7 +8,7 @@ WhatsFast uses a **green chat bubble** as its app icon. The product is **unoffic
 
 Source artwork: [packaging/icons/whatsfast-1024.png](packaging/icons/whatsfast-1024.png).
 
-The empty message composer is 35% taller than one text line, the caret fills that band, and attach, emoji, send, and schedule sit on the vertical center of the row. The bubble keeps 20% more space above the window's bottom edge than the old 8px inset. Reason: a tight one-line field against the window reads cheap; extra air does not change send keys.
+The empty message composer is 35% taller than one text line, the caret fills that band, and typed letters sit on the vertical center of that band with attach, emoji, send, and schedule. The bubble keeps 20% more space above the window's bottom edge than the old 8px inset. Reason: a tight one-line field against the window reads cheap; extra air does not change send keys.
 
 Chat wallpaper names in Settings are Auto or `Black 1` to `White 3`. Hover a name to preview it in the empty Settings margin. Right-click the thread for Next wallpaper. Reason: one doodle per colour felt static; the preview uses spare width instead of covering the combo.
 

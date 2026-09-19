@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | One-line composer letters use `Align::Center` in the tall first row | Default galley valign is bottom, so typed text sat on the floor of the taller bubble | `TextFormat::simple` default `Align::BOTTOM` in the stretched row |
 | 2026-09-19 | Composer caret fills the taller one-line band; row controls are vertically centered | Stretching the box left a short caret and bottom-aligned send/schedule | Bottom-aligned row, font-sized caret in a taller field |
 | 2026-09-19 | History prefetch names the open chat Current Chat and shows a hover card | This chat was vague; the card matches the wallpaper preview slot | Label This chat, no hover hint |
 | 2026-09-19 | Update toggles live in Settings About | They describe this build, not the window | Window section held Check for updates and Download updates automatically |
