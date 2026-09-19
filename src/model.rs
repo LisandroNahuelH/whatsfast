@@ -127,6 +127,18 @@ impl Chat {
         self.kind == ChatKind::Group
     }
 
+    /// Whether Leave group is offered. An empty member list means unknown.
+    pub fn can_leave(&self, me: Option<&str>) -> bool {
+        if !self.is_group() {
+            return false;
+        }
+        match me {
+            None => true,
+            Some(_) if self.participants.is_empty() => true,
+            Some(me) => self.participants.iter().any(|id| id == me),
+        }
+    }
+
     /// Counted unread or a local empty-dot reminder.
     pub fn looks_unread(&self) -> bool {
         self.unread > 0 || self.marked_unread
@@ -643,6 +655,8 @@ pub enum Dialog {
     Shortcuts,
     About,
     ConfirmUnlink,
+    /// Leave a group, optionally archiving the chat.
+    ConfirmLeaveGroup(ChatId),
     /// Phone number used for pairing-code linking.
     PairWithPhone,
     /// Manually entered number for messaging or saving a contact.
@@ -895,6 +909,11 @@ pub enum Action {
         emoji: String,
     },
     SetArchived(ChatId, bool),
+    /// Leaves a group. `archive` also hides the chat in Archived.
+    LeaveGroup {
+        chat: ChatId,
+        archive: bool,
+    },
     SetPinned(ChatId, bool),
     SetFavorite(ChatId, bool),
     SetChatList(ChatListId),
@@ -1016,6 +1035,21 @@ mod tests {
         assert_eq!(ChatKind::from_id("1@lid"), ChatKind::Direct);
         assert_eq!(ChatKind::from_id("1-2@g.us"), ChatKind::Group);
         assert_eq!(ChatKind::from_id("1@newsletter"), ChatKind::Broadcast);
+    }
+
+    #[test]
+    fn a_group_can_be_left_until_we_are_no_longer_a_member() {
+        let me = "me@s.whatsapp.net";
+        let mut chat = Chat::new("1-2@g.us".into(), "Rust".into());
+        assert!(
+            chat.can_leave(Some(me)),
+            "unknown membership still offers leave"
+        );
+        chat.participants = vec![me.into(), "other@s.whatsapp.net".into()];
+        assert!(chat.can_leave(Some(me)));
+        chat.participants.retain(|id| id != me);
+        assert!(!chat.can_leave(Some(me)));
+        assert!(!Chat::new("1@s.whatsapp.net".into(), "Ada".into()).can_leave(Some(me)));
     }
 
     #[test]

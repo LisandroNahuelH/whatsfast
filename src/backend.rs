@@ -388,6 +388,11 @@ pub enum Command {
         emoji: String,
     },
     SetArchived(ChatId, bool),
+    /// Leaves a group. `archive` also hides the chat in Archived.
+    LeaveGroup {
+        chat: ChatId,
+        archive: bool,
+    },
     SetPinned(ChatId, bool),
     SetFavorite(ChatId, bool),
     SaveChatList {

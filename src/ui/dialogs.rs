@@ -30,6 +30,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::Shortcuts => 540.0,
                 Dialog::About => 380.0,
                 Dialog::ConfirmUnlink => 380.0,
+                Dialog::ConfirmLeaveGroup(_) => 380.0,
                 Dialog::PairWithPhone => 380.0,
                 Dialog::NewContact => 380.0,
                 Dialog::ChatInfo(_) => 360.0,
@@ -57,6 +58,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         Dialog::Shortcuts => shortcuts(app, ui),
                         Dialog::About => about(app, ui),
                         Dialog::ConfirmUnlink => confirm_unlink(app, ui),
+                        Dialog::ConfirmLeaveGroup(id) => confirm_leave_group(app, ui, &id),
                         Dialog::PairWithPhone => pair_with_phone(app, ui),
                         Dialog::NewContact => new_contact(app, ui),
                         Dialog::ChatInfo(id) => chat_info(app, ui, &id),
@@ -467,6 +469,42 @@ fn confirm_unlink(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
+fn confirm_leave_group(app: &mut App, ui: &mut egui::Ui, id: &str) {
+    let palette = app.palette;
+    let archived = app.chat(id).is_some_and(|chat| chat.archived);
+    title(ui, app, "Leave this group?");
+    theme::paragraph(
+        ui,
+        "You will not receive new messages. The local history stays on this computer.",
+        theme::regular(13.5),
+        palette.text,
+    );
+    ui.add_space(10.0);
+    if danger_button(ui, app, "Leave group") {
+        app.actions.push(Action::LeaveGroup {
+            chat: id.to_owned(),
+            archive: false,
+        });
+    }
+    if !archived {
+        ui.add_space(4.0);
+        if theme::pill_button(ui, &palette, "Leave group and archive", false).clicked() {
+            app.actions.push(Action::LeaveGroup {
+                chat: id.to_owned(),
+                archive: true,
+            });
+        }
+    }
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if theme::pill_button(ui, &palette, "Cancel", false).clicked() {
+                app.actions.push(Action::CloseDialog);
+            }
+        });
+    });
+}
+
 fn pair_with_phone(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     title(ui, app, "Link with a phone number");
@@ -675,6 +713,8 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
     // Saving or cancelling leaves the editor buffer checked out.
     let mut editing = app.contact_edit.take().filter(|_| editable);
     let mut saved = None;
+    let mut leave = false;
+    let can_leave = chat.can_leave(app.me.as_deref());
     ui.vertical_centered(|ui| {
         super::widgets::avatar(ui, &palette, &name, id, photo, picture.as_deref());
         ui.add_space(6.0);
@@ -758,6 +798,12 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
                 theme::text(ui, status, theme::regular(12.5), palette.dim);
             }
         }
+        if can_leave {
+            ui.add_space(8.0);
+            if danger_button(ui, app, "Leave group") {
+                leave = true;
+            }
+        }
     });
     if let Some((first, last)) = saved {
         editing = None;
@@ -768,6 +814,10 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
         });
     }
     app.contact_edit = editing;
+    if leave {
+        app.actions
+            .push(Action::ShowDialog(Dialog::ConfirmLeaveGroup(id.to_owned())));
+    }
     ui.add_space(8.0);
     if chat.is_group() && !chat.participants.is_empty() {
         let members = app.participant_list(&chat);

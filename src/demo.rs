@@ -997,6 +997,11 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 });
             }
             "unlink" => app.dialog = Some(Dialog::ConfirmUnlink),
+            "leave-group" => {
+                let group = SAMPLES[1].id.to_owned();
+                app.open_chat = Some(group.clone());
+                app.dialog = Some(Dialog::ConfirmLeaveGroup(group));
+            }
             "new-contact" => app.dialog = Some(Dialog::NewContact),
             "light" => {
                 app.settings.theme = ThemeChoice::Light;
@@ -1400,6 +1405,7 @@ mod tests {
             "info",
             "forward",
             "unlink",
+            "leave-group",
             "new-contact",
             "light",
             "archived",

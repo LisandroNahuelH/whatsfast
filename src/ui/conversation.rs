@@ -227,6 +227,7 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             "Info",
                             "Pin to top",
                             "Unarchive",
+                            "Leave group",
                             "Copy number",
                             "Close chat",
                         ],
@@ -261,6 +262,19 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             ) {
                                 app.actions
                                     .push(Action::SetArchived(chat.id.clone(), !chat.archived));
+                            }
+                            if chat.can_leave(app.me.as_deref())
+                                && widgets::menu_item(
+                                    ui,
+                                    &palette,
+                                    Some(Icon::LogOut),
+                                    "Leave group",
+                                )
+                            {
+                                app.actions
+                                    .push(Action::ShowDialog(Dialog::ConfirmLeaveGroup(
+                                        chat.id.clone(),
+                                    )));
                             }
                             widgets::menu_separator(ui, &palette);
                             if let Some(phone) = chat.phone()
@@ -961,18 +975,33 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             if chat.read_only {
                 ui.vertical_centered(|ui| {
                     ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        let width = 230.0;
-                        ui.add_space((ui.available_width() - width).max(0.0) / 2.0);
-                        theme::text(ui, "Only", theme::regular(13.5), palette.secondary);
-                        theme::text(ui, "admins", theme::semibold(13.5), palette.accent);
+                    let left = chat.is_group()
+                        && app
+                            .me
+                            .as_deref()
+                            .is_some_and(|me| !chat.participants.iter().any(|id| id == me))
+                        && !chat.participants.is_empty();
+                    if left {
                         theme::text(
                             ui,
-                            "can send messages",
+                            "You left this group",
                             theme::regular(13.5),
                             palette.secondary,
                         );
-                    });
+                    } else {
+                        ui.horizontal(|ui| {
+                            let width = 230.0;
+                            ui.add_space((ui.available_width() - width).max(0.0) / 2.0);
+                            theme::text(ui, "Only", theme::regular(13.5), palette.secondary);
+                            theme::text(ui, "admins", theme::semibold(13.5), palette.accent);
+                            theme::text(
+                                ui,
+                                "can send messages",
+                                theme::regular(13.5),
+                                palette.secondary,
+                            );
+                        });
+                    }
                     ui.add_space(8.0);
                 });
                 return;

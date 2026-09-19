@@ -3113,6 +3113,9 @@ impl Worker {
                     .map_err(|error| error.to_string())
                 });
             }
+            Command::LeaveGroup { chat, archive } => {
+                self.leave_group(chat, archive).await;
+            }
             Command::SetPinned(chat, pinned) => {
                 let _ = self.archive.set_pinned(&chat, pinned);
                 self.emit_chat(&chat);
@@ -3363,6 +3366,41 @@ impl Worker {
                 self.emit_chat(&chat);
             }
         }
+    }
+
+    async fn leave_group(&self, chat: ChatId, archive: bool) {
+        if let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat))
+            && let Err(error) = client.groups().leave(jid).await
+        {
+            log::warn!("could not leave group: {error}");
+            self.emit(Event::Error("Could not leave the group.".into()));
+            self.emit_chat(&chat);
+            return;
+        }
+        self.finish_leave(&chat, archive);
+    }
+
+    fn finish_leave(&self, chat: &str, archive: bool) {
+        let Ok(Some(row)) = self.archive.chat(chat) else {
+            return;
+        };
+        let participants: Vec<_> = row
+            .participants
+            .into_iter()
+            .filter(|id| !self.is_me(id))
+            .collect();
+        let _ = self.archive.set_group_info(chat, None, &participants, true);
+        if archive {
+            let _ = self.archive.set_archived(chat, true);
+            self.tell_phone(chat, move |client, jid| async move {
+                client
+                    .chat_actions()
+                    .archive_chat(&jid, None)
+                    .await
+                    .map_err(|error| error.to_string())
+            });
+        }
+        self.emit_chat(chat);
     }
 
     /// Save the same audience the protocol library uses to encrypt the send.

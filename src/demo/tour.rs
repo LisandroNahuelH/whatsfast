@@ -1070,6 +1070,52 @@ mod tests {
     }
 
     #[test]
+    fn the_leave_group_dialog_offers_leave_and_archive() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let group = super::super::sample_ids()[1].to_owned();
+        app.open_chat = Some(group.clone());
+        app.dialog = Some(crate::model::Dialog::ChatInfo(group.clone()));
+        let mut info = None;
+        for at in 0..3 {
+            info = Some(step_output(
+                &mut app,
+                &ctx,
+                Vec::new(),
+                at as f32 * 0.05,
+                true,
+            ));
+        }
+        let info = info.expect("chat info");
+        assert!(
+            info.shapes.iter().any(|clipped| matches!(
+                &clipped.shape,
+                egui::Shape::Text(text) if text.galley.text() == "Leave group"
+            )),
+            "group info offers Leave group"
+        );
+        app.dialog = Some(crate::model::Dialog::ConfirmLeaveGroup(group));
+        let confirm = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let mut leave = false;
+        let mut archive = false;
+        let mut title = false;
+        for clipped in &confirm.shapes {
+            let egui::Shape::Text(text) = &clipped.shape else {
+                continue;
+            };
+            let content = text.galley.text();
+            leave |= content == "Leave group";
+            archive |= content == "Leave group and archive";
+            title |= content == "Leave this group?";
+        }
+        assert!(title, "the confirm dialog names the action");
+        assert!(leave, "Leave group is offered");
+        assert!(archive, "Leave group and archive is offered");
+    }
+
+    #[test]
     fn holding_a_pinned_row_starts_the_gesture_and_the_release_ends_it() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
