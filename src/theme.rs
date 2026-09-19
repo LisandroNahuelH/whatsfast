@@ -372,6 +372,8 @@ pub enum Icon {
     LogOut,
     MapPin,
     Maximize,
+    /// Three bars, the handle that says a row can be moved.
+    Menu,
     MessageCircle,
     Mic,
     Minimize,
@@ -443,6 +445,7 @@ const ICONS: &[(Icon, &str, &[u8])] = icons! {
     LogOut => "log-out",
     MapPin => "map-pin",
     Maximize => "maximize-2",
+    Menu => "menu",
     MessageCircle => "message-circle",
     Mic => "mic",
     Minimize => "minimize-2",

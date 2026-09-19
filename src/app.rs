@@ -897,13 +897,6 @@ impl App {
             && self.chats.iter().filter(|chat| chat.pinned).count() > 1
     }
 
-    /// Whether hiding the sidebar leaves the narrow rail behind. It does
-    /// unless the setting asks for the old behavior, so a user who does not
-    /// know the shortcut always has a way back.
-    pub fn compact_sidebar(&self) -> bool {
-        !self.settings.hide_sidebar_fully
-    }
-
     /// Matching individual contacts without an existing chat, sorted by name.
     pub fn matching_contacts(&self) -> Vec<&Contact> {
         let needle = crate::util::search_key(self.search.trim());

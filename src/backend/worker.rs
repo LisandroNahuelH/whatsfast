@@ -60,6 +60,8 @@ const ON_DEMAND: i32 = 6;
 const THUMBNAIL_SIDE: u32 = 96;
 /// Sticker download batch size for the picker.
 const STICKER_FETCH_LIMIT: usize = 40;
+/// How many starred messages the list shows.
+const STARRED_LIMIT: usize = 200;
 
 fn account_allows_receipts(
     settings: &whatsapp_rust::wacore::iq::privacy::PrivacySettingsResponse,
@@ -2494,6 +2496,8 @@ impl Worker {
                 next_at,
             ),
             Command::LoadScheduled => self.emit_scheduled(),
+            Command::LoadStarred => self.emit_starred(),
+            Command::ReorderPinned(order) => self.reorder_pinned(order),
             Command::CancelScheduled { id } => self.cancel_scheduled(id),
             Command::SetStar {
                 chat,
@@ -2506,12 +2510,29 @@ impl Worker {
                 }
             }
             Command::Starred {
-                message: _,
+                chat,
+                message,
                 starred,
                 result,
             } => {
                 if let Err(error) = &result {
                     self.emit(Event::Error(error.clone()));
+                } else {
+                    // Only a confirmed star reaches the archive, so the list
+                    // never claims something WhatsApp refused.
+                    let written = if starred {
+                        self.archive.star(&chat, &message, crate::util::now())
+                    } else {
+                        self.archive.unstar(&chat, &message)
+                    };
+                    match written {
+                        Ok(()) => self.emit(Event::StarChanged {
+                            chat,
+                            message,
+                            starred,
+                        }),
+                        Err(error) => self.emit(Event::Error(error.to_string())),
+                    }
                 }
                 // One toast for the whole batch, so a run of fifty stars does
                 // not stack fifty of them.
@@ -3193,6 +3214,69 @@ impl Worker {
         }
     }
 
+    /// Hands the starred list to the interface.
+    fn emit_starred(&mut self) {
+        match self.archive.starred(STARRED_LIMIT) {
+            Ok(list) => self.emit(Event::StarredList(list)),
+            Err(error) => self.emit(Event::Error(error.to_string())),
+        }
+    }
+
+    /// Writes the order the user dragged the pinned chats into. Only the local
+    /// order changes: the phone keeps its own, and nothing goes to WhatsApp.
+    /// Each row gets a time above its own pin version, so the history sync
+    /// cannot pull it back to where it was.
+    fn reorder_pinned(&mut self, order: Vec<ChatId>) {
+        let pinned = match self.archive.pinned_order() {
+            Ok(list) => list,
+            Err(error) => {
+                self.emit(Event::Error(error.to_string()));
+                return;
+            }
+        };
+        // Only the chats still pinned, in the order asked for; anything the
+        // list did not name (pinned on the phone meanwhile) keeps its place
+        // at the end.
+        let mut wanted: Vec<String> = order
+            .into_iter()
+            .filter(|id| pinned.iter().any(|(known, _)| known == id))
+            .collect();
+        for (known, _) in &pinned {
+            if !wanted.contains(known) {
+                wanted.push(known.clone());
+            }
+        }
+        let base = pinned
+            .iter()
+            .map(|(_, version)| *version)
+            .max()
+            .unwrap_or(0);
+        let count = wanted.len() as i64;
+        for (index, id) in wanted.iter().enumerate() {
+            let stamp = base + count - index as i64;
+            if let Err(error) = self.archive.set_pinned_at(id, true, stamp) {
+                self.emit(Event::Error(error.to_string()));
+                return;
+            }
+        }
+        // The write is the truth: read it back, so a row the guard refused
+        // shows up instead of a silent half-order.
+        match self.archive.pinned_order() {
+            Ok(after) => {
+                for (index, id) in wanted.iter().enumerate() {
+                    let expected = base + count - index as i64;
+                    match after.iter().find(|(known, _)| known == id) {
+                        Some((_, version)) if *version == expected => {}
+                        Some(_) => log::warn!("the reordered chat {id} kept its old place"),
+                        None => log::warn!("the reordered chat {id} is no longer pinned"),
+                    }
+                }
+            }
+            Err(error) => self.emit(Event::Error(error.to_string())),
+        }
+        self.emit_chats();
+    }
+
     fn cancel_scheduled(&mut self, id: String) {
         if let Err(error) = self.archive.delete_scheduled(&id) {
             self.emit(Event::Error(error.to_string()));
@@ -3608,6 +3692,14 @@ impl Worker {
             }
             Err(error) => self.emit(Event::Error(format!("Could not read the chat: {error}"))),
         }
+        if before.is_none()
+            && let Ok(ids) = self.archive.starred_ids(&chat)
+        {
+            self.emit(Event::Stars {
+                chat: chat.clone(),
+                ids: ids.into_iter().collect(),
+            });
+        }
         if before.is_none() && ChatKind::from_id(&chat) == ChatKind::Group {
             // Force group metadata when opening a group.
             self.request_group_info(&chat, false);
@@ -3983,18 +4075,31 @@ impl Worker {
 
     /// Stars or unstars one message for every linked device.
     fn set_star(&mut self, chat: ChatId, id: String, starred: bool) {
+        let commands = self.commands.clone();
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            // The batch counts every attempt, so a refusal it never heard
+            // about would leave its toast open. Report it like any other.
+            let _ = commands.send(Command::Starred {
+                chat,
+                message: id,
+                starred,
+                result: Err("Not connected to WhatsApp".to_owned()),
+            });
             return;
         };
         let Ok(Some(target)) = self.archive.message(&chat, &id) else {
+            let _ = commands.send(Command::Starred {
+                chat,
+                message: id,
+                starred,
+                result: Err("This message is not on this computer".to_owned()),
+            });
             return;
         };
         let from_me = target.from_me;
         let participant = (jid.is_group() && !from_me)
             .then(|| target.sender.clone())
             .and_then(|sender| Self::jid_of(&sender));
-        let commands = self.commands.clone();
         tokio::spawn(async move {
             let actions = client.chat_actions();
             let result = if starred {
@@ -4007,6 +4112,7 @@ impl Worker {
                     .await
             };
             let _ = commands.send(Command::Starred {
+                chat,
                 message: id,
                 starred,
                 result: result.map_err(|error| error.to_string()),

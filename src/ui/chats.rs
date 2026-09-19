@@ -774,7 +774,15 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .offset
         .y;
     let pinned = chats.iter().filter(|chat| chat.pinned).count();
-    let finished = pin_gesture(app, ui, list_top, offset, pinned, stride);
+    let finished = pin_gesture(
+        app,
+        ui,
+        list_top,
+        offset,
+        pinned,
+        stride,
+        usize::from(show_archive_row),
+    );
     // The list draws the order a release would write: the held chat sits in
     // the slot under the pointer and the rest close the gap behind it, so the
     // user sees where it lands before letting go.
@@ -863,6 +871,7 @@ fn pin_gesture(
     offset: f32,
     pinned: usize,
     stride: f32,
+    first: usize,
 ) -> bool {
     let Some(mut drag) = app.pin_drag.clone() else {
         return false;
@@ -881,8 +890,7 @@ fn pin_gesture(
     if drag.active
         && let Some(pointer) = pointer
     {
-        let slot = ((pointer.y - top + offset) / stride).floor();
-        drag.to = (slot.max(0.0) as usize).min(pinned.saturating_sub(1));
+        drag.to = pinned_slot(pointer.y, drag.grab_y, top, offset, stride, first, pinned);
     }
     if !down || released {
         if drag.active && drag.to != drag.from {
@@ -937,6 +945,24 @@ fn paint_dragged(
         pos2(rect.left() + 76.0, rect.top() + 14.0),
         palette.text,
     );
+}
+
+/// The pinned slot under the pointer. It measures from the middle of the
+/// carried row, not from the pointer itself, so the row lands where it looks
+/// like it lands. `first` is the archived row, which is not pinned and must
+/// not shift every slot down by one.
+fn pinned_slot(
+    pointer: f32,
+    grab_y: f32,
+    top: f32,
+    offset: f32,
+    stride: f32,
+    first: usize,
+    pinned: usize,
+) -> usize {
+    let carried = pointer - grab_y + theme::ROW_HEIGHT / 2.0;
+    let row = ((carried - top + offset) / stride).floor() - first as f32;
+    (row.max(0.0) as usize).min(pinned.saturating_sub(1))
 }
 
 /// The pinned chats, with the one at `from` moved to `to`, top first.
@@ -1517,6 +1543,33 @@ mod tests {
     use super::*;
     use crate::paths::AppDirs;
     use crate::settings::Settings;
+
+    #[test]
+    fn the_pointer_moves_one_row_to_change_slot() {
+        let stride = theme::ROW_HEIGHT + 6.0;
+        let grab = 34.0;
+        let pinned = 3;
+        // Pressed in the middle of the second pinned row, with the archived
+        // row above it: the slot must read 1, not 2.
+        let pressed = 2.0 * stride + grab;
+        assert_eq!(pinned_slot(pressed, grab, 0.0, 0.0, stride, 1, pinned), 1);
+        // A third of a row up stays where it is.
+        assert_eq!(
+            pinned_slot(pressed - 24.0, grab, 0.0, 0.0, stride, 1, pinned),
+            1
+        );
+        // A full row up is the place before, a full row down the one after.
+        assert_eq!(
+            pinned_slot(pressed - stride, grab, 0.0, 0.0, stride, 1, pinned),
+            0
+        );
+        assert_eq!(
+            pinned_slot(pressed + stride, grab, 0.0, 0.0, stride, 1, pinned),
+            2
+        );
+        // Without the archived row the same pointer reads one higher.
+        assert_eq!(pinned_slot(pressed, grab, 0.0, 0.0, stride, 0, pinned), 2);
+    }
 
     #[test]
     fn the_hidden_sidebar_keeps_a_way_back_unless_the_setting_says_otherwise() {
