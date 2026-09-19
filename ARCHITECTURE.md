@@ -17,6 +17,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 ## Layers
 
 - **`src/ui/`** — egui views; emit `model::Action`; no direct archive access.
+  Clicking a downloaded chat photo opens `ui/viewer.rs`, a full-window overlay
+  with wheel zoom, click-and-drag pan, and previous/next among downloaded
+  photos in that chat. Stickers, videos, and **Open file** still use the
+  system handler.
 - **`src/app.rs`** — Applies actions after each frame.
 - **`src/backend.rs` / `src/backend/worker.rs`** — Tokio worker thread; owns
   whatsapp-rust `Bot`, archive, downloads, profile pictures. Talks to UI via
