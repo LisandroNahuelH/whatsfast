@@ -159,7 +159,7 @@ pub struct Settings {
     pub keep_running_in_background: bool,
     /// Desktop notifications while away from the chat.
     pub notifications: bool,
-    /// Ask GitHub once a day whether a newer release exists.
+    /// Ask GitHub every 10 minutes whether a newer release exists.
     pub check_for_updates: bool,
     /// Download verified updates in the background. Install starts from the Update toast.
     #[serde(default = "default_true")]

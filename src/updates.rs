@@ -1,4 +1,4 @@
-//! Daily update check against GitHub releases.
+//! Timed update check against GitHub releases.
 
 use std::time::Duration;
 
@@ -32,7 +32,7 @@ const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/LisandroNahuelH/whatsfast/releases/latest";
 
 /// Update-check interval.
-pub const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+pub const CHECK_INTERVAL: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Release {
@@ -121,5 +121,10 @@ mod tests {
         assert!(!is_newer("0.11.0-rc1", "0.11.0"));
         assert!(!is_newer("0.11.0-rc2", "0.11.0-rc1"));
         assert!(!is_newer("0.10.0", "0.11.0-rc1"));
+    }
+
+    #[test]
+    fn check_interval_is_ten_minutes() {
+        assert_eq!(CHECK_INTERVAL, Duration::from_secs(10 * 60));
     }
 }
