@@ -1378,14 +1378,8 @@ impl App {
                 media.state = MediaState::Idle;
             }
             Err(error) => {
-                // Show expired-file failures in the bubble, not as a toast.
-                let notice = if error.contains("403") || error.contains("404") {
-                    "No longer available on WhatsApp's servers".to_owned()
-                } else {
-                    error
-                };
-                log::warn!("download failed: {notice}");
-                media.state = MediaState::Failed(notice);
+                log::warn!("download failed: {error}");
+                media.state = MediaState::Failed(error);
             }
         }
     }
@@ -3892,7 +3886,7 @@ mod tests {
 #[cfg(test)]
 mod name_tests {
     use super::*;
-    use crate::model::{Contact, Content, Delivery, Media, MediaState, MentionRef};
+    use crate::model::{Contact, Content, Delivery, Media, MentionRef};
 
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("whatsfast-names-{}", std::process::id()));
@@ -3986,7 +3980,7 @@ mod name_tests {
                     width: Some(800),
                     height: Some(600),
                     path: Some(PathBuf::from(path)),
-                    state: MediaState::Idle,
+                    ..Default::default()
                 },
             },
             status: Delivery::None,

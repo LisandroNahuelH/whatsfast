@@ -19,7 +19,6 @@ pub(super) struct State {
     history_chat: Option<ChatId>,
     media_due: Option<Instant>,
     media: Option<(ChatId, String)>,
-    media_skip: HashSet<(ChatId, String)>,
 }
 
 impl Default for State {
@@ -33,7 +32,6 @@ impl Default for State {
             history_chat: None,
             media_due: None,
             media: None,
-            media_skip: HashSet::new(),
         }
     }
 }
@@ -54,7 +52,6 @@ impl State {
         self.history_failures = 0;
         self.history_due = None;
         self.history_chat = None;
-        self.media_skip.clear();
     }
 
     pub fn reset_session(&mut self) {
@@ -123,14 +120,14 @@ impl State {
         self.media
             .as_ref()
             .is_some_and(|(active_chat, active_id)| active_chat == chat && active_id == id)
-            || self.media_skip.contains(&(chat.to_owned(), id.to_owned()))
     }
 
     pub fn start_media(&mut self, chat: ChatId, id: String) {
         self.media = Some((chat, id));
     }
 
-    pub fn finish_media(&mut self, chat: &str, id: &str, ok: bool, now: Instant) -> bool {
+    /// True when this completion belongs to the prefetch download.
+    pub fn finish_media(&mut self, chat: &str, id: &str, now: Instant) -> bool {
         if self
             .media
             .as_ref()
@@ -140,9 +137,6 @@ impl State {
         }
         self.media = None;
         self.media_due = Some(now + MEDIA_GAP);
-        if !ok {
-            self.media_skip.insert((chat.to_owned(), id.to_owned()));
-        }
         true
     }
 }
@@ -283,5 +277,19 @@ mod tests {
                 .next_history(Instant::now(), false, &["a".into()])
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_failed_prefetch_file_is_not_skipped_forever() {
+        let mut state = State::default();
+        state.configure(HistoryPrefetch::Focused, Some("a".into()));
+        let now = Instant::now();
+        state.start_media("a".into(), "m1".into());
+        assert!(state.skip_media("a", "m1"));
+        assert!(state.finish_media("a", "m1", now));
+        assert!(!state.skip_media("a", "m1"));
+        assert!(!state.next_media_ready(now));
+        assert!(state.next_media_ready(now + MEDIA_GAP));
+        assert!(!state.finish_media("a", "m1", now + MEDIA_GAP));
     }
 }

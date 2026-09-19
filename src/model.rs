@@ -428,7 +428,7 @@ fn with_whole_caption(label: &str, caption: &Option<String>) -> String {
 
 /// Attachment metadata, download state, and optional local file. Download keys
 /// remain in the archive's raw message.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Media {
     pub mime: String,
     pub size: u64,
@@ -437,9 +437,77 @@ pub struct Media {
     /// Decrypted downloaded file.
     #[serde(default)]
     pub path: Option<PathBuf>,
+    /// First failed download (Unix seconds). Prefetch stops after 30 days.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_from: Option<i64>,
+    /// Next prefetch attempt (Unix seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "u32_is_zero")]
+    pub retry_fails: u32,
     /// Non-persisted download state.
     #[serde(skip)]
     pub state: MediaState,
+}
+
+fn u32_is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
+/// Prefetch gives up this many seconds after the first failed download.
+pub const MEDIA_RETRY_TTL_SECS: i64 = 30 * 24 * 60 * 60;
+pub const MEDIA_STILL_TRYING: &str =
+    "We are still trying to get this file automatically. Click to retry manually.";
+pub const MEDIA_NO_LONGER: &str = "No longer available on WhatsApp's servers";
+
+/// Backoff after `fails` attempts: 30 s doubling to 15 min, then 1 h.
+pub fn media_retry_delay_secs(fails: u32) -> i64 {
+    match fails {
+        0 | 1 => 30,
+        2 => 60,
+        3 => 120,
+        4 => 240,
+        5 => 480,
+        6 => 900,
+        _ => 3600,
+    }
+}
+
+pub fn media_retry_notice(retry_from: i64, now: i64) -> &'static str {
+    if now.saturating_sub(retry_from) >= MEDIA_RETRY_TTL_SECS {
+        MEDIA_NO_LONGER
+    } else {
+        MEDIA_STILL_TRYING
+    }
+}
+
+impl Media {
+    pub fn clear_retry(&mut self) {
+        self.retry_from = None;
+        self.retry_at = None;
+        self.retry_fails = 0;
+    }
+
+    pub fn schedule_retry(&mut self, now: i64, reset: bool) {
+        let from = if reset {
+            now
+        } else {
+            self.retry_from.unwrap_or(now)
+        };
+        let fails = if reset {
+            1
+        } else {
+            self.retry_fails.saturating_add(1)
+        };
+        self.retry_from = Some(from);
+        self.retry_fails = fails;
+        self.retry_at = Some(now.saturating_add(media_retry_delay_secs(fails)));
+    }
+
+    pub fn retry_given_up(&self, now: i64) -> bool {
+        self.retry_from
+            .is_some_and(|from| now.saturating_sub(from) >= MEDIA_RETRY_TTL_SECS)
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -877,10 +945,7 @@ mod tests {
         Media {
             mime: "image/jpeg".into(),
             size: 1,
-            width: None,
-            height: None,
-            path: None,
-            state: MediaState::Idle,
+            ..Default::default()
         }
     }
 
@@ -967,5 +1032,32 @@ mod tests {
         let json = serde_json::to_string(&content).expect("serializes");
         let back: Content = serde_json::from_str(&json).expect("parses");
         assert_eq!(back, content);
+    }
+
+    #[test]
+    fn media_retry_backs_off_then_gives_up_after_thirty_days() {
+        assert_eq!(media_retry_delay_secs(1), 30);
+        assert_eq!(media_retry_delay_secs(6), 900);
+        assert_eq!(media_retry_delay_secs(7), 3600);
+        assert_eq!(media_retry_notice(10, 10), MEDIA_STILL_TRYING);
+        assert_eq!(
+            media_retry_notice(10, 10 + MEDIA_RETRY_TTL_SECS),
+            MEDIA_NO_LONGER
+        );
+        let mut media = media();
+        media.schedule_retry(1_000, false);
+        assert_eq!(media.retry_from, Some(1_000));
+        assert_eq!(media.retry_fails, 1);
+        assert_eq!(media.retry_at, Some(1_030));
+        media.schedule_retry(1_040, false);
+        assert_eq!(media.retry_from, Some(1_000));
+        assert_eq!(media.retry_fails, 2);
+        assert_eq!(media.retry_at, Some(1_100));
+        media.schedule_retry(2_000, true);
+        assert_eq!(media.retry_from, Some(2_000));
+        assert_eq!(media.retry_fails, 1);
+        media.clear_retry();
+        assert!(media.retry_from.is_none());
+        assert_eq!(media.retry_fails, 0);
     }
 }

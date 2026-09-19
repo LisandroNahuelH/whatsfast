@@ -300,7 +300,7 @@ fn chrome_button(ui: &mut egui::Ui, rect: Rect, icon: Icon, tooltip: &str) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Delivery, Media, MediaState};
+    use crate::model::{Delivery, Media};
 
     fn photo(id: &str, path: Option<&str>) -> Message {
         Message {
@@ -318,7 +318,7 @@ mod tests {
                     width: Some(800),
                     height: Some(600),
                     path: path.map(PathBuf::from),
-                    state: MediaState::Idle,
+                    ..Default::default()
                 },
             },
             status: Delivery::None,

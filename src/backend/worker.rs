@@ -42,8 +42,8 @@ use super::{Command, Event, LinkStatus, Waker, read_sync::ReadSync};
 use crate::app::PAGE;
 use crate::archive::Archive;
 use crate::model::{
-    Chat, ChatId, ChatKind, Contact, Content, Delivery, Gif, GifError, LinkPreview, Media,
-    MentionRef, Message, Quoted, Reaction,
+    Chat, ChatId, ChatKind, Contact, Content, Delivery, Gif, GifError, LinkPreview,
+    MEDIA_STILL_TRYING, Media, MentionRef, Message, Quoted, Reaction,
 };
 use crate::paths::AppDirs;
 
@@ -63,6 +63,13 @@ const THUMBNAIL_SIDE: u32 = 96;
 const STICKER_FETCH_LIMIT: usize = 40;
 /// How many starred messages the list shows.
 const STARRED_LIMIT: usize = 200;
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
 
 fn account_allows_receipts(
     settings: &whatsapp_rust::wacore::iq::privacy::PrivacySettingsResponse,
@@ -2534,7 +2541,7 @@ impl Worker {
             'media: for chat in &targets {
                 match self
                     .archive
-                    .undownloaded_media(chat, prefetch::MEDIA_MAX, 8)
+                    .undownloaded_media(chat, prefetch::MEDIA_MAX, unix_now(), 8)
                 {
                     Ok(ids) => {
                         for id in ids {
@@ -2543,7 +2550,8 @@ impl Worker {
                             }
                             self.prefetch.start_media(chat.clone(), id.clone());
                             if !self.download(chat.clone(), id.clone()) {
-                                self.prefetch.finish_media(chat, &id, false, now);
+                                let _ = self.prefetch.finish_media(chat, &id, now);
+                                let _ = self.archive.set_media_retry(chat, &id, unix_now(), false);
                                 continue;
                             }
                             break 'media;
@@ -3241,11 +3249,22 @@ impl Worker {
                 }
             }
             Command::Downloaded { chat, id, result } => {
-                if let Ok(path) = &result {
-                    let _ = self.archive.set_media_path(&chat, &id, path);
-                }
-                self.prefetch
-                    .finish_media(&chat, &id, result.is_ok(), Instant::now());
+                let prefetch = self.prefetch.finish_media(&chat, &id, Instant::now());
+                let result = match result {
+                    Ok(path) => {
+                        let _ = self.archive.set_media_path(&chat, &id, &path);
+                        Ok(path)
+                    }
+                    Err(_) => {
+                        let notice = self
+                            .archive
+                            .set_media_retry(&chat, &id, unix_now(), !prefetch)
+                            .ok()
+                            .flatten()
+                            .unwrap_or_else(|| MEDIA_STILL_TRYING.to_owned());
+                        Err(notice)
+                    }
+                };
                 if let Some(target) = self.save_targets.remove(&(chat.clone(), id.clone())) {
                     match &result {
                         Ok(source) => match self.copy_to(source, &target) {
@@ -5329,8 +5348,7 @@ fn media(
         size: size.unwrap_or(0),
         width,
         height,
-        path: None,
-        state: Default::default(),
+        ..Default::default()
     }
 }
 

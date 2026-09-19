@@ -709,6 +709,10 @@ mod tests {
         }
         click(&mut app, &mut tour, &ctx, "This chat");
         assert_eq!(app.settings.history_prefetch, HistoryPrefetch::Focused);
+        assert!(
+            tour.labels.keys().any(|text| text.contains("30 days")),
+            "settings copy should mention the 30-day retry"
+        );
     }
 
     #[test]

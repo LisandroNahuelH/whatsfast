@@ -121,7 +121,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui,
                         &palette,
                         "Download older history in the background",
-                        "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned.",
+                        "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Failed files are asked again with a long wait, for up to 30 days. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned.",
                         |ui| {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
                                 let selected = app.settings.history_prefetch.label();
