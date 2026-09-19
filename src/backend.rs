@@ -9,7 +9,9 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use crate::model::{Chat, ChatId, Contact, Gif, GifError, Message, PollDraft, StickerPack};
+use crate::model::{
+    Chat, ChatId, ChatList, Contact, Gif, GifError, Message, PollDraft, StickerPack,
+};
 use crate::paths::AppDirs;
 use crate::settings::HistoryPrefetch;
 
@@ -387,6 +389,22 @@ pub enum Command {
     },
     SetArchived(ChatId, bool),
     SetPinned(ChatId, bool),
+    SetFavorite(ChatId, bool),
+    SaveChatList {
+        id: String,
+        name: String,
+        members: Vec<ChatId>,
+    },
+    DeleteChatList(String),
+    SetListPinned {
+        list: String,
+        chat: ChatId,
+        pinned: bool,
+    },
+    ReorderListPinned {
+        list: String,
+        order: Vec<ChatId>,
+    },
     PairWithPhone(String),
     /// Unlinks the device remotely and locally.
     Unlink,
@@ -601,6 +619,11 @@ pub enum Event {
     },
     /// The starred messages, newest star first.
     StarredList(Vec<crate::archive::Starred>),
+    /// Custom chat lists and pins that are not the All/WhatsApp pin.
+    ChatLists {
+        lists: Vec<ChatList>,
+        pins: Vec<(String, String, i64)>,
+    },
     /// A newer release than this build exists.
     UpdateAvailable {
         version: String,

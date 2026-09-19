@@ -3,7 +3,7 @@
 use egui::{Align, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
 
 use crate::app::App;
-use crate::model::{Action, Chat, Contact, Dialog, Message, Page};
+use crate::model::{Action, Chat, ChatListId, Contact, Dialog, Message, Page};
 use crate::theme::{self, Icon, Palette};
 
 use super::widgets;
@@ -352,6 +352,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                 app.focus_search = false;
                 response.request_focus();
             }
+            list_chips(app, ui);
         });
 }
 
@@ -473,7 +474,158 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                 app.focus_search = false;
                 response.request_focus();
             }
+            list_chips(app, ui);
         });
+}
+
+fn list_chips(app: &mut App, ui: &mut egui::Ui) {
+    if app.show_archived || app.show_starred || app.show_scheduled {
+        return;
+    }
+    let palette = app.palette;
+    let unread = app.unread_chip_count();
+    let lists = app.chat_lists.clone();
+    let selected = app.chat_list.clone();
+    ui.add_space(8.0);
+    egui::ScrollArea::horizontal()
+        .id_salt("chat-list-chips")
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                if filter_chip(ui, &palette, "All", 0, matches!(selected, ChatListId::All))
+                    .clicked()
+                {
+                    app.actions.push(Action::SetChatList(ChatListId::All));
+                }
+                if filter_chip(
+                    ui,
+                    &palette,
+                    "Unread",
+                    unread,
+                    matches!(selected, ChatListId::Unread),
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::SetChatList(ChatListId::Unread));
+                }
+                if filter_chip(
+                    ui,
+                    &palette,
+                    "Favorites",
+                    0,
+                    matches!(selected, ChatListId::Favorites),
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::SetChatList(ChatListId::Favorites));
+                }
+                if filter_chip(
+                    ui,
+                    &palette,
+                    "Groups",
+                    0,
+                    matches!(selected, ChatListId::Groups),
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::SetChatList(ChatListId::Groups));
+                }
+                for list in &lists {
+                    let on = matches!(&selected, ChatListId::Custom(id) if id == &list.id);
+                    let response = filter_chip(ui, &palette, &list.name, 0, on);
+                    if response.clicked() {
+                        app.actions
+                            .push(Action::SetChatList(ChatListId::Custom(list.id.clone())));
+                    }
+                    egui::Popup::context_menu(&response)
+                        .frame(widgets::menu_frame(&palette))
+                        .show(|ui| {
+                            ui.set_min_width(160.0);
+                            if widgets::menu_item(ui, &palette, Some(Icon::Pencil), "Edit") {
+                                app.actions.push(Action::ShowDialog(Dialog::EditChatList {
+                                    id: Some(list.id.clone()),
+                                }));
+                            }
+                            if widgets::menu_item(ui, &palette, Some(Icon::Trash), "Delete") {
+                                app.actions.push(Action::DeleteChatList(list.id.clone()));
+                            }
+                        });
+                }
+                if filter_chip(ui, &palette, "+", 0, false).clicked() {
+                    app.actions
+                        .push(Action::ShowDialog(Dialog::EditChatList { id: None }));
+                }
+            });
+        });
+}
+
+fn filter_chip(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    label: &str,
+    count: u32,
+    selected: bool,
+) -> egui::Response {
+    let fill = if selected {
+        palette.accent
+    } else {
+        palette.surface
+    };
+    let text = if selected {
+        palette.on_accent
+    } else {
+        palette.text
+    };
+    let font = theme::semibold(12.5);
+    let label_galley = ui
+        .painter()
+        .layout_no_wrap(label.to_string(), font.clone(), text);
+    let count_galley =
+        (count > 0).then(|| ui.painter().layout_no_wrap(count.to_string(), font, text));
+    let pad = if label == "+" { 10.0 } else { 12.0 };
+    let extra = count_galley
+        .as_ref()
+        .map(|galley| galley.size().x + 6.0)
+        .unwrap_or(0.0);
+    let size = vec2(label_galley.size().x + extra + pad * 2.0, 28.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    if ui.is_rect_visible(rect) {
+        ui.painter().rect_filled(
+            rect,
+            14.0,
+            if response.hovered() && !selected {
+                palette.surface_hover
+            } else {
+                fill
+            },
+        );
+        if !selected {
+            ui.painter().rect_stroke(
+                rect,
+                14.0,
+                Stroke::new(1.0, palette.outline),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let mut x = rect.left() + pad;
+        let label_width = label_galley.size().x;
+        let label_height = label_galley.size().y;
+        ui.painter().galley(
+            pos2(x, rect.center().y - label_height / 2.0),
+            label_galley,
+            text,
+        );
+        x += label_width;
+        if let Some(count_galley) = count_galley {
+            x += 6.0;
+            let height = count_galley.size().y;
+            ui.painter()
+                .galley(pos2(x, rect.center().y - height / 2.0), count_galley, text);
+        }
+    }
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 /// The scheduled messages, in the place the chat list usually takes.
@@ -758,17 +910,32 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
     }
     let mut chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
     let archived = app.archived_count();
-    let show_archive_row = !app.show_archived && archived > 0;
+    let show_archive_row =
+        matches!(app.chat_list, ChatListId::All) && !app.show_archived && archived > 0;
     if chats.is_empty() && !show_archive_row {
         let (title, body) = if app.show_archived {
             ("Nothing archived", "Archived chats appear here.")
         } else if app.syncing {
             ("Loading your chats", "Receiving history from your phone.")
         } else {
-            (
-                "No chats yet",
-                "New chats appear here. You can start one from your phone.",
-            )
+            match &app.chat_list {
+                ChatListId::Unread => {
+                    ("No unread chats", "Chats with unread messages appear here.")
+                }
+                ChatListId::Favorites => (
+                    "No favorites yet",
+                    "Right-click a chat and add it to favorites.",
+                ),
+                ChatListId::Groups => ("No groups", "Group chats appear here."),
+                ChatListId::Custom(_) => (
+                    "Nothing in this list",
+                    "Right-click this chip and choose Edit to add chats.",
+                ),
+                ChatListId::All => (
+                    "No chats yet",
+                    "New chats appear here. You can start one from your phone.",
+                ),
+            }
         };
         widgets::empty_state(ui, &palette, Icon::MessageCircle, title, body);
         return;
@@ -781,7 +948,7 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .unwrap_or_default()
         .offset
         .y;
-    let pinned = chats.iter().filter(|chat| chat.pinned).count();
+    let pinned = chats.iter().filter(|chat| app.is_pinned_here(chat)).count();
     let finished = pin_gesture(
         app,
         ui,
@@ -901,8 +1068,15 @@ fn pin_gesture(
     }
     if !down || released {
         if drag.active && drag.to != drag.from {
-            app.actions
-                .push(Action::ReorderPinned(pinned_order(app, drag.from, drag.to)));
+            if let Some(list) = app.chat_list.pin_key() {
+                app.actions.push(Action::ReorderListPinned {
+                    list: list.to_owned(),
+                    order: pinned_order(app, drag.from, drag.to),
+                });
+            } else {
+                app.actions
+                    .push(Action::ReorderPinned(pinned_order(app, drag.from, drag.to)));
+            }
         }
         // The rows still read the gesture while they draw this frame: egui
         // counts a hold of up to 0.8 s as a click, so clearing it here would
@@ -977,7 +1151,7 @@ fn pinned_order(app: &App, from: usize, to: usize) -> Vec<crate::model::ChatId> 
     let mut ids: Vec<crate::model::ChatId> = app
         .visible_chats()
         .into_iter()
-        .filter(|chat| chat.pinned)
+        .filter(|chat| app.is_pinned_here(chat))
         .map(|chat| chat.id.clone())
         .collect();
     if from < ids.len() {
@@ -1274,13 +1448,14 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
     let selected = app.open_chat.as_deref() == Some(chat.id.as_str());
     let now = crate::util::now();
     let muted = chat.muted(now);
+    let pinned_here = app.is_pinned_here(chat);
     let (rect, response) = ui.allocate_exact_size(
         vec2(ui.available_width(), theme::ROW_HEIGHT),
         Sense::click(),
     );
     // A press on a pinned row starts the hold that can move it. The rest of
     // the gesture runs before the rows are drawn, in `pin_gesture`.
-    if chat.pinned
+    if pinned_here
         && app.can_reorder_pinned()
         && app.pin_drag.is_none()
         && response.is_pointer_button_down_on()
@@ -1299,7 +1474,7 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
     }
     // While a pinned chat is held, every pinned row shows its handle and the
     // pointer says it can be grabbed.
-    let moving = app.pin_drag.as_ref().is_some_and(|drag| drag.active) && chat.pinned;
+    let moving = app.pin_drag.as_ref().is_some_and(|drag| drag.active) && pinned_here;
     let held = app
         .pin_drag
         .as_ref()
@@ -1403,7 +1578,7 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
                 .paint_at(ui, icon_rect);
             badge_right -= 20.0;
         }
-        if chat.pinned {
+        if pinned_here {
             let icon_rect =
                 Rect::from_center_size(pos2(badge_right - 8.0, line_y + 8.0), Vec2::splat(14.0));
             Icon::Pin.image(palette.dim, 14.0).paint_at(ui, icon_rect);
@@ -1510,11 +1685,24 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
     if widgets::menu_item(
         ui,
         palette,
-        Some(if chat.pinned { Icon::PinOff } else { Icon::Pin }),
-        if chat.pinned { "Unpin" } else { "Pin to top" },
+        Some(Icon::Heart),
+        if chat.favorite {
+            "Remove from favorites"
+        } else {
+            "Add to favorites"
+        },
     ) {
         app.actions
-            .push(Action::SetPinned(chat.id.clone(), !chat.pinned));
+            .push(Action::SetFavorite(chat.id.clone(), !chat.favorite));
+    }
+    let pinned_here = app.is_pinned_here(chat);
+    if widgets::menu_item(
+        ui,
+        palette,
+        Some(if pinned_here { Icon::PinOff } else { Icon::Pin }),
+        if pinned_here { "Unpin" } else { "Pin to top" },
+    ) {
+        app.actions.push(app.toggle_pin_action(chat));
     }
     if widgets::menu_item(
         ui,

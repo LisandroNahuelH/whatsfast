@@ -437,6 +437,7 @@ pub fn populate(app: &mut App) {
         chat.last_activity = now - sample.minutes_ago * 60;
         chat.unread = sample.unread;
         chat.marked_unread = sample.name == "Grace Hopper";
+        chat.favorite = sample.name == "Ada Lovelace";
         chat.pinned = sample.pinned;
         chat.pinned_at = if sample.pinned {
             (now - sample.minutes_ago * 60) * 1000
@@ -497,6 +498,15 @@ pub fn populate(app: &mut App) {
         app.conversations.insert(sample.id.to_owned(), conversation);
         app.chats.push(chat);
     }
+
+    app.chat_lists.push(crate::model::ChatList {
+        id: "l-work".to_owned(),
+        name: "Work".to_owned(),
+        members: vec![
+            "120363012345678901@g.us".to_owned(),
+            "393331234567@s.whatsapp.net".to_owned(),
+        ],
+    });
 
     plant_avatars(app);
     // Cover every supported bubble type in the first chat.

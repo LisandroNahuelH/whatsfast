@@ -621,6 +621,7 @@ impl Worker {
         }
         self.emit(Event::Contacts(self.contacts.values().cloned().collect()));
         self.emit_chats();
+        self.emit_chat_lists();
     }
 
     /// Re-derives archived rows from raw protobufs after parser changes. Also
@@ -3124,6 +3125,38 @@ impl Worker {
                     .map_err(|error| error.to_string())
                 });
             }
+            Command::SetFavorite(chat, favorite) => {
+                let _ = self.archive.set_favorite(&chat, favorite);
+                self.emit_chat(&chat);
+            }
+            Command::SaveChatList { id, name, members } => {
+                if let Err(error) = self.archive.save_chat_list(&id, &name, &members) {
+                    self.emit(Event::Error(error.to_string()));
+                    return;
+                }
+                self.emit_chat_lists();
+            }
+            Command::DeleteChatList(id) => {
+                if let Err(error) = self.archive.delete_chat_list(&id) {
+                    self.emit(Event::Error(error.to_string()));
+                    return;
+                }
+                self.emit_chat_lists();
+            }
+            Command::SetListPinned { list, chat, pinned } => {
+                if let Err(error) = self.archive.set_list_pinned(&list, &chat, pinned) {
+                    self.emit(Event::Error(error.to_string()));
+                    return;
+                }
+                self.emit_chat_lists();
+            }
+            Command::ReorderListPinned { list, order } => {
+                if let Err(error) = self.archive.reorder_list_pins(&list, &order) {
+                    self.emit(Event::Error(error.to_string()));
+                    return;
+                }
+                self.emit_chat_lists();
+            }
             Command::SetMuted(chat, until) => {
                 let _ = self.archive.set_muted(&chat, until);
                 self.emit_chat(&chat);
@@ -3405,6 +3438,13 @@ impl Worker {
         match self.archive.starred(STARRED_LIMIT) {
             Ok(list) => self.emit(Event::StarredList(list)),
             Err(error) => self.emit(Event::Error(error.to_string())),
+        }
+    }
+
+    fn emit_chat_lists(&self) {
+        match (self.archive.chat_lists(), self.archive.list_pins()) {
+            (Ok(lists), Ok(pins)) => self.emit(Event::ChatLists { lists, pins }),
+            (Err(error), _) | (_, Err(error)) => self.emit(Event::Error(error.to_string())),
         }
     }
 

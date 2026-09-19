@@ -11,6 +11,38 @@ use serde::{Deserialize, Serialize};
 /// Chat JID string: `<phone>@s.whatsapp.net`, `<id>@g.us`, or `<id>@lid`.
 pub type ChatId = String;
 
+/// Sidebar chip that filters the chat list.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ChatListId {
+    #[default]
+    All,
+    Unread,
+    Favorites,
+    Groups,
+    Custom(String),
+}
+
+impl ChatListId {
+    /// Key in `chat_list_pins`. All uses `chats.pinned` instead.
+    pub fn pin_key(&self) -> Option<&str> {
+        match self {
+            Self::All => None,
+            Self::Unread => Some("unread"),
+            Self::Favorites => Some("favorites"),
+            Self::Groups => Some("groups"),
+            Self::Custom(id) => Some(id.as_str()),
+        }
+    }
+}
+
+/// A user-made chat list stored in the archive.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatList {
+    pub id: String,
+    pub name: String,
+    pub members: Vec<ChatId>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChatKind {
@@ -41,6 +73,8 @@ pub struct Chat {
     pub unread: u32,
     /// Local reminder: show the empty unread dot with no pending count.
     pub marked_unread: bool,
+    /// Local favorite flag. It is not a WhatsApp pin.
+    pub favorite: bool,
     pub archived: bool,
     pub pinned: bool,
     /// Pin time in Unix milliseconds; zero for older archives with no ordering.
@@ -77,6 +111,7 @@ impl Chat {
             last_activity: 0,
             unread: 0,
             marked_unread: false,
+            favorite: false,
             archived: false,
             pinned: false,
             pinned_at: 0,
@@ -621,6 +656,10 @@ pub enum Dialog {
     CreatePoll(ChatId),
     /// Picks when the composer's text is sent, and whether it repeats.
     ScheduleMessage(ChatId),
+    /// Creates a chat list, or edits an existing one.
+    EditChatList {
+        id: Option<String>,
+    },
 }
 
 /// Messages picked in one chat while the selection bar is up.
@@ -857,6 +896,23 @@ pub enum Action {
     },
     SetArchived(ChatId, bool),
     SetPinned(ChatId, bool),
+    SetFavorite(ChatId, bool),
+    SetChatList(ChatListId),
+    SaveChatList {
+        id: Option<String>,
+        name: String,
+        members: Vec<ChatId>,
+    },
+    DeleteChatList(String),
+    SetListPinned {
+        list: String,
+        chat: ChatId,
+        pinned: bool,
+    },
+    ReorderListPinned {
+        list: String,
+        order: Vec<ChatId>,
+    },
     ShowDialog(Dialog),
     CloseDialog,
     ToggleSidebar,

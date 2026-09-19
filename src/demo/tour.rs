@@ -40,6 +40,7 @@ pub fn prepare(app: &mut App) {
     app.focus_composer = false;
     app.sidebar_visible = true;
     app.show_archived = false;
+    app.chat_list = crate::model::ChatListId::All;
     app.backend.record_demo_commands();
     media::populate(app).expect("bundled demo media");
     if let Some(row) = app
@@ -1394,6 +1395,35 @@ mod tests {
         assert!(
             app.stars[&chat].contains(&message),
             "the open chat knows which messages are starred"
+        );
+    }
+
+    #[test]
+    fn the_chat_list_chips_filter_unread() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        for name in ["All", "Unread", "Favorites", "Groups"] {
+            assert!(tour.labels.contains_key(name), "missing list chip {name}");
+        }
+        click(&mut app, &mut tour, &ctx, "Unread");
+        assert_eq!(app.chat_list, crate::model::ChatListId::Unread);
+        assert!(
+            app.visible_chats().iter().all(|chat| chat.looks_unread()),
+            "unread chip lists only unread chats"
+        );
+        click(&mut app, &mut tour, &ctx, "Favorites");
+        assert!(app.visible_chats().iter().all(|chat| chat.favorite));
+        app.chat_list = crate::model::ChatListId::Custom("l-work".into());
+        assert!(
+            app.visible_chats()
+                .iter()
+                .any(|chat| chat.name == "Rust Berlin")
         );
     }
 

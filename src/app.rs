@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use crate::audio::{Player, Recorder};
 use crate::backend::{Backend, Command, Event, LinkStatus, Waker};
 use crate::model::{
-    Action, Chat, ChatId, Contact, Content, Delivery, Dialog, Gif, GifError, Media, MediaState,
-    Message, Page, PickerTab, StickerPack, Toast, ToastKind,
+    Action, Chat, ChatId, ChatList, ChatListId, Contact, Content, Delivery, Dialog, Gif, GifError,
+    Media, MediaState, Message, Page, PickerTab, StickerPack, Toast, ToastKind,
 };
 use crate::paths::AppDirs;
 use crate::settings::{Settings, ThemeChoice};
@@ -182,6 +182,15 @@ pub struct App {
     pub selecting: Option<crate::model::Selecting>,
     /// A pinned chat being held to move it, while the gesture lasts.
     pub pin_drag: Option<crate::model::PinDrag>,
+    /// Sidebar chip that filters the chat list. All is the default.
+    pub chat_list: ChatListId,
+    pub chat_lists: Vec<ChatList>,
+    /// Pins that are not the All/WhatsApp pin: list id → chat id → pinned_at.
+    pub list_pins: HashMap<String, HashMap<ChatId, i64>>,
+    /// Name buffer for the chat-list editor.
+    pub list_name: String,
+    /// Chats picked in the chat-list editor.
+    pub list_picked: HashSet<ChatId>,
     /// Scheduled messages, soonest first, and whether the left panel lists them.
     pub scheduled: Vec<crate::archive::Scheduled>,
     pub show_scheduled: bool,
@@ -420,6 +429,11 @@ impl App {
             open_message_menu: None,
             selecting: None,
             pin_drag: None,
+            chat_list: ChatListId::All,
+            chat_lists: Vec::new(),
+            list_pins: HashMap::new(),
+            list_name: String::new(),
+            list_picked: HashSet::new(),
             scheduled: Vec::new(),
             show_scheduled: false,
             starred: Vec::new(),
@@ -864,13 +878,14 @@ impl App {
         names.join(", ")
     }
 
-    /// Visible chats filtered by search and archive state, with pinned first.
+    /// Visible chats filtered by search, archive state, and the sidebar chip.
     pub fn visible_chats(&self) -> Vec<&Chat> {
         let needle = crate::util::search_key(self.search.trim());
         let mut chats: Vec<&Chat> = self
             .chats
             .iter()
             .filter(|chat| chat.archived == self.show_archived || !needle.is_empty())
+            .filter(|chat| self.matches_chat_list(chat))
             .filter(|chat| {
                 needle.is_empty()
                     || crate::util::search_key(&chat.name).contains(&needle)
@@ -881,15 +896,74 @@ impl App {
             })
             .collect();
         chats.sort_by(|a, b| {
-            b.pinned.cmp(&a.pinned).then_with(|| {
-                if a.pinned && b.pinned {
-                    b.pinned_at.cmp(&a.pinned_at).then(a.id.cmp(&b.id))
+            let a_pin = self.is_pinned_here(a);
+            let b_pin = self.is_pinned_here(b);
+            b_pin.cmp(&a_pin).then_with(|| {
+                if a_pin && b_pin {
+                    self.pinned_at_here(b)
+                        .cmp(&self.pinned_at_here(a))
+                        .then(a.id.cmp(&b.id))
                 } else {
                     b.last_activity.cmp(&a.last_activity).then(a.id.cmp(&b.id))
                 }
             })
         });
         chats
+    }
+
+    pub fn matches_chat_list(&self, chat: &Chat) -> bool {
+        match &self.chat_list {
+            ChatListId::All => true,
+            ChatListId::Unread => chat.looks_unread(),
+            ChatListId::Favorites => chat.favorite,
+            ChatListId::Groups => chat.is_group(),
+            ChatListId::Custom(id) => self
+                .chat_lists
+                .iter()
+                .find(|list| list.id == *id)
+                .is_some_and(|list| list.members.iter().any(|member| member == &chat.id)),
+        }
+    }
+
+    pub fn is_pinned_here(&self, chat: &Chat) -> bool {
+        match self.chat_list.pin_key() {
+            None => chat.pinned,
+            Some(list) => self
+                .list_pins
+                .get(list)
+                .is_some_and(|pins| pins.contains_key(&chat.id)),
+        }
+    }
+
+    pub fn pinned_at_here(&self, chat: &Chat) -> i64 {
+        match self.chat_list.pin_key() {
+            None => chat.pinned_at,
+            Some(list) => self
+                .list_pins
+                .get(list)
+                .and_then(|pins| pins.get(&chat.id))
+                .copied()
+                .unwrap_or(0),
+        }
+    }
+
+    pub fn unread_chip_count(&self) -> u32 {
+        self.chats
+            .iter()
+            .filter(|chat| !chat.archived && chat.looks_unread())
+            .count() as u32
+    }
+
+    pub fn toggle_pin_action(&self, chat: &Chat) -> Action {
+        let pinned = !self.is_pinned_here(chat);
+        match self.chat_list.pin_key() {
+            None => Action::SetPinned(chat.id.clone(), pinned),
+            Some(list) => Action::SetListPinned {
+                list: list.to_owned(),
+                chat: chat.id.clone(),
+                pinned,
+            },
+        }
     }
 
     /// Whether the pinned chats can be dragged into a new order: only in the
@@ -899,7 +973,16 @@ impl App {
             && !self.show_archived
             && !self.show_scheduled
             && !self.show_starred
-            && self.chats.iter().filter(|chat| chat.pinned).count() > 1
+            && self
+                .chats
+                .iter()
+                .filter(|chat| {
+                    chat.archived == self.show_archived
+                        && self.matches_chat_list(chat)
+                        && self.is_pinned_here(chat)
+                })
+                .count()
+                > 1
     }
 
     /// Whether hiding the sidebar leaves the narrow rail behind. It does
@@ -1264,6 +1347,19 @@ impl App {
                     }
                 }
                 Event::StarredList(list) => self.starred = list,
+                Event::ChatLists { lists, pins } => {
+                    self.chat_lists = lists;
+                    let mut map: HashMap<String, HashMap<ChatId, i64>> = HashMap::new();
+                    for (list, chat, at) in pins {
+                        map.entry(list).or_default().insert(chat, at);
+                    }
+                    self.list_pins = map;
+                    if let ChatListId::Custom(id) = &self.chat_list
+                        && !self.chat_lists.iter().any(|list| list.id == *id)
+                    {
+                        self.chat_list = ChatListId::All;
+                    }
+                }
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     self.update = Some(notice);
@@ -2217,6 +2313,17 @@ impl App {
             Action::ReorderPinned(order) => {
                 self.backend.send(Command::ReorderPinned(order));
             }
+            Action::ReorderListPinned { list, order } => {
+                let mut pins = self.list_pins.entry(list.clone()).or_default().clone();
+                let base = jiff::Timestamp::now().as_millisecond();
+                let count = order.len() as i64;
+                for (index, chat) in order.iter().enumerate() {
+                    pins.insert(chat.clone(), base + count - index as i64);
+                }
+                self.list_pins.insert(list.clone(), pins);
+                self.backend
+                    .send(Command::ReorderListPinned { list, order });
+            }
             Action::CancelScheduled { id } => {
                 self.backend.send(Command::CancelScheduled { id });
             }
@@ -2546,6 +2653,55 @@ impl App {
                 }
                 self.backend.send(Command::SetPinned(chat, pinned));
             }
+            Action::SetFavorite(chat, favorite) => {
+                if let Some(known) = self.chat_mut(&chat) {
+                    known.favorite = favorite;
+                }
+                self.backend.send(Command::SetFavorite(chat, favorite));
+            }
+            Action::SetChatList(list) => {
+                self.chat_list = list;
+                self.show_archived = false;
+                self.show_scheduled = false;
+                self.show_starred = false;
+                self.pin_drag = None;
+            }
+            Action::SaveChatList { id, name, members } => {
+                let id =
+                    id.unwrap_or_else(|| format!("l{}", jiff::Timestamp::now().as_millisecond()));
+                if let Some(existing) = self.chat_lists.iter_mut().find(|list| list.id == id) {
+                    existing.name = name.clone();
+                    existing.members = members.clone();
+                } else {
+                    self.chat_lists.push(ChatList {
+                        id: id.clone(),
+                        name: name.clone(),
+                        members: members.clone(),
+                    });
+                }
+                self.chat_list = ChatListId::Custom(id.clone());
+                self.dialog = None;
+                self.backend
+                    .send(Command::SaveChatList { id, name, members });
+            }
+            Action::DeleteChatList(id) => {
+                self.chat_lists.retain(|list| list.id != id);
+                self.list_pins.remove(&id);
+                if self.chat_list == ChatListId::Custom(id.clone()) {
+                    self.chat_list = ChatListId::All;
+                }
+                self.backend.send(Command::DeleteChatList(id));
+            }
+            Action::SetListPinned { list, chat, pinned } => {
+                let pins = self.list_pins.entry(list.clone()).or_default();
+                if pinned {
+                    pins.insert(chat.clone(), jiff::Timestamp::now().as_millisecond());
+                } else {
+                    pins.remove(&chat);
+                }
+                self.backend
+                    .send(Command::SetListPinned { list, chat, pinned });
+            }
             Action::ShowDialog(dialog) => {
                 self.emoji_start = None;
                 self.mention_start = None;
@@ -2554,6 +2710,19 @@ impl App {
                 }
                 if matches!(&dialog, Dialog::Forward { .. }) {
                     self.forward_search.clear();
+                }
+                if let Dialog::EditChatList { id } = &dialog {
+                    self.forward_search.clear();
+                    if let Some(id) = id {
+                        let list = self.chat_lists.iter().find(|list| list.id == *id);
+                        self.list_name = list.map(|list| list.name.clone()).unwrap_or_default();
+                        self.list_picked = list
+                            .map(|list| list.members.iter().cloned().collect())
+                            .unwrap_or_default();
+                    } else {
+                        self.list_name.clear();
+                        self.list_picked.clear();
+                    }
                 }
                 if dialog == Dialog::PairWithPhone {
                     self.pair_phone.clear();
@@ -3666,6 +3835,50 @@ mod tests {
             .map(|chat| chat.name.as_str())
             .collect();
         assert_eq!(names, vec!["Ada"]);
+    }
+
+    #[test]
+    fn chat_list_chips_filter_and_keep_their_own_pins() {
+        use crate::model::ChatList;
+        let mut app = app();
+        let mut ada = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
+        ada.last_activity = 10;
+        ada.favorite = true;
+        ada.unread = 2;
+        let mut bob = Chat::new("2@s.whatsapp.net".into(), "Bob".into());
+        bob.last_activity = 20;
+        bob.pinned = true;
+        let mut group = Chat::new("3@g.us".into(), "Rust".into());
+        group.last_activity = 15;
+        app.chats = vec![ada, bob, group];
+        let names = |app: &App| {
+            app.visible_chats()
+                .iter()
+                .map(|chat| chat.name.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(&app), ["Bob", "Rust", "Ada"]);
+        app.chat_list = ChatListId::Unread;
+        assert_eq!(names(&app), ["Ada"]);
+        app.chat_list = ChatListId::Favorites;
+        assert_eq!(names(&app), ["Ada"]);
+        app.chat_list = ChatListId::Groups;
+        assert_eq!(names(&app), ["Rust"]);
+        app.chat_lists.push(ChatList {
+            id: "l1".into(),
+            name: "Work".into(),
+            members: vec!["2@s.whatsapp.net".into(), "3@g.us".into()],
+        });
+        app.list_pins
+            .entry("l1".into())
+            .or_default()
+            .insert("3@g.us".into(), 50);
+        app.chat_list = ChatListId::Custom("l1".into());
+        assert_eq!(names(&app), ["Rust", "Bob"]);
+        assert!(app.is_pinned_here(app.chats.iter().find(|c| c.name == "Rust").unwrap()));
+        assert!(!app.is_pinned_here(app.chats.iter().find(|c| c.name == "Bob").unwrap()));
+        app.chat_list = ChatListId::All;
+        assert!(app.is_pinned_here(app.chats.iter().find(|c| c.name == "Bob").unwrap()));
     }
 
     #[test]

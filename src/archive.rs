@@ -10,6 +10,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::model::{Chat, ChatKind, Contact, Content, Delivery, LastMessage, Message};
 
 mod encryption;
+mod lists;
 mod polls;
 mod receipts;
 mod scheduled;
@@ -107,7 +108,7 @@ END;
 const CHAT_COLUMNS: &str =
     "c.id, c.name, c.kind, c.last_activity, c.unread, c.archived, c.pinned, c.muted_until,
                     m.from_me, m.sender_name, m.content, m.status, m.sender, c.participants, c.read_only,
-                    c.pinned_at, c.ephemeral_expiration, c.marked_unread";
+                    c.pinned_at, c.ephemeral_expiration, c.marked_unread, c.favorite";
 
 /// Adds columns introduced after the initial schema when missing.
 const MIGRATIONS: &[(&str, &str, &str)] = &[
@@ -126,6 +127,7 @@ const MIGRATIONS: &[(&str, &str, &str)] = &[
     ("chats", "pin_updated_at", "INTEGER"),
     ("chats", "mute_updated_at", "INTEGER"),
     ("chats", "marked_unread", "INTEGER NOT NULL DEFAULT 0"),
+    ("chats", "favorite", "INTEGER NOT NULL DEFAULT 0"),
 ];
 const CHAT_JOIN: &str = "FROM chats c
              LEFT JOIN messages m ON m.chat = c.id AND m.rowid = (
@@ -158,6 +160,7 @@ fn chat_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
         last_activity: row.get(3)?,
         unread: row.get(4)?,
         marked_unread: row.get(17)?,
+        favorite: row.get(18)?,
         archived: row.get(5)?,
         pinned: row.get(6)?,
         pinned_at: row.get(15)?,
@@ -242,6 +245,7 @@ impl Archive {
         connection.execute_batch(polls::SCHEMA)?;
         connection.execute_batch(scheduled::SCHEMA)?;
         connection.execute_batch(stars::SCHEMA)?;
+        connection.execute_batch(lists::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -1406,6 +1410,7 @@ pub(crate) mod tests {
         assert!(chats[0].participants.is_empty());
         assert!(!chats[0].read_only);
         assert!(!chats[0].marked_unread);
+        assert!(!chats[0].favorite);
         let mut with_thumbnail = message("1@s.whatsapp.net", "m1", 1, false);
         with_thumbnail.thumbnail = Some(vec![1, 2, 3]);
         archive
