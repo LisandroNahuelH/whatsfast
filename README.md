@@ -17,6 +17,11 @@ WhatsApp or Meta.
 
 Each item below is a WhatsFast change on top of the upstream ZapFast baseline. Under every title: what it does in the app, then why it helps day to day.
 
+### Mark as unread from the chat list
+
+- **Technical:** Right-click a chat in the left list (or the compact rail) and choose **Mark as unread**. The row uses the unread style with an empty round badge and no number. Opening the chat, **Mark as read**, or a real new message clears it. Counted unread badges stay numbered.
+- **Daily use:** Flag a thread you still need to answer without pretending there is a pending count. Same empty dot as WhatsApp Desktop.
+
 ### One-click in-app updates
 
 - **Technical:** With check and download enabled (both on by default), a sticky toast says a new version is available. One click on **Update** installs the GitHub release, restarts WhatsFast, and reopens the last chat. Installer and portable builds only; package-manager installs keep their own update path.
