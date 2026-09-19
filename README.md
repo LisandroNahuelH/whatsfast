@@ -17,6 +17,16 @@ WhatsApp or Meta.
 
 Each item below is a WhatsFast change on top of the upstream ZapFast baseline. Under every title: what it does in the app, then why it helps day to day.
 
+### One-click in-app updates
+
+- **Technical:** With check and download enabled (both on by default), a sticky toast says a new version is available. One click on **Update** installs the GitHub release, restarts WhatsFast, and reopens the last chat. Installer and portable builds only; package-manager installs keep their own update path.
+- **Daily use:** You do not hunt for a setup file. Click Update when the toast appears, wait a few seconds, and keep working in the same chat.
+
+### In-app photo viewer with zoom and pan
+
+- **Technical:** Clicking a downloaded photo in a chat opens a full-window viewer in the app. The mouse wheel zooms toward the pointer, click-and-hold moves the photo, and the arrow keys (or on-screen chevrons) step to the previous or next downloaded photo in that chat. Escape, the close control, or a click on the dark background closes it. Stickers, videos, and the bubble menu **Open file** still use the system handler.
+- **Daily use:** You can read a screenshot or a document photo without leaving WhatsFast or waiting for Photos to open. Zoom in on the part you need, move around, then go back to the thread.
+
 ### Composer caret stays visible while the window has focus
 
 - **Technical:** The message composer keeps a visible text caret (insertion point) whenever the WhatsApp window has keyboard focus, including after repaints and layout updates in egui.
@@ -74,6 +84,8 @@ manager key from ZapFast is picked up automatically on first launch.
 
 Download the latest release from
 [GitHub Releases](https://github.com/LisandroNahuelH/whatsfast/releases).
+The Windows installer then updates itself from GitHub: a toast, one click on
+**Update**, and a restart back into your last chat.
 
 ## Build (Windows)
 
