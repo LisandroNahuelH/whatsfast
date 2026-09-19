@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Update toggles live in Settings About | They describe this build, not the window | Window section held Check for updates and Download updates automatically |
 | 2026-09-19 | Update check is once a day after the installer path is proven | Ten minutes is only for a local test; production should not poll GitHub that often | 10-minute `CHECK_INTERVAL` |
 | 2026-09-19 | Update check is every 10 minutes while we prove the installer path | A daily interval hides a failed GitHub download until the next day | 24-hour `CHECK_INTERVAL` |
 | 2026-09-19 | Sidebar split is a 1-physical-pixel hairline on the chat panel | `outline` on the panel edge vanished under CentralPanel and matched the sidebar fill | 1px `palette.outline` vline on the SidePanel |
