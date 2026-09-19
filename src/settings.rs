@@ -84,6 +84,9 @@ pub struct Settings {
     pub ask_where_to_save: bool,
     /// Also add saved contacts to the phone's address book.
     pub save_contacts_to_phone: bool,
+    /// Hide the sidebar outright instead of narrowing it to the chat pictures.
+    #[serde(default)]
+    pub hide_sidebar_fully: bool,
 }
 
 impl Default for Settings {
@@ -114,6 +117,7 @@ impl Default for Settings {
             show_poll_button: true,
             ask_where_to_save: false,
             voice_speed: 1.0,
+            hide_sidebar_fully: false,
         }
     }
 }

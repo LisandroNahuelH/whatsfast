@@ -38,6 +38,136 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     );
 }
 
+/// Width of the sidebar when it narrows to its bones.
+const COMPACT_WIDTH: f32 = 72.0;
+
+/// Height of one chat picture in the narrow sidebar.
+const COMPACT_ROW: f32 = 56.0;
+
+/// The sidebar narrowed to its bones: your picture, search, archived chats,
+/// and one picture per chat. Hiding the bar then never traps a user who does
+/// not know the shortcut.
+pub fn show_compact(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let panel = egui::Panel::left("chats-compact")
+        .resizable(false)
+        .default_size(COMPACT_WIDTH)
+        .size_range(COMPACT_WIDTH..=COMPACT_WIDTH)
+        .show_separator_line(false)
+        .frame(Frame::new().fill(palette.panel).inner_margin(Margin::ZERO));
+    let response = panel.show(ui, |ui| {
+        compact_header(app, ui);
+        compact_list(app, ui);
+    });
+    // Separate the panel from the conversation.
+    let rect = response.response.rect;
+    ui.painter().vline(
+        rect.right(),
+        rect.y_range(),
+        egui::Stroke::new(1.0, palette.outline),
+    );
+}
+
+/// Your picture, search, and archived chats, stacked in the narrow sidebar.
+fn compact_header(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let top = if theme::macos_chrome(ui.ctx()) {
+        theme::traffic_light_inset(ui.ctx()) + 8.0
+    } else {
+        10.0
+    };
+    Frame::new()
+        .inner_margin(Margin {
+            left: 0,
+            right: 0,
+            top: top as i8,
+            bottom: 6,
+        })
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                let me = app.me.clone().unwrap_or_default();
+                let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
+                let picture = app.avatar(&me);
+                let tooltip = match &app.me_about {
+                    Some(about) => format!("{name}\n{about}"),
+                    None => name.clone(),
+                };
+                let response = widgets::avatar(ui, &palette, &name, &me, 34.0, picture.as_deref())
+                    .interact(Sense::click())
+                    .on_hover_text(tooltip)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if response.clicked() {
+                    app.actions.push(Action::ToggleSettings);
+                }
+                ui.add_space(2.0);
+                if theme::icon_button(
+                    ui,
+                    Icon::Search,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Search (Ctrl+F)",
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::FocusSearch);
+                }
+                if theme::icon_button(
+                    ui,
+                    Icon::Archive,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Archived chats",
+                )
+                .clicked()
+                {
+                    app.sidebar_visible = true;
+                    app.show_archived = true;
+                }
+            });
+        });
+}
+
+/// One picture per chat, with no names: enough to get back into a chat.
+fn compact_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
+    egui::ScrollArea::vertical()
+        .id_salt("chats-compact")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for chat in &chats {
+                let title = app.chat_title(chat);
+                let picture = app.avatar(&chat.id);
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), COMPACT_ROW), Sense::click());
+                if ui.is_rect_visible(rect) {
+                    if response.hovered() {
+                        ui.painter()
+                            .rect_filled(rect.shrink(4.0), 10.0, palette.surface_hover);
+                    }
+                    let avatar_rect = Rect::from_center_size(rect.center(), Vec2::splat(44.0));
+                    widgets::paint_avatar(
+                        ui,
+                        &palette,
+                        avatar_rect,
+                        &title,
+                        &chat.id,
+                        picture.as_deref(),
+                    );
+                }
+                if response
+                    .on_hover_text(&title)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .clicked()
+                {
+                    app.actions.push(Action::OpenChat(chat.id.clone()));
+                }
+            }
+        });
+}
+
 fn header(app: &mut App, ui: &mut egui::Ui) {
     if theme::macos_chrome(ui.ctx()) {
         macos_header(app, ui);
@@ -1375,6 +1505,30 @@ mod tests {
     use super::*;
     use crate::paths::AppDirs;
     use crate::settings::Settings;
+
+    #[test]
+    fn the_hidden_sidebar_keeps_a_way_back_unless_the_setting_says_otherwise() {
+        let root = std::env::temp_dir().join(format!(
+            "zapfast-compact-sidebar-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let (mut app, _events) = App::headless(AppDirs::under(&root), Settings::default());
+        assert!(app.open_chat.is_none());
+        assert!(
+            app.compact_sidebar(),
+            "the rail shows while nothing is open"
+        );
+        app.open_chat = Some("491700000000@s.whatsapp.net".to_owned());
+        assert!(
+            !app.compact_sidebar(),
+            "an open chat takes the whole window"
+        );
+        app.page = crate::model::Page::Settings;
+        assert!(app.compact_sidebar(), "settings keeps the rail");
+        app.settings.hide_sidebar_fully = true;
+        assert!(!app.compact_sidebar(), "the setting hides the bar outright");
+    }
 
     #[test]
     fn moving_a_pinned_chat_rewrites_the_order() {

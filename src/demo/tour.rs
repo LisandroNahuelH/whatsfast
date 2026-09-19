@@ -1068,6 +1068,40 @@ mod tests {
     }
 
     #[test]
+    fn the_compact_sidebar_opens_a_chat_from_its_picture() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        app.sidebar_visible = false;
+        app.open_chat = None;
+        app.page = crate::model::Page::Chats;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let expected = app.visible_chats().first().map(|chat| chat.id.clone());
+        let spot = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Circle(circle) if circle.center.x < 72.0 && circle.radius > 20.0 => {
+                    Some(circle.center)
+                }
+                _ => None,
+            })
+            .expect("the rail draws a chat picture");
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(spot, egui::PointerButton::Primary),
+            0.1,
+            true,
+        );
+        assert_eq!(
+            app.open_chat, expected,
+            "clicking a picture in the rail opens that chat"
+        );
+    }
+
+    #[test]
     fn a_short_click_on_a_pinned_row_still_opens_the_chat() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

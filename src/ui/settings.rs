@@ -129,6 +129,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(ui, app, "Notify about new messages", "Show desktop notifications when the window is hidden, in the background, or showing another chat. Muted chats do not notify you.", |settings| &mut settings.notifications);
                     toggle(ui, app, "Download updates automatically", "Download and verify new releases in the background. You choose when to restart. Native packages and Flatpak update through their package manager.", |settings| &mut settings.download_updates_automatically);
                     toggle(ui, app, "Check for updates", "Ask GitHub once a day whether a newer ZapFast release exists. The request identifies only ZapFast and its version.", |settings| &mut settings.check_for_updates);
+                    toggle(ui, app, "Hide the sidebar completely", "On: hiding the sidebar (Ctrl+B) leaves nothing behind. Off: it narrows to the chat pictures, so search, archived chats, and settings stay one click away. The narrow bar shows while no chat is open.", |settings| &mut settings.hide_sidebar_fully);
 
                     widgets::setting_row(
                         ui,

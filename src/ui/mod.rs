@@ -37,6 +37,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     }
     if app.sidebar_visible {
         chats::show(app, ui);
+    } else if app.compact_sidebar() {
+        chats::show_compact(app, ui);
     }
     let palette = app.palette;
     egui::CentralPanel::default()
