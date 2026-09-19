@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Empty composer is 35% taller, first line centered, 20% more gap under the bubble | A one-line field felt tight against the window; extra height and inset give a calmer typing band without changing send keys | One-line composer flush to an 8px bottom inset |
 | 2026-09-19 | README is two layers: ZapFast-adapted catalog, then WhatsFast extras | Upstream describes the app; extras stay the Windows delta. Visual identity stays amber PNG + badges. RAM numbers stay attributed to ZapFast Linux | README extras-only, no catalog |
 | 2026-09-19 | Chat doodle wallpaper is Auto by theme, with a Settings override | Native WhatsApp uses a low-contrast doodle behind bubbles; five families match bundled palettes and more PNGs can land in the same folders | Solid `palette.chat` fill only |
 | 2026-09-19 | Chat-list chips are local filters; All pins stay the WhatsApp pin | Custom lists and favorites must not pretend to be WhatsApp labels or groups | One global pin list for every sidebar view |
