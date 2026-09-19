@@ -10,6 +10,7 @@ pub mod polls;
 pub mod schedule;
 pub mod settings;
 pub mod update;
+pub mod viewer;
 pub mod widgets;
 
 use egui::{Align2, CornerRadius, Frame, Margin, Stroke, vec2};
@@ -22,12 +23,13 @@ use crate::theme::{self, Icon};
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     let ctx = &ctx;
+    viewer::intercept_scroll(app, ctx);
     keys::handle(app, ctx);
     titlebar_strip(app, ui);
     if !app.is_linked() {
         login::show(app, ui);
         dialogs::show(app, ctx);
-        update::show(app, ctx);
+        viewer::show(app, ctx);
         toasts(app, ctx);
         return;
     }
@@ -47,9 +49,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             Page::Settings => settings::show(app, ui),
             Page::Chats => conversation::show(app, ui),
         });
-    update::show(app, ctx);
     picker::show(app, ctx);
     dialogs::show(app, ctx);
+    viewer::show(app, ctx);
     drop_target(app, ctx);
     toasts(app, ctx);
 }
@@ -91,8 +93,7 @@ fn drop_target(app: &mut App, ctx: &egui::Context) {
 /// Connection and history-sync banner.
 fn banner(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
-    let update = app.update.clone();
-    let (icon, text, color, retry, download) = match &app.link {
+    let (icon, text, color, retry) = match &app.link {
         LinkStatus::Connected if app.syncing => (
             Icon::Refresh,
             match app.sync_percent {
@@ -101,46 +102,26 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
             },
             palette.accent,
             false,
-            None,
         ),
-        LinkStatus::Connected if update.is_some() => {
-            let update = update.as_ref().expect("checked above");
-            (
-                Icon::Info,
-                format!("WhatsFast {} is available", update.version),
-                palette.accent,
-                false,
-                Some(update.url.clone()),
-            )
-        }
         LinkStatus::Connected => return,
         LinkStatus::Starting | LinkStatus::Connecting => (
             Icon::Refresh,
             "Connecting to WhatsApp…".to_owned(),
             palette.secondary,
             false,
-            None,
         ),
         LinkStatus::Disconnected { reason } => (
             Icon::WifiOff,
             format!("Offline ({reason}). Reconnecting…"),
             palette.warning,
             true,
-            None,
         ),
-        LinkStatus::Failed(message) => (
-            Icon::CircleAlert,
-            message.clone(),
-            palette.danger,
-            true,
-            None,
-        ),
+        LinkStatus::Failed(message) => (Icon::CircleAlert, message.clone(), palette.danger, true),
         LinkStatus::Unlinked { .. } | LinkStatus::LoggedOut => (
             Icon::Smartphone,
             "Not linked to a phone".to_owned(),
             palette.warning,
             false,
-            None,
         ),
     };
     egui::Panel::top("banner")
@@ -156,28 +137,10 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
                 // sync must not redraw every message just to spin this icon.
                 theme::icon(ui, icon, 15.0, color);
                 theme::text(ui, text, theme::medium(13.0), palette.text);
-                if retry || download.is_some() {
+                if retry {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if download.is_some() {
-                            if theme::soft_button(
-                                ui,
-                                &palette,
-                                Some(Icon::ExternalLink),
-                                "Update",
-                                false,
-                            )
+                        if theme::soft_button(ui, &palette, Some(Icon::Refresh), "Retry", false)
                             .clicked()
-                            {
-                                app.actions.push(Action::ShowUpdate);
-                            }
-                        } else if theme::soft_button(
-                            ui,
-                            &palette,
-                            Some(Icon::Refresh),
-                            "Retry",
-                            false,
-                        )
-                        .clicked()
                         {
                             app.actions.push(Action::Reconnect);
                         }
@@ -188,14 +151,15 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn toasts(app: &mut App, ctx: &egui::Context) {
-    if app.toasts.is_empty() {
+    let has_update = app.update.is_some();
+    if app.toasts.is_empty() && !has_update {
         return;
     }
     let palette = app.palette;
     egui::Area::new(egui::Id::new("toasts"))
         .anchor(Align2::RIGHT_BOTTOM, vec2(-20.0, -20.0))
         .order(egui::Order::Tooltip)
-        .interactable(false)
+        .interactable(has_update)
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 8.0;
             for toast in &app.toasts {
@@ -246,6 +210,8 @@ fn toasts(app: &mut App, ctx: &egui::Context) {
                         });
                     });
             }
+            ui.set_opacity(1.0);
+            update::toast(app, ui);
         });
 }
 

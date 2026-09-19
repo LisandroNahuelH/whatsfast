@@ -18,7 +18,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         if app.page == Page::Chats
             && app.open_chat.is_some()
             && app.dialog.is_none()
-            && !app.show_update
+            && app.image_viewer.is_none()
             && app.recording.is_none()
         {
             key(Modifiers::COMMAND, Key::L, Action::FocusComposer);
@@ -37,6 +37,10 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         key(Modifiers::COMMAND, Key::Minus, Action::ZoomBy(-0.1));
         key(Modifiers::COMMAND, Key::Num0, Action::ResetZoom);
         key(Modifiers::COMMAND, Key::End, Action::ScrollToBottom);
+        if app.image_viewer.is_some() {
+            key(Modifiers::NONE, Key::ArrowLeft, Action::StepImage(-1));
+            key(Modifiers::NONE, Key::ArrowRight, Action::StepImage(1));
+        }
     });
     // Escape cancels the topmost state. Menus handle Escape themselves.
     let menu_open = egui::Popup::is_any_open(ctx);
@@ -44,8 +48,8 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
     let escape =
         !menu_open && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
     if escape {
-        if app.show_update {
-            actions.push(Action::CloseUpdate);
+        if app.image_viewer.is_some() {
+            actions.push(Action::CloseImageViewer);
         } else if app.dialog.is_some() {
             actions.push(Action::CloseDialog);
         } else if app.selecting.is_some() {
@@ -125,6 +129,10 @@ pub const SHORTCUTS: &[(&str, &str)] = &[
     (
         "Escape",
         "Dismiss the current action, return from search, or close the chat",
+    ),
+    (
+        "Photo viewer",
+        "Wheel zooms, drag moves, ← / → previous or next photo",
     ),
     ("Ctrl+V", "Paste text, or send a picture from the clipboard"),
     ("Ctrl+B", "Show or hide the chat list"),
@@ -235,33 +243,21 @@ mod tests {
     }
 
     #[test]
-    fn escape_closes_the_update_before_touching_an_unfinished_message() {
+    fn escape_closes_the_image_viewer_before_closing_the_chat() {
         let root = tempfile::tempdir().unwrap();
         let mut app = App::headless(
             crate::paths::AppDirs::under(root.path()),
             crate::settings::Settings::default(),
         )
         .0;
-        app.show_update = true;
-        app.page = Page::Settings;
-        app.reply_to = Some("reply-fixture".into());
-        app.pending
-            .push(crate::app::Pending::File("unsent.png".into()));
+        app.page = Page::Chats;
+        app.open_chat = Some("fixture".into());
+        app.image_viewer = Some(crate::ui::viewer::ImageViewer::open(
+            "fixture".into(),
+            "photo".into(),
+        ));
         let ctx = egui::Context::default();
-        let mut output = ctx.run_ui(
-            egui::RawInput {
-                events: vec![egui::Event::Key {
-                    key: Key::Escape,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: Modifiers::NONE,
-                }],
-                ..Default::default()
-            },
-            |ui| handle(&mut app, ui.ctx()),
-        );
-        output.textures_delta.clear();
-        assert!(matches!(app.actions.as_slice(), [Action::CloseUpdate]));
+        escape(&mut app, &ctx);
+        assert!(matches!(app.actions.as_slice(), [Action::CloseImageViewer]));
     }
 }

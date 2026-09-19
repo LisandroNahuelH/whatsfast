@@ -638,6 +638,14 @@ pub enum Action {
     CancelRecording,
     SendRecording,
     OpenFile(PathBuf),
+    /// Opens a downloaded chat photo in the in-app viewer.
+    ViewImage {
+        chat: ChatId,
+        message: String,
+    },
+    CloseImageViewer,
+    /// Steps to another downloaded photo in the same chat. Does not wrap.
+    StepImage(i8),
     OpenUrl(String),
     CopyText(String),
     /// Starts a reply to a message in the open chat.
@@ -782,9 +790,6 @@ pub enum Action {
     ScrollTo(String),
     /// Updates chat-list search text.
     Search(String),
-    ShowUpdate,
-    CloseUpdate,
-    DownloadUpdate,
     InstallUpdate,
     SetTheme(crate::settings::ThemeChoice),
     SetCustomTheme(String),

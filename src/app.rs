@@ -237,6 +237,8 @@ pub struct App {
 
     pub page: Page,
     pub dialog: Option<Dialog>,
+    /// Full-window photo viewer for a downloaded chat image.
+    pub image_viewer: Option<crate::ui::viewer::ImageViewer>,
     /// Chat filter in the forwarding destination dialog.
     pub forward_search: String,
     pub poll_draft: crate::model::PollDraft,
@@ -258,10 +260,11 @@ pub struct App {
     /// A newer release than this build, once GitHub has said so.
     pub update: Option<crate::updates::Release>,
     last_update_check: Option<Instant>,
-    pub show_update: bool,
     pub update_download: crate::updates::DownloadState,
     pub update_support: Option<Result<crate::updates::install::Installation, String>>,
     update_inspecting: bool,
+    /// Install as soon as a verified package is ready (one-click toast).
+    pub install_when_ready: bool,
     pub update_arguments: Vec<String>,
     /// Whether to scroll the conversation to its newest message.
     pub scroll_to_bottom: bool,
@@ -452,6 +455,7 @@ impl App {
             scroll_last_event: None,
             page: Page::Chats,
             dialog: None,
+            image_viewer: None,
             forward_search: String::new(),
             poll_draft: Default::default(),
             poll_creating: false,
@@ -468,10 +472,10 @@ impl App {
             actions: Vec::new(),
             update: None,
             last_update_check: None,
-            show_update: false,
             update_download: Default::default(),
             update_support: None,
             update_inspecting: false,
+            install_when_ready: false,
             update_arguments: Vec::new(),
             scroll_to_bottom: true,
             at_bottom: true,
@@ -1261,15 +1265,15 @@ impl App {
                 Event::StarredList(list) => self.starred = list,
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
-                    if self.update.as_ref() != Some(&notice) {
-                        self.toast(format!("WhatsFast {} is available", notice.version));
-                    }
                     self.update = Some(notice);
+                    self.inspect_update();
+                    self.maybe_download_update();
                 }
                 Event::UpdateSupport(result) => {
                     self.update_support = Some(result);
                     self.update_inspecting = false;
                     self.maybe_download_update();
+                    self.begin_install_if_ready();
                 }
                 Event::UpdateProgress { received, total } => {
                     self.update_download =
@@ -1280,6 +1284,7 @@ impl App {
                         Ok(prepared) => crate::updates::DownloadState::Ready(prepared),
                         Err(error) => crate::updates::DownloadState::Failed(error),
                     };
+                    self.begin_install_if_ready();
                 }
                 Event::UpdateInstalling(result) => match result {
                     Ok(()) => self.actions.push(Action::Quit),
@@ -1756,8 +1761,8 @@ impl App {
 
     fn maybe_download_update(&mut self) {
         if !self.settings.check_for_updates
-            || !self.settings.download_updates_automatically
             || self.update.is_none()
+            || !(self.settings.download_updates_automatically || self.install_when_ready)
             || !matches!(self.update_download, crate::updates::DownloadState::Idle)
         {
             return;
@@ -1784,6 +1789,27 @@ impl App {
             self.backend.send(Command::DownloadUpdate {
                 release,
                 source: crate::updates::Source::GitHub,
+            });
+        }
+    }
+
+    fn begin_install_if_ready(&mut self) {
+        if !self.install_when_ready {
+            return;
+        }
+        if matches!(
+            self.update_download,
+            crate::updates::DownloadState::Ready(_)
+        ) {
+            let crate::updates::DownloadState::Ready(prepared) = std::mem::replace(
+                &mut self.update_download,
+                crate::updates::DownloadState::Installing,
+            ) else {
+                unreachable!()
+            };
+            self.backend.send(Command::InstallUpdate {
+                prepared,
+                arguments: self.update_arguments.clone(),
             });
         }
     }
@@ -2014,6 +2040,35 @@ impl App {
             Action::OpenFile(path) => {
                 if let Err(error) = open::that_detached(&path) {
                     self.toast_error(format!("Could not open {}: {error}", path.display()));
+                }
+            }
+            Action::ViewImage { chat, message } => {
+                let ready = self
+                    .conversations
+                    .get(&chat)
+                    .and_then(|conversation| conversation.message(&message))
+                    .and_then(crate::ui::viewer::image_path)
+                    .is_some();
+                if ready {
+                    self.image_viewer = Some(crate::ui::viewer::ImageViewer::open(chat, message));
+                }
+            }
+            Action::CloseImageViewer => self.image_viewer = None,
+            Action::StepImage(step) => {
+                let Some(viewer) = &self.image_viewer else {
+                    return;
+                };
+                let chat = viewer.chat.clone();
+                let current = viewer.message.clone();
+                let next = self
+                    .conversations
+                    .get(&chat)
+                    .and_then(|conversation| {
+                        crate::ui::viewer::neighbor_image(&conversation.messages, &current, step)
+                    })
+                    .map(str::to_owned);
+                if let Some(next) = next {
+                    self.image_viewer = Some(crate::ui::viewer::ImageViewer::open(chat, next));
                 }
             }
             Action::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
@@ -2571,28 +2626,17 @@ impl App {
                     self.backend.send(Command::SearchMessages { query });
                 }
             }
-            Action::ShowUpdate => {
-                self.show_update = self.update.is_some();
-                self.inspect_update();
-            }
-            Action::CloseUpdate => self.show_update = false,
-            Action::DownloadUpdate => self.download_update(),
             Action::InstallUpdate => {
+                self.install_when_ready = true;
+                self.inspect_update();
                 if matches!(
                     self.update_download,
-                    crate::updates::DownloadState::Ready(_)
+                    crate::updates::DownloadState::Failed(_)
                 ) {
-                    let crate::updates::DownloadState::Ready(prepared) = std::mem::replace(
-                        &mut self.update_download,
-                        crate::updates::DownloadState::Installing,
-                    ) else {
-                        unreachable!()
-                    };
-                    self.backend.send(Command::InstallUpdate {
-                        prepared,
-                        arguments: self.update_arguments.clone(),
-                    });
+                    self.update_download = crate::updates::DownloadState::Idle;
                 }
+                self.maybe_download_update();
+                self.begin_install_if_ready();
             }
             Action::SetTheme(choice) => {
                 self.settings.theme = choice;
@@ -3256,7 +3300,7 @@ mod tests {
     }
 
     #[test]
-    fn automatic_updates_require_opt_in_and_explicit_restart() {
+    fn one_click_update_installs_when_ready() {
         use crate::updates::{
             DownloadState,
             install::{Installation, Kind, Prepared},
@@ -3268,7 +3312,6 @@ mod tests {
             url: "https://github.com/LisandroNahuelH/whatsfast/releases/latest".into(),
         });
         app.update_support = Some(Err("Use your package manager".into()));
-        app.settings.download_updates_automatically = true;
         app.maybe_download_update();
         assert!(matches!(app.update_download, DownloadState::Idle));
         let installation = Installation {
@@ -3298,6 +3341,49 @@ mod tests {
         app.apply(Action::InstallUpdate, &ctx);
         assert!(matches!(app.update_download, DownloadState::Installing));
         assert!(!app.quit_requested, "wait for the helper before closing");
+    }
+
+    #[test]
+    fn one_click_update_queues_until_the_download_finishes() {
+        use crate::updates::{
+            DownloadState,
+            install::{Installation, Kind, Prepared},
+        };
+        let directory = tempfile::tempdir().unwrap();
+        let (mut app, events) =
+            App::headless(AppDirs::under(directory.path()), Settings::default());
+        let ctx = egui::Context::default();
+        let installation = Installation {
+            executable: PathBuf::from("/fixture/whatsfast"),
+            kind: Kind::Portable,
+        };
+        app.update = Some(crate::updates::Release {
+            version: "99.0.0".into(),
+            url: "https://github.com/LisandroNahuelH/whatsfast/releases/latest".into(),
+        });
+        app.update_support = Some(Ok(installation.clone()));
+        app.update_download = DownloadState::Downloading {
+            received: 1,
+            total: 2,
+        };
+        app.apply(Action::InstallUpdate, &ctx);
+        assert!(app.install_when_ready);
+        assert!(matches!(
+            app.update_download,
+            DownloadState::Downloading { .. }
+        ));
+        events
+            .send(Event::UpdateDownloaded(Ok(Box::new(Prepared {
+                installation,
+                directory: "/fixture/staging".into(),
+                payload: "/fixture/staging/next".into(),
+                sha256: String::new(),
+                version: "99.0.0".into(),
+            }))))
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(matches!(app.update_download, DownloadState::Installing));
+        assert!(!app.quit_requested);
     }
 
     #[test]
@@ -3740,7 +3826,7 @@ mod tests {
 #[cfg(test)]
 mod name_tests {
     use super::*;
-    use crate::model::{Contact, Content, Delivery, MentionRef};
+    use crate::model::{Contact, Content, Delivery, Media, MediaState, MentionRef};
 
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("whatsfast-names-{}", std::process::id()));
@@ -3813,5 +3899,83 @@ mod name_tests {
             thumbnail: None,
         };
         assert_eq!(app.message_text(&message), "ciao @Carmine");
+    }
+
+    #[test]
+    fn viewing_a_photo_resets_zoom_when_stepping() {
+        let mut app = app();
+        let chat = "a@s.whatsapp.net".to_owned();
+        let photo = |id: &str, path: &str| Message {
+            id: id.into(),
+            chat: chat.clone(),
+            sender: chat.clone(),
+            sender_name: None,
+            from_me: false,
+            timestamp: 0,
+            content: Content::Image {
+                caption: None,
+                media: Media {
+                    mime: "image/jpeg".into(),
+                    size: 1,
+                    width: Some(800),
+                    height: Some(600),
+                    path: Some(PathBuf::from(path)),
+                    state: MediaState::Idle,
+                },
+            },
+            status: Delivery::None,
+            delivered_at: None,
+            read_at: None,
+            quoted: None,
+            reactions: Vec::new(),
+            edited: false,
+            mentions: Vec::new(),
+            forwarded: false,
+            thumbnail: None,
+        };
+        app.conversations.insert(
+            chat.clone(),
+            Conversation {
+                messages: vec![photo("first", "a.jpg"), photo("second", "b.jpg")],
+                complete: true,
+                loading_older: false,
+                requested: true,
+                fetching_phone: false,
+                phone_exhausted: false,
+                phone_answered: None,
+                phone_misses: 0,
+                phone_delivered: false,
+            },
+        );
+        let ctx = egui::Context::default();
+        app.apply(
+            Action::ViewImage {
+                chat: chat.clone(),
+                message: "first".into(),
+            },
+            &ctx,
+        );
+        let viewer = app.image_viewer.as_mut().expect("opened");
+        viewer.zoom = 3.0;
+        app.apply(Action::StepImage(1), &ctx);
+        let viewer = app.image_viewer.as_ref().expect("stepped");
+        assert_eq!(viewer.message, "second");
+        assert!((viewer.zoom - 1.0).abs() < f32::EPSILON);
+        app.apply(
+            Action::ViewImage {
+                chat,
+                message: "missing".into(),
+            },
+            &ctx,
+        );
+        assert_eq!(
+            app.image_viewer
+                .as_ref()
+                .map(|viewer| viewer.message.as_str()),
+            Some("second"),
+            "a missing photo does not replace the open one"
+        );
+        app.apply(Action::CloseImageViewer, &ctx);
+        assert!(app.image_viewer.is_none());
     }
 }

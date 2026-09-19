@@ -70,7 +70,8 @@ pub struct Settings {
     pub notifications: bool,
     /// Ask GitHub once a day whether a newer release exists.
     pub check_for_updates: bool,
-    /// Download verified updates in the background; restarting remains explicit.
+    /// Download verified updates in the background. Install starts from the Update toast.
+    #[serde(default = "default_true")]
     pub download_updates_automatically: bool,
     /// Prefer address-book names over public profile names.
     pub names_from_contacts: bool,
@@ -87,6 +88,10 @@ pub struct Settings {
     /// Hide the sidebar outright instead of narrowing it to the chat pictures.
     #[serde(default)]
     pub hide_sidebar_fully: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -110,7 +115,7 @@ impl Default for Settings {
             keep_running_in_background: true,
             notifications: true,
             check_for_updates: true,
-            download_updates_automatically: false,
+            download_updates_automatically: true,
             names_from_contacts: true,
             save_contacts_to_phone: true,
             forward_in_order: true,
@@ -193,7 +198,7 @@ mod tests {
         assert_eq!(parsed.theme, ThemeChoice::Light);
         assert!(parsed.enter_sends);
         assert!(parsed.check_for_updates);
-        assert!(!parsed.download_updates_automatically);
+        assert!(parsed.download_updates_automatically);
     }
 
     #[test]

@@ -3240,6 +3240,23 @@ fn frame_size(media: &Media, thumbnail_hint: Option<(u32, u32)>, limit: f32) -> 
     fit_picture(w, h, limit, PICTURE_HEIGHT.min(limit * 1.3))
 }
 
+/// Click on a downloaded image or sticker. Photos open in the viewer.
+fn downloaded_picture_action(
+    sticker: bool,
+    selecting: bool,
+    chat: ChatId,
+    message: String,
+    path: PathBuf,
+) -> Option<Action> {
+    if sticker {
+        Some(Action::OpenFile(path))
+    } else if selecting {
+        None
+    } else {
+        Some(Action::ViewImage { chat, message })
+    }
+}
+
 /// Draws an image or sticker, using its preview until downloaded. Returns its width.
 fn picture(
     ui: &mut egui::Ui,
@@ -3278,8 +3295,15 @@ fn picture(
             if response
                 .on_hover_cursor(egui::CursorIcon::PointingHand)
                 .clicked()
+                && let Some(action) = downloaded_picture_action(
+                    true,
+                    view.selecting.is_some(),
+                    view.chat.id.clone(),
+                    message.id.clone(),
+                    path.clone(),
+                )
             {
-                actions.push(Action::OpenFile(path.clone()));
+                actions.push(action);
             }
             return size.x;
         }
@@ -3295,13 +3319,24 @@ fn picture(
                     image
                         .fit_to_exact_size(size)
                         .corner_radius(if sticker.is_some() { 0.0 } else { 6.0 })
-                        .sense(Sense::click()),
+                        .sense(if view.selecting.is_some() && sticker.is_none() {
+                            Sense::hover()
+                        } else {
+                            Sense::click()
+                        }),
                 );
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .clicked()
+                    && let Some(action) = downloaded_picture_action(
+                        sticker.is_some(),
+                        view.selecting.is_some(),
+                        view.chat.id.clone(),
+                        message.id.clone(),
+                        path.clone(),
+                    )
                 {
-                    actions.push(Action::OpenFile(path.clone()));
+                    actions.push(action);
                 }
                 size.x
             }
@@ -4134,6 +4169,27 @@ mod tests {
         assert_eq!(emoji_match_score(grinning, "grin"), Some(1));
         assert_eq!(emoji_match_score(grinning, "face"), Some(3));
         assert_eq!(emoji_match_score(grinning, "rocket"), None);
+    }
+
+    #[test]
+    fn a_downloaded_photo_opens_the_viewer_and_a_sticker_opens_the_file() {
+        let chat = "a@s.whatsapp.net".to_owned();
+        let path = PathBuf::from("photo.jpg");
+        assert_eq!(
+            downloaded_picture_action(false, false, chat.clone(), "photo".into(), path.clone()),
+            Some(Action::ViewImage {
+                chat: chat.clone(),
+                message: "photo".into()
+            })
+        );
+        assert_eq!(
+            downloaded_picture_action(false, true, chat.clone(), "photo".into(), path.clone()),
+            None
+        );
+        assert_eq!(
+            downloaded_picture_action(true, false, chat, "sticker".into(), path.clone()),
+            Some(Action::OpenFile(path))
+        );
     }
 }
 

@@ -932,12 +932,12 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     version: "99.0.0".to_owned(),
                     url: "https://github.com/LisandroNahuelH/whatsfast/releases/latest".to_owned(),
                 });
-                app.show_update = true;
                 let installation = Installation {
                     executable: "/demo/whatsfast".into(),
                     kind: Kind::Portable,
                 };
                 app.update_support = Some(Ok(installation.clone()));
+                app.install_when_ready = part == "update-downloading";
                 app.update_download = match part {
                     "update-downloading" => DownloadState::Downloading {
                         received: 8_000_000,
@@ -1228,6 +1228,24 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 }
                 app.scroll_to_bottom = true;
             }
+            "image-viewer" => {
+                let (photo, _) = sample_files(app);
+                let chat = SAMPLES[0].id;
+                app.open_chat = Some(chat.to_owned());
+                if let Some(conversation) = app.conversations.get_mut(chat) {
+                    for id in ["ada-tall", "ada-photo"] {
+                        if let Some(message) = conversation.message_mut(id)
+                            && let crate::model::Content::Image { media, .. } = &mut message.content
+                        {
+                            media.path = Some(photo.clone());
+                        }
+                    }
+                }
+                app.image_viewer = Some(crate::ui::viewer::ImageViewer::open(
+                    chat.to_owned(),
+                    "ada-photo".into(),
+                ));
+            }
             other => {
                 if app.chat(other).is_some() {
                     app.open_chat = Some(other.to_owned());
@@ -1396,6 +1414,7 @@ mod tests {
             "react-picker-empty",
             "react-custom",
             "react-other",
+            "image-viewer",
         ] {
             let mut app = self::app();
             apply_flags(&mut app, Some(page));
