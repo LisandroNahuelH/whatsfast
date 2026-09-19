@@ -49,8 +49,8 @@ Run fmt, clippy, and tests locally before you push (see `AGENTS.md`).
 
 WhatsFast is distributed under the **[MIT License](LICENSE)**.
 
-The `LICENSE` file includes the copyright notice that applies to this
-repository's source distribution (including lineage from the ZapFast project).
+The `LICENSE` file names **Lisandro Nahuel** as copyright holder for this
+repository. Portions derive from ZapFast (see [ATTRIBUTIONS.md](ATTRIBUTIONS.md)).
 You may use, modify, and redistribute the software under the conditions in
 that file. The software is provided **as is**, without warranty.
 

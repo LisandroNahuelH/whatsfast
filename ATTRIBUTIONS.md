@@ -56,6 +56,12 @@ sponsored, or affiliated with WhatsApp or Meta.
 
 ## License file
 
-The full MIT license text and copyright notice for this repository's
-distribution are in [LICENSE](LICENSE). When you redistribute binaries or
-source, keep that file and this attributions document with them.
+**Copyright (c) 2026 Lisandro Nahuel** — this repository and WhatsFast releases
+maintained here.
+
+Portions of the codebase derive from
+[crmne/zapfast](https://github.com/crmne/zapfast); **Copyright (c) 2026 Carmine
+Paolino** and contributors, also under MIT. See the ZapFast section above.
+
+The full MIT license text is in [LICENSE](LICENSE). When you redistribute
+binaries or source, keep that file and this attributions document with them.
