@@ -2,7 +2,7 @@
 
 use egui::{Color32, ColorImage, Pos2, Rect, TextureHandle, TextureOptions, Ui, pos2};
 
-use crate::settings::{ChatWallpaper, WallpaperFamily};
+use crate::settings::{ChatWallpaper, WALLPAPER_SLOTS, WallpaperFamily};
 use crate::theme::Palette;
 
 /// Chooses a wallpaper family from the active palette.
@@ -26,11 +26,15 @@ pub fn family_for(palette: &Palette) -> WallpaperFamily {
 }
 
 /// Paints the wallpaper covering `ui.max_rect()`, cropping overflow.
-pub fn paint(ui: &mut Ui, family: WallpaperFamily) {
-    let Some(texture) = texture(ui, family) else {
+pub fn paint(ui: &mut Ui, family: WallpaperFamily, slot: u8) {
+    paint_in(ui, family, slot, ui.max_rect());
+}
+
+/// Paints the wallpaper covering `rect`, cropping overflow.
+pub fn paint_in(ui: &mut Ui, family: WallpaperFamily, slot: u8, rect: Rect) {
+    let Some(texture) = texture(ui, family, slot) else {
         return;
     };
-    let rect = ui.max_rect();
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return;
     }
@@ -39,8 +43,7 @@ pub fn paint(ui: &mut Ui, family: WallpaperFamily) {
         return;
     }
     let scale = (rect.width() / tex.x).max(rect.height() / tex.y);
-    let size = tex * scale;
-    let dest = Rect::from_center_size(rect.center(), size);
+    let dest = Rect::from_center_size(rect.center(), tex * scale);
     ui.painter().with_clip_rect(rect).image(
         texture.id(),
         dest,
@@ -49,25 +52,55 @@ pub fn paint(ui: &mut Ui, family: WallpaperFamily) {
     );
 }
 
-fn texture(ui: &Ui, family: WallpaperFamily) -> Option<TextureHandle> {
-    let id = egui::Id::new(("chat-wallpaper", family));
+fn texture(ui: &Ui, family: WallpaperFamily, slot: u8) -> Option<TextureHandle> {
+    let slot = slot.min(WALLPAPER_SLOTS - 1);
+    let id = egui::Id::new(("chat-wallpaper", family, slot));
     if let Some(handle) = ui.ctx().data(|data| data.get_temp::<TextureHandle>(id)) {
         return Some(handle);
     }
-    let image = decode(family)?;
+    let image = decode(family, slot)?;
     let handle = ui
         .ctx()
-        .load_texture(family.asset_key(), image, TextureOptions::LINEAR);
+        .load_texture(asset_key(family, slot), image, TextureOptions::LINEAR);
     ui.ctx()
         .data_mut(|data| data.insert_temp(id, handle.clone()));
     Some(handle)
 }
 
-fn decode(family: WallpaperFamily) -> Option<ColorImage> {
-    let bytes = family.png();
+fn decode(family: WallpaperFamily, slot: u8) -> Option<ColorImage> {
+    let bytes = png(family, slot);
     let bitmap = image::load_from_memory(bytes).ok()?.to_rgba8();
     let size = [bitmap.width() as usize, bitmap.height() as usize];
     Some(ColorImage::from_rgba_unmultiplied(size, bitmap.as_raw()))
+}
+
+fn asset_key(family: WallpaperFamily, slot: u8) -> String {
+    format!(
+        "wallpaper-{}-{}",
+        family.label().to_ascii_lowercase(),
+        slot + 1
+    )
+}
+
+fn png(family: WallpaperFamily, slot: u8) -> &'static [u8] {
+    match (family, slot.min(WALLPAPER_SLOTS - 1)) {
+        (WallpaperFamily::Black, 0) => include_bytes!("../../assets/wallpapers/black/01.png"),
+        (WallpaperFamily::Black, 1) => include_bytes!("../../assets/wallpapers/black/02.png"),
+        (WallpaperFamily::Black, 2) => include_bytes!("../../assets/wallpapers/black/03.png"),
+        (WallpaperFamily::Gray, 0) => include_bytes!("../../assets/wallpapers/gray/01.png"),
+        (WallpaperFamily::Gray, 1) => include_bytes!("../../assets/wallpapers/gray/02.png"),
+        (WallpaperFamily::Gray, 2) => include_bytes!("../../assets/wallpapers/gray/03.png"),
+        (WallpaperFamily::Green, 0) => include_bytes!("../../assets/wallpapers/green/01.png"),
+        (WallpaperFamily::Green, 1) => include_bytes!("../../assets/wallpapers/green/02.png"),
+        (WallpaperFamily::Green, 2) => include_bytes!("../../assets/wallpapers/green/03.png"),
+        (WallpaperFamily::Red, 0) => include_bytes!("../../assets/wallpapers/red/01.png"),
+        (WallpaperFamily::Red, 1) => include_bytes!("../../assets/wallpapers/red/02.png"),
+        (WallpaperFamily::Red, 2) => include_bytes!("../../assets/wallpapers/red/03.png"),
+        (WallpaperFamily::White, 0) => include_bytes!("../../assets/wallpapers/white/01.png"),
+        (WallpaperFamily::White, 1) => include_bytes!("../../assets/wallpapers/white/02.png"),
+        (WallpaperFamily::White, 2) => include_bytes!("../../assets/wallpapers/white/03.png"),
+        _ => include_bytes!("../../assets/wallpapers/black/01.png"),
+    }
 }
 
 fn rgb_hsl(color: Color32) -> (f32, f32, f32) {
@@ -92,38 +125,9 @@ fn rgb_hsl(color: Color32) -> (f32, f32, f32) {
     (hue.rem_euclid(360.0), saturation, lightness)
 }
 
-impl WallpaperFamily {
-    fn asset_key(self) -> &'static str {
-        match self {
-            Self::Black => "wallpaper-black",
-            Self::Gray => "wallpaper-gray",
-            Self::Green => "wallpaper-green",
-            Self::Red => "wallpaper-red",
-            Self::White => "wallpaper-white",
-        }
-    }
-
-    fn png(self) -> &'static [u8] {
-        match self {
-            Self::Black => include_bytes!("../../assets/wallpapers/black/01.png"),
-            Self::Gray => include_bytes!("../../assets/wallpapers/gray/01.png"),
-            Self::Green => include_bytes!("../../assets/wallpapers/green/01.png"),
-            Self::Red => include_bytes!("../../assets/wallpapers/red/01.png"),
-            Self::White => include_bytes!("../../assets/wallpapers/white/01.png"),
-        }
-    }
-}
-
 impl ChatWallpaper {
     pub fn resolve(self, palette: &Palette) -> WallpaperFamily {
-        match self {
-            Self::Auto => family_for(palette),
-            Self::Black => WallpaperFamily::Black,
-            Self::Gray => WallpaperFamily::Gray,
-            Self::Green => WallpaperFamily::Green,
-            Self::Red => WallpaperFamily::Red,
-            Self::White => WallpaperFamily::White,
-        }
+        self.family().unwrap_or_else(|| family_for(palette))
     }
 }
 

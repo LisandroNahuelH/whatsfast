@@ -731,7 +731,16 @@ fn chat_menu(
     } else {
         None
     };
-    let width = widgets::menu_width(ui, &["Select messages", "Select all", "Close chat"], true);
+    let width = widgets::menu_width(
+        ui,
+        &[
+            "Select messages",
+            "Select all",
+            "Next wallpaper",
+            "Close chat",
+        ],
+        true,
+    );
     egui::Popup::menu(background)
         .open_memory(open)
         .width(width)
@@ -745,6 +754,10 @@ fn chat_menu(
             if widgets::menu_item(ui, palette, Some(Icon::ListChecks), "Select all") {
                 actions.push(Action::StartSelecting { message: None });
                 actions.push(Action::SelectAllMessages);
+                ui.close();
+            }
+            if widgets::menu_item(ui, palette, Some(Icon::Image), "Next wallpaper") {
+                actions.push(Action::NextWallpaper);
                 ui.close();
             }
             widgets::menu_separator(ui, palette);

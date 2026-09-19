@@ -928,7 +928,11 @@ pub enum Action {
     SetTheme(crate::settings::ThemeChoice),
     SetCustomTheme(String),
     SetHistoryPrefetch(crate::settings::HistoryPrefetch),
-    SetChatWallpaper(crate::settings::ChatWallpaper),
+    SetChatWallpaper {
+        choice: crate::settings::ChatWallpaper,
+        index: u8,
+    },
+    NextWallpaper,
     ReloadThemes,
     OpenThemesFolder,
     SettingsChanged,

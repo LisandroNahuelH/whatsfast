@@ -45,12 +45,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     }
     let palette = app.palette;
     let wallpaper = app.settings.chat_wallpaper.resolve(&palette);
+    let wallpaper_slot = app.settings.wallpaper_slot();
     egui::CentralPanel::default()
         .frame(Frame::new().fill(palette.chat))
         .show(ui, |ui| match app.page {
             Page::Settings => settings::show(app, ui),
             Page::Chats => {
-                wallpaper::paint(ui, wallpaper);
+                wallpaper::paint(ui, wallpaper, wallpaper_slot);
                 conversation::show(app, ui);
             }
         });

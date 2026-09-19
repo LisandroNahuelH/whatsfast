@@ -717,7 +717,7 @@ mod tests {
     }
 
     #[test]
-    fn the_chat_wallpaper_dropdown_lists_auto_and_the_five_families() {
+    fn the_chat_wallpaper_dropdown_lists_auto_and_numbered_families() {
         use crate::settings::ChatWallpaper;
         let mut app = super::super::tests::app();
         app.page = Page::Settings;
@@ -728,14 +728,17 @@ mod tests {
             frame(&mut app, &mut tour, &ctx, Vec::new());
         }
         click(&mut app, &mut tour, &ctx, "Auto");
-        for name in ["Auto", "Black", "Gray", "Green", "Red", "White"] {
-            assert!(
-                tour.labels.contains_key(name),
-                "missing chat wallpaper choice {name}"
-            );
-        }
-        click(&mut app, &mut tour, &ctx, "Green");
+        assert!(
+            tour.labels.contains_key("Auto"),
+            "missing chat wallpaper choice Auto"
+        );
+        assert!(
+            tour.labels.contains_key("Black 1"),
+            "missing chat wallpaper choice Black 1"
+        );
+        click(&mut app, &mut tour, &ctx, "Green 1");
         assert_eq!(app.settings.chat_wallpaper, ChatWallpaper::Green);
+        assert_eq!(app.settings.chat_wallpaper_index, 0);
     }
 
     #[test]
@@ -1619,5 +1622,39 @@ mod tests {
             egui::Popup::is_any_open(&ctx),
             "a right click away from a bubble opens the chat menu"
         );
+    }
+
+    #[test]
+    fn next_wallpaper_from_the_chat_menu_advances_the_slot() {
+        use crate::settings::ChatWallpaper;
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        step(&mut app, &ctx, Vec::new(), 0.0);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let (_, bubble) = app.conversations[&chat]
+            .messages
+            .iter()
+            .filter(|message| message.from_me)
+            .filter_map(|message| {
+                let id = crate::ui::conversation::bubble_id(&chat, &message.id).with("rect");
+                ctx.data(|data| data.get_temp::<Rect>(id))
+                    .map(|rect| (message.id.clone(), rect))
+            })
+            .find(|(_, rect)| rect.center().y > 60.0 && rect.center().y < 700.0)
+            .expect("a bubble of ours is on screen");
+        let pos = pos2(bubble.left() - 24.0, bubble.center().y);
+        step(
+            &mut app,
+            &ctx,
+            click_events(pos, PointerButton::Secondary),
+            0.1,
+        );
+        frame(&mut app, &mut tour, &ctx, Vec::new());
+        click(&mut app, &mut tour, &ctx, "Next wallpaper");
+        assert_eq!(app.settings.chat_wallpaper, ChatWallpaper::Auto);
+        assert_eq!(app.settings.chat_wallpaper_index, 1);
     }
 }

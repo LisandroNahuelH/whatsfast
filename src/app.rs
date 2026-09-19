@@ -2845,8 +2845,13 @@ impl App {
                 self.mark_settings_dirty();
                 self.sync_prefetch();
             }
-            Action::SetChatWallpaper(choice) => {
+            Action::SetChatWallpaper { choice, index } => {
                 self.settings.chat_wallpaper = choice;
+                self.settings.chat_wallpaper_index = index;
+                self.mark_settings_dirty();
+            }
+            Action::NextWallpaper => {
+                self.settings.next_wallpaper();
                 self.mark_settings_dirty();
             }
             Action::SetCustomTheme(filename) => {

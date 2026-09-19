@@ -56,6 +56,34 @@ pub enum WallpaperFamily {
     White,
 }
 
+impl WallpaperFamily {
+    pub const ALL: [WallpaperFamily; 5] =
+        [Self::Black, Self::Gray, Self::Green, Self::Red, Self::White];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Black => "Black",
+            Self::Gray => "Gray",
+            Self::Green => "Green",
+            Self::Red => "Red",
+            Self::White => "White",
+        }
+    }
+
+    pub fn as_choice(self) -> ChatWallpaper {
+        match self {
+            Self::Black => ChatWallpaper::Black,
+            Self::Gray => ChatWallpaper::Gray,
+            Self::Green => ChatWallpaper::Green,
+            Self::Red => ChatWallpaper::Red,
+            Self::White => ChatWallpaper::White,
+        }
+    }
+}
+
+/// Slots per family (`01.png` … `03.png`).
+pub const WALLPAPER_SLOTS: u8 = 3;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChatWallpaper {
@@ -69,23 +97,21 @@ pub enum ChatWallpaper {
 }
 
 impl ChatWallpaper {
-    pub const ALL: [ChatWallpaper; 6] = [
-        Self::Auto,
-        Self::Black,
-        Self::Gray,
-        Self::Green,
-        Self::Red,
-        Self::White,
-    ];
-
-    pub fn label(self) -> &'static str {
+    pub fn family(self) -> Option<WallpaperFamily> {
         match self {
-            Self::Auto => "Auto",
-            Self::Black => "Black",
-            Self::Gray => "Gray",
-            Self::Green => "Green",
-            Self::Red => "Red",
-            Self::White => "White",
+            Self::Auto => None,
+            Self::Black => Some(WallpaperFamily::Black),
+            Self::Gray => Some(WallpaperFamily::Gray),
+            Self::Green => Some(WallpaperFamily::Green),
+            Self::Red => Some(WallpaperFamily::Red),
+            Self::White => Some(WallpaperFamily::White),
+        }
+    }
+
+    pub fn combo_label(self, index: u8) -> String {
+        match self.family() {
+            None => "Auto".to_owned(),
+            Some(family) => format!("{} {}", family.label(), index.min(WALLPAPER_SLOTS - 1) + 1),
         }
     }
 }
@@ -157,6 +183,9 @@ pub struct Settings {
     pub history_prefetch: HistoryPrefetch,
     /// Doodle wallpaper behind the open chat. Auto follows the theme colours.
     pub chat_wallpaper: ChatWallpaper,
+    /// Which bundled doodle in the family (`0` is `01.png`).
+    #[serde(default)]
+    pub chat_wallpaper_index: u8,
 }
 
 fn default_true() -> bool {
@@ -194,6 +223,7 @@ impl Default for Settings {
             hide_sidebar_fully: false,
             history_prefetch: HistoryPrefetch::RecentAndPinned,
             chat_wallpaper: ChatWallpaper::Auto,
+            chat_wallpaper_index: 0,
         }
     }
 }
@@ -227,6 +257,14 @@ impl Settings {
             .map(str::trim)
             .filter(|key| !key.is_empty())
             .map(str::to_owned)
+    }
+
+    pub fn wallpaper_slot(&self) -> u8 {
+        self.chat_wallpaper_index.min(WALLPAPER_SLOTS - 1)
+    }
+
+    pub fn next_wallpaper(&mut self) {
+        self.chat_wallpaper_index = (self.wallpaper_slot() + 1) % WALLPAPER_SLOTS;
     }
 
     pub fn load(path: &Path) -> Self {
@@ -272,6 +310,31 @@ mod tests {
         assert!(parsed.download_updates_automatically);
         assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
         assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Auto);
+        assert_eq!(parsed.chat_wallpaper_index, 0);
+    }
+
+    #[test]
+    fn next_wallpaper_wraps_the_slot_and_keeps_the_family() {
+        let mut settings = Settings::default();
+        settings.next_wallpaper();
+        assert_eq!(settings.chat_wallpaper, ChatWallpaper::Auto);
+        assert_eq!(settings.chat_wallpaper_index, 1);
+        settings.next_wallpaper();
+        settings.next_wallpaper();
+        assert_eq!(settings.chat_wallpaper_index, 0);
+        settings.chat_wallpaper = ChatWallpaper::Black;
+        settings.chat_wallpaper_index = 2;
+        settings.next_wallpaper();
+        assert_eq!(settings.chat_wallpaper, ChatWallpaper::Black);
+        assert_eq!(settings.chat_wallpaper_index, 0);
+    }
+
+    #[test]
+    fn a_legacy_family_choice_is_the_first_slot() {
+        let parsed: Settings =
+            serde_json::from_str(r#"{"chat_wallpaper":"black"}"#).expect("parses");
+        assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Black);
+        assert_eq!(parsed.chat_wallpaper_index, 0);
     }
 
     #[test]

@@ -1,12 +1,13 @@
 //! The settings page.
 
-use egui::{CornerRadius, Frame, Margin};
+use egui::{CornerRadius, Frame, Margin, Order, Sense, pos2, vec2};
 
 use crate::app::App;
 use crate::model::{Action, Dialog, Page};
-use crate::settings::ThemeChoice;
+use crate::settings::{ChatWallpaper, ThemeChoice, WALLPAPER_SLOTS, WallpaperFamily};
 use crate::theme::{self, Icon};
 
+use super::wallpaper;
 use super::widgets;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
@@ -90,28 +91,53 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui,
                         &palette,
                         "Chat wallpaper",
-                        "Auto picks a doodle from the theme colours. You can force Black, Gray, Green, Red, or White. More pictures per colour come later.",
+                        "Auto picks a doodle from the theme colours. You can force Black 1 to White 3. Right-click the open chat and choose Next wallpaper to step through the three doodles for that family.",
                         |ui| {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-                                let selected = app.settings.chat_wallpaper.label();
+                                let selected = app.settings.chat_wallpaper.combo_label(app.settings.wallpaper_slot());
+                                let mut preview = None;
                                 let response = egui::ComboBox::from_id_salt("chat_wallpaper")
                                     .selected_text(" ")
                                     .width(200.0_f32.min(ui.available_width()))
+                                    .height(500.0)
                                     .show_ui(ui, |ui| {
-                                        for choice in crate::settings::ChatWallpaper::ALL {
-                                            if theme_option(ui, &palette, choice.label(), app.settings.chat_wallpaper == choice) {
-                                                app.actions.push(Action::SetChatWallpaper(choice));
+                                        let auto = wallpaper_option(ui, &palette, "Auto", app.settings.chat_wallpaper == ChatWallpaper::Auto);
+                                        if auto.hovered() {
+                                            preview = Some((wallpaper::family_for(&palette), app.settings.wallpaper_slot()));
+                                        }
+                                        if auto.clicked() {
+                                            app.actions.push(Action::SetChatWallpaper {
+                                                choice: ChatWallpaper::Auto,
+                                                index: app.settings.wallpaper_slot(),
+                                            });
+                                        }
+                                        for family in WallpaperFamily::ALL {
+                                            for slot in 0..WALLPAPER_SLOTS {
+                                                let label = format!("{} {}", family.label(), slot + 1);
+                                                let chosen = app.settings.chat_wallpaper == family.as_choice()
+                                                    && app.settings.wallpaper_slot() == slot;
+                                                let row = wallpaper_option(ui, &palette, &label, chosen);
+                                                if row.hovered() {
+                                                    preview = Some((family, slot));
+                                                }
+                                                if row.clicked() {
+                                                    app.actions.push(Action::SetChatWallpaper {
+                                                        choice: family.as_choice(),
+                                                        index: slot,
+                                                    });
+                                                }
                                             }
                                         }
                                     });
                                 let rect = response.response.rect;
-                                let text = widgets::line(ui, selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
+                                let text = widgets::line(ui, &selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
                                 text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
                                 response.response.widget_info(|| {
                                     let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Chat wallpaper");
-                                    info.current_text_value = Some(selected.to_owned());
+                                    info.current_text_value = Some(selected.clone());
                                     info
                                 });
+                                show_wallpaper_preview(ui, app, preview);
                             });
                         },
                     );
@@ -354,4 +380,84 @@ fn theme_option(ui: &mut egui::Ui, palette: &theme::Palette, text: &str, selecte
         )
     });
     response.clicked()
+}
+
+fn wallpaper_option(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    text: &str,
+    selected: bool,
+) -> egui::Response {
+    let response = ui.add(
+        egui::Button::selectable(selected, " ").min_size(egui::vec2(ui.available_width(), 28.0)),
+    );
+    let rect = response.rect;
+    let line = widgets::line(
+        ui,
+        text,
+        theme::regular(14.0),
+        palette.text,
+        rect.width() - 16.0,
+        1,
+    );
+    if ui.is_rect_visible(rect) {
+        line.paint(
+            ui,
+            egui::pos2(rect.left() + 8.0, rect.center().y - line.size().y / 2.0),
+            palette.text,
+        );
+    }
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            ui.is_enabled(),
+            selected,
+            text,
+        )
+    });
+    response
+}
+
+fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(WallpaperFamily, u8)>) {
+    let Some((family, slot)) = preview else {
+        return;
+    };
+    let window = ui.ctx().content_rect();
+    let sidebar = if app.sidebar_visible {
+        app.settings.sidebar_width
+    } else if app.compact_sidebar() {
+        56.0
+    } else {
+        0.0
+    };
+    let column = (640.0_f32 + 64.0).min((window.width() - sidebar).max(0.0));
+    let col_right = window.left() + sidebar + column;
+    let gap = (window.right() - col_right - 16.0).max(0.0);
+    let width = if gap < 160.0 {
+        gap
+    } else {
+        gap.min(window.width() * 0.32).clamp(160.0, 420.0)
+    };
+    if width < 80.0 {
+        return;
+    }
+    let height = width * 9.0 / 16.0;
+    let top = (window.top() + 72.0).min(window.bottom() - height - 16.0);
+    let origin = pos2(col_right + 8.0, top.max(window.top() + 8.0));
+    egui::Area::new(egui::Id::new("wallpaper-preview"))
+        .order(Order::Foreground)
+        .fixed_pos(origin)
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            Frame::new()
+                .fill(app.palette.panel)
+                .stroke(egui::Stroke::new(1.0, app.palette.dim))
+                .corner_radius(CornerRadius::same(8))
+                .inner_margin(Margin::same(6))
+                .show(ui, |ui| {
+                    let size = vec2(width, height);
+                    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+                    wallpaper::paint_in(ui, family, slot, rect);
+                });
+        });
 }
