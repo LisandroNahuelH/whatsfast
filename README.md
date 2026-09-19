@@ -55,6 +55,16 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 <table>
 <tr>
+<td colspan="2" valign="top">
+
+### Chat list filters: All, Unread, Favorites, Groups, and your own lists
+
+- **Technical:** Chips under the search box filter the left chat list. **All** is the default and keeps today's WhatsApp pins. **Unread** shows counted unread plus the empty local mark. **Favorites** is a local flag from the chat menu or the contact card. **Groups** shows group chats. **+** names a list and picks members with the same searchable chat picker as Forward. Each chip, including Unread and Favorites, has its own pin order. Custom lists stay in the archive. They do not create WhatsApp groups or labels.
+- **Daily use:** Open Unread to work the inbox, keep a Favorites strip for people you always need, and make a Work list without mixing those pins into All.
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### Mark as unread from the chat list
