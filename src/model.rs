@@ -803,6 +803,7 @@ pub enum Action {
     InstallUpdate,
     SetTheme(crate::settings::ThemeChoice),
     SetCustomTheme(String),
+    SetHistoryPrefetch(crate::settings::HistoryPrefetch),
     ReloadThemes,
     OpenThemesFolder,
     SettingsChanged,

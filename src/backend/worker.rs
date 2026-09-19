@@ -36,6 +36,7 @@ use whatsapp_rust::{MediaRetryResult, MediaReuploadRequest};
 
 mod poll_history;
 mod polls;
+mod prefetch;
 
 use super::{Command, Event, LinkStatus, Waker, read_sync::ReadSync};
 use crate::app::PAGE;
@@ -224,6 +225,8 @@ pub async fn run(
         poll_decrypting: 0,
         poll_history: Default::default(),
         poll_sending: HashSet::new(),
+        prefetch: prefetch::State::default(),
+        prefetch_older: HashSet::new(),
     };
     worker.load_state();
     worker.backfill();
@@ -260,6 +263,7 @@ pub async fn run(
                 worker.pump_read_sync();
                 worker.pump_poll_votes();
                 worker.pump_poll_history();
+                worker.pump_prefetch();
                 worker.pump_scheduled(false);
             }
         }
@@ -272,6 +276,9 @@ struct Worker {
     poll_decrypting: usize,
     poll_history: poll_history::Requests,
     poll_sending: HashSet<(ChatId, String)>,
+    prefetch: prefetch::State,
+    /// Phone-history requests started by prefetch, not by the user scrolling.
+    prefetch_older: HashSet<ChatId>,
     dirs: AppDirs,
     events: std::sync::mpsc::Sender<Event>,
     commands: mpsc::UnboundedSender<Command>,
@@ -549,6 +556,9 @@ impl Worker {
     fn set_status(&mut self, status: LinkStatus) {
         if self.status != status {
             log::info!("link: {}", status.log_label());
+            if matches!(status, LinkStatus::Connected) {
+                self.prefetch.on_connected();
+            }
             self.status = status.clone();
             self.emit(Event::Link(status));
         }
@@ -1437,6 +1447,8 @@ impl Worker {
         self.read_sync = ReadSync::default();
         self.poll_sending.clear();
         self.poll_history = Default::default();
+        self.prefetch.reset_session();
+        self.prefetch_older.clear();
         self.pending_older.clear();
         self.pending_avatars.clear();
         self.me_pn = None;
@@ -2412,22 +2424,26 @@ impl Worker {
                 self.emit(Event::OlderFetched { chat, more });
                 continue;
             };
-            match self
-                .archive
-                .messages(&chat, Some((before_time, &before_id)), 500)
-            {
-                Ok(mut messages) => {
-                    for message in &mut messages {
-                        self.polish(message);
+            let silent = self.prefetch_older.remove(&chat);
+            self.prefetch.finish_history(&chat, more, Instant::now());
+            if !silent {
+                match self
+                    .archive
+                    .messages(&chat, Some((before_time, &before_id)), 500)
+                {
+                    Ok(mut messages) => {
+                        for message in &mut messages {
+                            self.polish(message);
+                        }
+                        self.emit(Event::Messages {
+                            chat: chat.clone(),
+                            messages,
+                            older: true,
+                            complete: false,
+                        })
                     }
-                    self.emit(Event::Messages {
-                        chat: chat.clone(),
-                        messages,
-                        older: true,
-                        complete: false,
-                    })
+                    Err(error) => log::warn!("could not read older messages: {error}"),
                 }
-                Err(error) => log::warn!("could not read older messages: {error}"),
             }
             self.emit(Event::OlderFetched { chat, more });
         }
@@ -2443,12 +2459,14 @@ impl Worker {
             .collect();
         for chat in expired {
             self.pending_older.remove(&chat);
+            let silent = self.prefetch_older.remove(&chat);
+            self.prefetch.fail_history(&chat, Instant::now());
             self.emit(Event::OlderFetched {
                 chat: chat.clone(),
                 more: true,
             });
             // Report the timeout once per chat; later retries back off silently.
-            if self.older_warned.insert(chat) {
+            if !silent && self.older_warned.insert(chat) {
                 self.emit(Event::Error(
                     "Your phone did not send older messages. Check that it is online".to_owned(),
                 ));
@@ -2456,14 +2474,17 @@ impl Worker {
         }
     }
 
-    fn fetch_older(&mut self, chat: ChatId) {
+    fn fetch_older(&mut self, chat: ChatId, prefetch: bool) -> bool {
         if self.pending_older.contains_key(&chat) {
-            return;
+            return false;
+        }
+        if prefetch && !self.pending_older.is_empty() {
+            return false;
         }
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
             // Offline requests retry after reconnection; the banner shows state.
             self.emit(Event::OlderFetched { chat, more: true });
-            return;
+            return false;
         };
         // Chats without messages request history from the current time.
         let (id, from_me, timestamp) = match self.archive.oldest(&chat) {
@@ -2472,6 +2493,9 @@ impl Worker {
         };
         self.pending_older
             .insert(chat.clone(), (Instant::now(), (timestamp, id.clone())));
+        if prefetch {
+            self.prefetch_older.insert(chat.clone());
+        }
         let commands = self.commands.clone();
         tokio::spawn(async move {
             if let Err(error) = client
@@ -2487,6 +2511,57 @@ impl Worker {
                 });
             }
         });
+        true
+    }
+
+    fn pump_prefetch(&mut self) {
+        if !self.status.is_connected()
+            || self.prefetch.mode == crate::settings::HistoryPrefetch::Off
+        {
+            return;
+        }
+        let now = Instant::now();
+        let chats = match self.archive.chats() {
+            Ok(chats) => chats,
+            Err(error) => {
+                log::warn!("prefetch chats: {error}");
+                return;
+            }
+        };
+        let targets =
+            prefetch::targets(&chats, self.prefetch.mode, self.prefetch.focused.as_deref());
+        if self.prefetch.next_media_ready(now) {
+            'media: for chat in &targets {
+                match self
+                    .archive
+                    .undownloaded_media(chat, prefetch::MEDIA_MAX, 8)
+                {
+                    Ok(ids) => {
+                        for id in ids {
+                            if self.prefetch.skip_media(chat, &id) {
+                                continue;
+                            }
+                            self.prefetch.start_media(chat.clone(), id.clone());
+                            if !self.download(chat.clone(), id.clone()) {
+                                self.prefetch.finish_media(chat, &id, false, now);
+                                continue;
+                            }
+                            break 'media;
+                        }
+                    }
+                    Err(error) => log::warn!("prefetch media: {error}"),
+                }
+            }
+        }
+        let Some(chat) = self
+            .prefetch
+            .next_history(now, !self.pending_older.is_empty(), &targets)
+        else {
+            return;
+        };
+        if self.fetch_older(chat.clone(), true) {
+            self.prefetch.start_history(chat);
+        }
     }
 
     // --- commands --------------------------------------------------------
@@ -2666,7 +2741,13 @@ impl Worker {
                 }
             }
             Command::LoadChat { chat, before } => self.load_chat(chat, before),
-            Command::FetchOlder(chat) => self.fetch_older(chat),
+            Command::FetchOlder(chat) => {
+                self.prefetch_older.remove(&chat);
+                let _ = self.fetch_older(chat, false);
+            }
+            Command::SetHistoryPrefetch { mode, focused } => {
+                self.prefetch.configure(mode, focused);
+            }
             Command::LoadUntil { chat, id, before } => self.load_until(chat, id, before),
             Command::SearchMessages { query } => self.search_messages(query),
             Command::EnsureChat { chat, name } => {
@@ -2687,7 +2768,9 @@ impl Worker {
                     let _ = self.archive.set_ephemeral(&chat, expiration, timestamp);
                 }
             }
-            Command::Download { chat, message } => self.download(chat, message),
+            Command::Download { chat, message } => {
+                let _ = self.download(chat, message);
+            }
             Command::FetchAvatar { id, full } => self.fetch_avatar(id, full),
             Command::EditText {
                 chat,
@@ -3103,8 +3186,12 @@ impl Worker {
             Command::Shutdown => {}
             Command::OlderFailed { chat, error } => {
                 self.pending_older.remove(&chat);
+                let silent = self.prefetch_older.remove(&chat);
+                self.prefetch.fail_history(&chat, Instant::now());
                 self.emit(Event::OlderFetched { chat, more: true });
-                self.emit(Event::Error(error));
+                if !silent {
+                    self.emit(Event::Error(error));
+                }
             }
             Command::GroupInfoFailed { chat, permanent } => {
                 self.handle_failed_group(chat, permanent);
@@ -3157,6 +3244,8 @@ impl Worker {
                 if let Ok(path) = &result {
                     let _ = self.archive.set_media_path(&chat, &id, path);
                 }
+                self.prefetch
+                    .finish_media(&chat, &id, result.is_ok(), Instant::now());
                 if let Some(target) = self.save_targets.remove(&(chat.clone(), id.clone())) {
                     match &result {
                         Ok(source) => match self.copy_to(source, &target) {
@@ -3837,14 +3926,14 @@ impl Worker {
         }
     }
 
-    fn download(&mut self, chat: ChatId, id: String) {
+    fn download(&mut self, chat: ChatId, id: String) -> bool {
         let Some(client) = self.client.clone() else {
             self.emit(Event::Media {
                 chat,
                 message: id,
                 result: Err("Not connected to WhatsApp".to_owned()),
             });
-            return;
+            return false;
         };
         let raw = self.archive.raw(&chat, &id).ok().flatten();
         let Some(message) = raw.and_then(|raw| wa::Message::decode_from_slice(&raw).ok()) else {
@@ -3853,7 +3942,7 @@ impl Worker {
                 message: id,
                 result: Err("Attachment download keys are missing".to_owned()),
             });
-            return;
+            return false;
         };
         let base = message.get_base_message().clone();
         let (downloadable, mime, file_name): (Box<dyn Downloadable>, String, Option<String>) =
@@ -3897,7 +3986,7 @@ impl Worker {
                     message: id,
                     result: Err("This message has no downloadable file".to_owned()),
                 });
-                return;
+                return false;
             };
         // Keep metadata needed for one media re-upload request and retry.
         let media_key = base
@@ -4022,6 +4111,7 @@ impl Worker {
             };
             let _ = commands.send(Command::Downloaded { chat, id, result });
         });
+        true
     }
 
     /// Saves picked attachments: into the user's Downloads folder, or wherever
@@ -4135,7 +4225,7 @@ impl Worker {
             } else {
                 // The copy happens when the download lands.
                 self.save_targets.insert((chat.clone(), id.clone()), target);
-                self.download(chat.clone(), id);
+                let _ = self.download(chat.clone(), id);
             }
         }
     }
@@ -4287,7 +4377,7 @@ impl Worker {
             Ok(list) => {
                 for (chat, id) in list {
                     if self.sticker_downloads.insert((chat.clone(), id.clone())) {
-                        self.download(chat, id);
+                        let _ = self.download(chat, id);
                     }
                 }
             }
@@ -6777,6 +6867,8 @@ mod receipt_tests {
             poll_decrypting: 0,
             poll_history: Default::default(),
             poll_sending: HashSet::new(),
+            prefetch: prefetch::State::default(),
+            prefetch_older: HashSet::new(),
         };
         (worker, events_rx, inbox, wa_events)
     }

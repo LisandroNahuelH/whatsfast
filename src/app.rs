@@ -494,6 +494,7 @@ impl App {
             notifications: Default::default(),
         };
         app.player.set_speed(app.settings.voice_speed);
+        app.sync_prefetch();
         app
     }
 
@@ -1531,6 +1532,7 @@ impl App {
             self.settings.last_chat = Some(id);
             self.mark_settings_dirty();
         }
+        self.sync_prefetch();
     }
 
     /// Returns keyboard focus to the open conversation when no search or
@@ -1836,6 +1838,16 @@ impl App {
         self.settings_dirty = true;
     }
 
+    fn sync_prefetch(&mut self) {
+        self.backend.send(Command::SetHistoryPrefetch {
+            mode: self.settings.history_prefetch,
+            focused: self
+                .open_chat
+                .clone()
+                .or_else(|| self.settings.last_chat.clone()),
+        });
+    }
+
     fn save_settings(&mut self) {
         self.settings_dirty = false;
         self.last_settings_save = Instant::now();
@@ -1990,6 +2002,7 @@ impl App {
                 self.reaction_target = None;
                 self.reaction_anchor = None;
                 self.emoji_jump = None;
+                self.sync_prefetch();
             }
             Action::SendText {
                 chat,
@@ -2663,6 +2676,11 @@ impl App {
                 self.settings.custom_theme_cache = None;
                 self.mark_settings_dirty();
                 self.apply_theme(ctx);
+            }
+            Action::SetHistoryPrefetch(mode) => {
+                self.settings.history_prefetch = mode;
+                self.mark_settings_dirty();
+                self.sync_prefetch();
             }
             Action::SetCustomTheme(filename) => {
                 if let Some(theme) = self.custom_themes.find(&filename) {

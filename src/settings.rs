@@ -25,6 +25,27 @@ impl ThemeChoice {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HistoryPrefetch {
+    Off,
+    Focused,
+    #[default]
+    RecentAndPinned,
+}
+
+impl HistoryPrefetch {
+    pub const ALL: [HistoryPrefetch; 3] = [Self::Off, Self::Focused, Self::RecentAndPinned];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Focused => "This chat",
+            Self::RecentAndPinned => "Recent and pinned",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -88,6 +109,8 @@ pub struct Settings {
     /// Hide the sidebar outright instead of narrowing it to the chat pictures.
     #[serde(default)]
     pub hide_sidebar_fully: bool,
+    /// Slowly fetch older phone history and files in the background.
+    pub history_prefetch: HistoryPrefetch,
 }
 
 fn default_true() -> bool {
@@ -123,6 +146,7 @@ impl Default for Settings {
             ask_where_to_save: false,
             voice_speed: 1.0,
             hide_sidebar_fully: false,
+            history_prefetch: HistoryPrefetch::RecentAndPinned,
         }
     }
 }
@@ -199,6 +223,7 @@ mod tests {
         assert!(parsed.enter_sends);
         assert!(parsed.check_for_updates);
         assert!(parsed.download_updates_automatically);
+        assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
     }
 
     #[test]

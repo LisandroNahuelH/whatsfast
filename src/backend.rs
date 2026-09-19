@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 
 use crate::model::{Chat, ChatId, Contact, Gif, GifError, Message, PollDraft, StickerPack};
 use crate::paths::AppDirs;
+use crate::settings::HistoryPrefetch;
 
 // Re-exported so the picker can detect pasted Signal pack links.
 mod read_sync;
@@ -224,6 +225,11 @@ pub enum Command {
     },
     /// Requests messages before the archive's earliest message.
     FetchOlder(ChatId),
+    /// Background history mode and the chat the user last opened.
+    SetHistoryPrefetch {
+        mode: HistoryPrefetch,
+        focused: Option<ChatId>,
+    },
     Download {
         chat: ChatId,
         message: String,

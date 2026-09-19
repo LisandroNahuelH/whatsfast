@@ -575,6 +575,29 @@ impl Archive {
         rows.collect()
     }
 
+    /// Oldest attachment in `chat` with no local file and size at most `max_size`.
+    pub fn undownloaded_media(
+        &self,
+        chat: &str,
+        max_size: u64,
+        limit: usize,
+    ) -> Result<Vec<String>> {
+        let mut statement = self.connection.prepare(
+            "SELECT id FROM messages
+             WHERE chat = ?1
+               AND json_extract(content, '$.media.size') IS NOT NULL
+               AND json_extract(content, '$.media.size') <= ?2
+               AND (json_extract(content, '$.media.path') IS NULL
+                    OR json_extract(content, '$.media.path') = '')
+             ORDER BY timestamp ASC, rowid ASC
+             LIMIT ?3",
+        )?;
+        let rows = statement.query_map(params![chat, max_size as i64, limit as i64], |row| {
+            row.get(0)
+        })?;
+        rows.collect()
+    }
+
     /// Stores a privacy id mapping and carries early mute/pin sync to the
     /// canonical chat. Returns whether that chat's preferences were touched.
     pub fn put_lid(&self, lid: &str, pn: &str) -> Result<bool> {
@@ -2199,5 +2222,32 @@ mod media_path_tests {
             .clear_media_path("a@s.whatsapp.net", "p1")
             .expect("cleared");
         assert!(archive.media_paths().expect("lists").is_empty());
+    }
+
+    #[test]
+    fn undownloaded_media_skips_filed_and_oversize_rows() {
+        let archive = Archive::in_memory().expect("opens");
+        archive.ensure_chat("a@s.whatsapp.net", "A").expect("chat");
+        archive
+            .insert_message(&picture("p1"), None)
+            .expect("inserted");
+        let mut huge = picture("p2");
+        huge.timestamp = 2;
+        if let Content::Image { media, .. } = &mut huge.content {
+            media.size = 65 * 1024 * 1024;
+        }
+        archive.insert_message(&huge, None).expect("inserted");
+        let mut filed = picture("p3");
+        filed.timestamp = 3;
+        if let Content::Image { media, .. } = &mut filed.content {
+            media.path = Some(std::path::PathBuf::from("/tmp/p3.jpg"));
+        }
+        archive.insert_message(&filed, None).expect("inserted");
+        assert_eq!(
+            archive
+                .undownloaded_media("a@s.whatsapp.net", 64 * 1024 * 1024, 8)
+                .expect("listed"),
+            vec!["p1".to_owned()]
+        );
     }
 }

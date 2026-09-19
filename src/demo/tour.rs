@@ -556,6 +556,7 @@ impl Tour {
 mod tests {
     use super::*;
     use crate::model::{Dialog, PickerTab};
+    use crate::settings::HistoryPrefetch;
 
     fn frame(app: &mut App, tour: &mut Tour, ctx: &egui::Context, events: Vec<Event>) {
         let input = egui::RawInput {
@@ -687,6 +688,27 @@ mod tests {
         click(&mut app, &mut tour, &ctx, "Follow system");
         assert!(app.settings.custom_theme.is_none());
         assert_eq!(app.settings.theme, ThemeChoice::System);
+    }
+
+    #[test]
+    fn the_history_prefetch_dropdown_lists_the_three_modes() {
+        let mut app = super::super::tests::app();
+        app.page = Page::Settings;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        click(&mut app, &mut tour, &ctx, "Recent and pinned");
+        for name in ["Off", "This chat", "Recent and pinned"] {
+            assert!(
+                tour.labels.contains_key(name),
+                "missing history prefetch choice {name}"
+            );
+        }
+        click(&mut app, &mut tour, &ctx, "This chat");
+        assert_eq!(app.settings.history_prefetch, HistoryPrefetch::Focused);
     }
 
     #[test]

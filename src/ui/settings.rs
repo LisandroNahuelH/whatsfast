@@ -117,6 +117,35 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(ui, app, "Send read receipts", receipts_note, |settings| &mut settings.send_read_receipts);
                     toggle(ui, app, "Show when you are typing", "", |settings| &mut settings.send_typing);
                     toggle(ui, app, "Download attachments automatically", "Download pictures, videos, voice messages, and documents up to 64 MB when they enter view. When off, click a file to download it.", |settings| &mut settings.auto_download);
+                    widgets::setting_row(
+                        ui,
+                        &palette,
+                        "Download older history in the background",
+                        "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned.",
+                        |ui| {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                                let selected = app.settings.history_prefetch.label();
+                                let response = egui::ComboBox::from_id_salt("history_prefetch")
+                                    .selected_text(" ")
+                                    .width(200.0_f32.min(ui.available_width()))
+                                    .show_ui(ui, |ui| {
+                                        for choice in crate::settings::HistoryPrefetch::ALL {
+                                            if theme_option(ui, &palette, choice.label(), app.settings.history_prefetch == choice) {
+                                                app.actions.push(Action::SetHistoryPrefetch(choice));
+                                            }
+                                        }
+                                    });
+                                let rect = response.response.rect;
+                                let text = widgets::line(ui, selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
+                                text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
+                                response.response.widget_info(|| {
+                                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Download older history in the background");
+                                    info.current_text_value = Some(selected.to_owned());
+                                    info
+                                });
+                            });
+                        },
+                    );
                     toggle(ui, app, "Show sender pictures in every chat", "WhatsApp shows them in groups only.", |settings| &mut settings.show_sender_pictures);
                     toggle(ui, app, "Names from your address book", "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app.", |settings| &mut settings.names_from_contacts);
                     toggle(ui, app, "Save contacts to the phone's address book", "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way.", |settings| &mut settings.save_contacts_to_phone);
