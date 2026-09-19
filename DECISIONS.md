@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Update check is every 10 minutes while we prove the installer path | A daily interval hides a failed GitHub download until the next day | 24-hour `CHECK_INTERVAL` |
 | 2026-09-19 | Sidebar split is a 1-physical-pixel hairline on the chat panel | `outline` on the panel edge vanished under CentralPanel and matched the sidebar fill | 1px `palette.outline` vline on the SidePanel |
 | 2026-09-19 | Each wallpaper family has three doodles; Next wallpaper steps the slot | One PNG per colour felt static; Auto keeps the family while the index wraps | One PNG per family, family-only Settings names |
 | 2026-09-19 | Empty composer is 35% taller, first line centered, 20% more gap under the bubble | A one-line field felt tight against the window; extra height and inset give a calmer typing band without changing send keys | One-line composer flush to an 8px bottom inset |
