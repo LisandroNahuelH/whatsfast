@@ -11,7 +11,7 @@ Rust + [egui](https://github.com/emilk/egui). Protocol: [whatsapp-rust](https://
 <br />
 
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%26%2011-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/LisandroNahuelH/whatsfast/releases)
-[![Latest release](https://img.shields.io/github/v/release/LisandroNahuelH/whatsfast?style=for-the-badge&color=00a884)](https://github.com/LisandroNahuelH/whatsfast/releases)
+[![Latest release](https://img.shields.io/github/v/release/LisandroNahuelH/whatsfast?style=for-the-badge&color=E85D04)](https://github.com/LisandroNahuelH/whatsfast/releases)
 [![Rust](https://img.shields.io/badge/Rust-egui-DEA584?style=for-the-badge&logo=rust&logoColor=000)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-1b4332?style=for-the-badge)](LICENSE)
 [![Native](https://img.shields.io/badge/Engine-native%20%7C%20no%20Chromium-0b1c17?style=for-the-badge)](#install-windows)
@@ -19,7 +19,7 @@ Rust + [egui](https://github.com/emilk/egui). Protocol: [whatsapp-rust](https://
 <br />
 
 <a href="https://github.com/LisandroNahuelH/whatsfast/releases">
-  <img src="https://img.shields.io/badge/Download_installer-GitHub_Releases-00a884?style=for-the-badge&logo=github&logoColor=white" alt="Download the Windows installer from GitHub Releases" />
+  <img src="https://img.shields.io/badge/Download_installer-GitHub_Releases-E85D04?style=for-the-badge&logo=github&logoColor=white" alt="Download the Windows installer from GitHub Releases" />
 </a>
 
 <br />
