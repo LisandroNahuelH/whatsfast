@@ -9,6 +9,68 @@ use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
 const HEADER: &[u8; 16] = b"SQLite format 3\0";
+const SERVICE: &str = "rocks.whatsfast.WhatsFast";
+const LEGACY_SERVICE: &str = "rocks.zapfast.ZapFast";
+const LEGACY_APP_NAMES: &[&str] = &["zapfast", "fastwhatsapp", "fastsapp"];
+
+fn identity_for_dir(dir: &Path) -> Result<String> {
+    let resolved = match dir.canonicalize() {
+        Ok(path) => path,
+        Err(_) => dir.to_path_buf(),
+    };
+    let digest = Sha256::digest(resolved.as_os_str().as_encoded_bytes());
+    Ok(format!(
+        "archive-{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+}
+
+fn legacy_state_dir(name: &str) -> Option<std::path::PathBuf> {
+    let project = directories::ProjectDirs::from("me", "paolino", name)?;
+    Some(
+        project
+            .state_dir()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_else(|| project.data_local_dir().to_path_buf()),
+    )
+}
+
+fn secret_to_key(secret: Vec<u8>) -> Result<Zeroizing<[u8; 32]>> {
+    ensure!(
+        secret.len() == 32,
+        "The archive key in the OS keyring is invalid"
+    );
+    let mut key = Zeroizing::new([0; 32]);
+    key.copy_from_slice(&secret);
+    Ok(key)
+}
+
+fn try_legacy_archive_key(
+    store: &dyn keyring_core::api::CredentialStoreApi,
+    path: &Path,
+) -> Result<Option<Zeroizing<[u8; 32]>>> {
+    for name in LEGACY_APP_NAMES {
+        let Some(legacy_state) = legacy_state_dir(name) else {
+            continue;
+        };
+        let identity = identity_for_dir(&legacy_state)?;
+        let entry = match store.build(LEGACY_SERVICE, &identity, None) {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let Ok(secret) = entry.get_secret() else {
+            continue;
+        };
+        let key = secret_to_key(secret)?;
+        if keyed(path, &*key).is_ok() {
+            return Ok(Some(key));
+        }
+    }
+    Ok(None)
+}
 
 fn plaintext(path: &Path) -> Result<bool> {
     let mut file = match fs::File::open(path) {
@@ -27,46 +89,55 @@ fn plaintext(path: &Path) -> Result<bool> {
 pub(super) fn key_for(path: &Path) -> Result<Zeroizing<[u8; 32]>> {
     let parent = path.parent().context("Archive has no parent directory")?;
     fs::create_dir_all(parent)?;
-    // Separate profiles must not overwrite each other's keys. The credential
-    // label contains a digest, never a user path, phone number or message data.
-    let digest = Sha256::digest(parent.canonicalize()?.as_os_str().as_encoded_bytes());
-    let identity = format!(
-        "archive-{}",
-        digest
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    );
+    let identity = identity_for_dir(parent)?;
     #[cfg(target_os = "linux")]
-    let store = zbus_secret_service_keyring_store::Store::new();
+    {
+        let store = zbus_secret_service_keyring_store::Store::new()
+            .context("Unlock your OS keyring and restart WhatsFast")?;
+        let entry = store
+            .build(SERVICE, &identity, None)
+            .context("The OS keyring could not open WhatsFast's archive key")?;
+        key_from_entry(path, &entry, store.as_ref())
+    }
     #[cfg(target_os = "macos")]
-    let store = apple_native_keyring_store::keychain::Store::new();
+    {
+        let store = apple_native_keyring_store::keychain::Store::new()
+            .context("Unlock your OS keyring and restart WhatsFast")?;
+        let entry = store
+            .build(SERVICE, &identity, None)
+            .context("The OS keyring could not open WhatsFast's archive key")?;
+        key_from_entry(path, &entry, store.as_ref())
+    }
     #[cfg(windows)]
-    let store = windows_native_keyring_store::Store::new();
-    let store = store.context("Unlock your OS keyring and restart WhatsFast")?;
-    let entry = store
-        .build("rocks.whatsfast.WhatsFast", &identity, None)
-        .context("The OS keyring could not open WhatsFast's archive key")?;
-    key_from_entry(path, &entry)
+    {
+        let store = windows_native_keyring_store::Store::new()
+            .context("Unlock your OS keyring and restart WhatsFast")?;
+        let entry = store
+            .build(SERVICE, &identity, None)
+            .context("The OS keyring could not open WhatsFast's archive key")?;
+        key_from_entry(path, &entry, store.as_ref())
+    }
 }
 
-fn key_from_entry(path: &Path, entry: &keyring_core::Entry) -> Result<Zeroizing<[u8; 32]>> {
+fn key_from_entry(
+    path: &Path,
+    entry: &keyring_core::Entry,
+    store: &dyn keyring_core::api::CredentialStoreApi,
+) -> Result<Zeroizing<[u8; 32]>> {
     match entry.get_secret() {
-        Ok(secret) => {
-            let secret = Zeroizing::new(secret);
-            ensure!(
-                secret.len() == 32,
-                "The archive key in the OS keyring is invalid"
-            );
-            let mut key = Zeroizing::new([0; 32]);
-            key.copy_from_slice(&secret);
-            Ok(key)
-        }
+        Ok(secret) => secret_to_key(secret),
         Err(keyring_core::Error::NoEntry) => {
-            ensure!(
-                plaintext(path)?,
-                "The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed"
-            );
+            if !plaintext(path)? {
+                if let Some(legacy) = try_legacy_archive_key(store, path)? {
+                    entry
+                        .set_secret(legacy.as_ref())
+                        .context("Could not save the migrated archive key in the OS keyring")?;
+                    return Ok(legacy);
+                }
+                anyhow::bail!(
+                    "The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed"
+                );
+            }
             let mut key = Zeroizing::new([0; 32]);
             getrandom::fill(key.as_mut()).context("Could not generate an archive key")?;
             entry
@@ -217,8 +288,8 @@ mod tests {
         let path = directory.path().join("archive.db");
         let store = keyring_core::mock::Store::new().unwrap();
         let entry = store.build("whatsfast-test", "archive", None).unwrap();
-        let key = key_from_entry(&path, &entry).unwrap();
-        assert_eq!(*key, *key_from_entry(&path, &entry).unwrap());
+        let key = key_from_entry(&path, &entry, store.as_ref()).unwrap();
+        assert_eq!(*key, *key_from_entry(&path, &entry, store.as_ref()).unwrap());
         let connection = open(&path, &key).unwrap();
         connection
             .execute_batch(
@@ -229,7 +300,7 @@ mod tests {
         let original = fs::read(&path).unwrap();
         entry.delete_credential().unwrap();
         assert!(
-            key_from_entry(&path, &entry)
+            key_from_entry(&path, &entry, store.as_ref())
                 .unwrap_err()
                 .to_string()
                 .contains("missing")
@@ -241,7 +312,7 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), original);
         entry.set_secret(&[1; 12]).unwrap();
         assert!(
-            key_from_entry(&path, &entry)
+            key_from_entry(&path, &entry, store.as_ref())
                 .unwrap_err()
                 .to_string()
                 .contains("invalid")
@@ -254,7 +325,7 @@ mod tests {
             std::io::Error::other("locked"),
         )));
         assert!(
-            key_from_entry(&path, &entry)
+            key_from_entry(&path, &entry, store.as_ref())
                 .unwrap_err()
                 .to_string()
                 .contains("Unlock")
