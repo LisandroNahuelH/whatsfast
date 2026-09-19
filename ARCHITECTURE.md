@@ -24,7 +24,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 - **`src/app.rs`** — Applies actions after each frame.
 - **`src/backend.rs` / `src/backend/worker.rs`** — Tokio worker thread; owns
   whatsapp-rust `Bot`, archive, downloads, profile pictures. Talks to UI via
-  `Command` and `Event`.
+  `Command` and `Event`. Serial `Command::Forward` keeps a queue and starts
+  the next send only after `Command::Sent` writes `Delivery::Sent` (first
+  tick) or `Failed`; parallel batches still use `forward_batch`.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
