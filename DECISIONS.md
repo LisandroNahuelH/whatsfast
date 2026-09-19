@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | README hero uses GitHub HTML, shields, a banner SVG, and a synthetic `--demo-shot` | Visitors need a visual front door; ZapFast Linux charts are not WhatsFast Windows facts | Plain-text README only |
 | 2026-09-19 | Mark as unread is a local `marked_unread` flag and an empty sidebar dot | Faking `unread = 1` would show a number; the protocol is not used for this reminder | — |
 | 2026-09-19 | Serial forward waits for `Delivery::Sent` (first tick) before the next send | `send_message_with_options` returns before the worker writes the tick; `Command::Sent` is that write | Awaiting `send_outgoing` then starting the next job at once |
 | 2026-09-19 | End each coding turn with `cargo build --locked` (debug) | Incremental rebuild so `target/debug/whatsfast.exe` is ready to try at once | Waiting for `--release` or a later `cargo run` that may only surface the installer copy |
