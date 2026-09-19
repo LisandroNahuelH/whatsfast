@@ -38,6 +38,148 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     );
 }
 
+/// Width of the sidebar when it narrows to its bones.
+const COMPACT_WIDTH: f32 = 72.0;
+
+/// Height of one chat picture in the narrow sidebar.
+const COMPACT_ROW: f32 = 56.0;
+
+/// The sidebar narrowed to its bones: your picture, search, archived chats,
+/// and one picture per chat. Hiding the bar then never traps a user who does
+/// not know the shortcut.
+pub fn show_compact(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let panel = egui::Panel::left("chats-compact")
+        .resizable(false)
+        .default_size(COMPACT_WIDTH)
+        .size_range(COMPACT_WIDTH..=COMPACT_WIDTH)
+        .show_separator_line(false)
+        .frame(Frame::new().fill(palette.panel).inner_margin(Margin::ZERO));
+    let response = panel.show(ui, |ui| {
+        compact_header(app, ui);
+        compact_list(app, ui);
+    });
+    // Separate the panel from the conversation.
+    let rect = response.response.rect;
+    ui.painter().vline(
+        rect.right(),
+        rect.y_range(),
+        egui::Stroke::new(1.0, palette.outline),
+    );
+}
+
+/// Your picture, search, and archived chats, stacked in the narrow sidebar.
+fn compact_header(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let top = if theme::macos_chrome(ui.ctx()) {
+        theme::traffic_light_inset(ui.ctx()) + 8.0
+    } else {
+        10.0
+    };
+    Frame::new()
+        .inner_margin(Margin {
+            left: 0,
+            right: 0,
+            top: top as i8,
+            bottom: 6,
+        })
+        .show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                let me = app.me.clone().unwrap_or_default();
+                let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
+                let picture = app.avatar(&me);
+                let tooltip = match &app.me_about {
+                    Some(about) => format!("{name}\n{about}"),
+                    None => name.clone(),
+                };
+                let response = widgets::avatar(ui, &palette, &name, &me, 34.0, picture.as_deref())
+                    .interact(Sense::click())
+                    .on_hover_text(tooltip)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if response.clicked() {
+                    app.actions.push(Action::ToggleSettings);
+                }
+                ui.add_space(2.0);
+                if theme::icon_button(
+                    ui,
+                    Icon::PanelLeft,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Show the chat list (Ctrl+B)",
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::ToggleSidebar);
+                }
+                if theme::icon_button(
+                    ui,
+                    Icon::Search,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Search (Ctrl+F)",
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::FocusSearch);
+                }
+                if theme::icon_button(
+                    ui,
+                    Icon::Archive,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Archived chats",
+                )
+                .clicked()
+                {
+                    app.sidebar_visible = true;
+                    app.show_archived = true;
+                }
+            });
+        });
+}
+
+/// One picture per chat, with no names: enough to get back into a chat.
+fn compact_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
+    egui::ScrollArea::vertical()
+        .id_salt("chats-compact")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for chat in &chats {
+                let title = app.chat_title(chat);
+                let picture = app.avatar(&chat.id);
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), COMPACT_ROW), Sense::click());
+                if ui.is_rect_visible(rect) {
+                    if response.hovered() {
+                        ui.painter()
+                            .rect_filled(rect.shrink(4.0), 10.0, palette.surface_hover);
+                    }
+                    let avatar_rect = Rect::from_center_size(rect.center(), Vec2::splat(44.0));
+                    widgets::paint_avatar(
+                        ui,
+                        &palette,
+                        avatar_rect,
+                        &title,
+                        &chat.id,
+                        picture.as_deref(),
+                    );
+                }
+                if response
+                    .on_hover_text(&title)
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .clicked()
+                {
+                    app.actions.push(Action::OpenChat(chat.id.clone()));
+                }
+            }
+        });
+}
+
 fn header(app: &mut App, ui: &mut egui::Ui) {
     if theme::macos_chrome(ui.ctx()) {
         macos_header(app, ui);
@@ -632,7 +774,15 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .offset
         .y;
     let pinned = chats.iter().filter(|chat| chat.pinned).count();
-    let finished = pin_gesture(app, ui, list_top, offset, pinned, stride);
+    let finished = pin_gesture(
+        app,
+        ui,
+        list_top,
+        offset,
+        pinned,
+        stride,
+        usize::from(show_archive_row),
+    );
     // The list draws the order a release would write: the held chat sits in
     // the slot under the pointer and the rest close the gap behind it, so the
     // user sees where it lands before letting go.
@@ -721,6 +871,7 @@ fn pin_gesture(
     offset: f32,
     pinned: usize,
     stride: f32,
+    first: usize,
 ) -> bool {
     let Some(mut drag) = app.pin_drag.clone() else {
         return false;
@@ -739,8 +890,7 @@ fn pin_gesture(
     if drag.active
         && let Some(pointer) = pointer
     {
-        let slot = ((pointer.y - top + offset) / stride).floor();
-        drag.to = (slot.max(0.0) as usize).min(pinned.saturating_sub(1));
+        drag.to = pinned_slot(pointer.y, drag.grab_y, top, offset, stride, first, pinned);
     }
     if !down || released {
         if drag.active && drag.to != drag.from {
@@ -795,6 +945,24 @@ fn paint_dragged(
         pos2(rect.left() + 76.0, rect.top() + 14.0),
         palette.text,
     );
+}
+
+/// The pinned slot under the pointer. It measures from the middle of the
+/// carried row, not from the pointer itself, so the row lands where it looks
+/// like it lands. `first` is the archived row, which is not pinned and must
+/// not shift every slot down by one.
+fn pinned_slot(
+    pointer: f32,
+    grab_y: f32,
+    top: f32,
+    offset: f32,
+    stride: f32,
+    first: usize,
+    pinned: usize,
+) -> usize {
+    let carried = pointer - grab_y + theme::ROW_HEIGHT / 2.0;
+    let row = ((carried - top + offset) / stride).floor() - first as f32;
+    (row.max(0.0) as usize).min(pinned.saturating_sub(1))
 }
 
 /// The pinned chats, with the one at `from` moved to `to`, top first.
@@ -1375,6 +1543,57 @@ mod tests {
     use super::*;
     use crate::paths::AppDirs;
     use crate::settings::Settings;
+
+    #[test]
+    fn the_pointer_moves_one_row_to_change_slot() {
+        let stride = theme::ROW_HEIGHT + 6.0;
+        let grab = 34.0;
+        let pinned = 3;
+        // Pressed in the middle of the second pinned row, with the archived
+        // row above it: the slot must read 1, not 2.
+        let pressed = 2.0 * stride + grab;
+        assert_eq!(pinned_slot(pressed, grab, 0.0, 0.0, stride, 1, pinned), 1);
+        // A third of a row up stays where it is.
+        assert_eq!(
+            pinned_slot(pressed - 24.0, grab, 0.0, 0.0, stride, 1, pinned),
+            1
+        );
+        // A full row up is the place before, a full row down the one after.
+        assert_eq!(
+            pinned_slot(pressed - stride, grab, 0.0, 0.0, stride, 1, pinned),
+            0
+        );
+        assert_eq!(
+            pinned_slot(pressed + stride, grab, 0.0, 0.0, stride, 1, pinned),
+            2
+        );
+        // Without the archived row the same pointer reads one higher.
+        assert_eq!(pinned_slot(pressed, grab, 0.0, 0.0, stride, 0, pinned), 2);
+    }
+
+    #[test]
+    fn the_hidden_sidebar_keeps_a_way_back_unless_the_setting_says_otherwise() {
+        let root = std::env::temp_dir().join(format!(
+            "zapfast-compact-sidebar-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let (mut app, _events) = App::headless(AppDirs::under(&root), Settings::default());
+        assert!(app.open_chat.is_none());
+        assert!(
+            app.compact_sidebar(),
+            "the rail shows while nothing is open"
+        );
+        app.open_chat = Some("491700000000@s.whatsapp.net".to_owned());
+        assert!(
+            app.compact_sidebar(),
+            "an open chat keeps the rail: the way back is always there"
+        );
+        app.page = crate::model::Page::Settings;
+        assert!(app.compact_sidebar(), "settings keeps the rail");
+        app.settings.hide_sidebar_fully = true;
+        assert!(!app.compact_sidebar(), "the setting hides the bar outright");
+    }
 
     #[test]
     fn moving_a_pinned_chat_rewrites_the_order() {
