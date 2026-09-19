@@ -28,14 +28,17 @@ fn identity_for_dir(dir: &Path) -> Result<String> {
     ))
 }
 
-fn legacy_state_dir(name: &str) -> Option<std::path::PathBuf> {
-    let project = directories::ProjectDirs::from("me", "paolino", name)?;
-    Some(
-        project
-            .state_dir()
-            .map(std::path::Path::to_path_buf)
-            .unwrap_or_else(|| project.data_local_dir().to_path_buf()),
-    )
+fn legacy_state_roots(name: &str) -> Vec<std::path::PathBuf> {
+    let Some(project) = directories::ProjectDirs::from("me", "paolino", name) else {
+        return Vec::new();
+    };
+    let root = crate::paths::state_root(&project);
+    let mut dirs = vec![root.clone()];
+    let local = project.data_local_dir().to_path_buf();
+    if root != local {
+        dirs.push(local);
+    }
+    dirs
 }
 
 fn secret_to_key(secret: Vec<u8>) -> Result<Zeroizing<[u8; 32]>> {
@@ -52,11 +55,26 @@ fn try_legacy_archive_key(
     store: &dyn keyring_core::api::CredentialStoreApi,
     path: &Path,
 ) -> Result<Option<Zeroizing<[u8; 32]>>> {
+    let mut dirs = Vec::new();
+    if let Some(parent) = path.parent() {
+        dirs.push(parent.to_path_buf());
+        if let Ok(canonical) = parent.canonicalize() {
+            for name in LEGACY_APP_NAMES {
+                let replaced: String = canonical.to_string_lossy().replace("whatsfast", name);
+                dirs.push(std::path::PathBuf::from(replaced));
+            }
+        }
+    }
     for name in LEGACY_APP_NAMES {
-        let Some(legacy_state) = legacy_state_dir(name) else {
-            continue;
+        dirs.extend(legacy_state_roots(name));
+    }
+    dirs.sort();
+    dirs.dedup();
+    for dir in dirs {
+        let identity = match identity_for_dir(&dir) {
+            Ok(identity) => identity,
+            Err(_) => continue,
         };
-        let identity = identity_for_dir(&legacy_state)?;
         let entry = match store.build(LEGACY_SERVICE, &identity, None) {
             Ok(entry) => entry,
             Err(_) => continue,

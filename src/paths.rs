@@ -7,6 +7,19 @@ use std::path::{Path, PathBuf};
 
 use directories::ProjectDirs;
 
+/// Session and archive live under `data/` on Windows when that folder already exists.
+pub(crate) fn state_root(project: &ProjectDirs) -> PathBuf {
+    let local = project.data_local_dir().to_path_buf();
+    let data = local.join("data");
+    if data.is_dir() {
+        return data;
+    }
+    project
+        .state_dir()
+        .map(|path| path.to_path_buf())
+        .unwrap_or(local)
+}
+
 #[derive(Clone, Debug)]
 pub struct AppDirs {
     pub config: PathBuf,
@@ -34,10 +47,7 @@ impl AppDirs {
         let project = ProjectDirs::from("me", "paolino", name)?;
         Some(Self {
             config: project.config_dir().to_path_buf(),
-            state: project
-                .state_dir()
-                .map(|path| path.to_path_buf())
-                .unwrap_or_else(|| project.data_local_dir().to_path_buf()),
+            state: state_root(&project),
             cache: project.cache_dir().to_path_buf(),
         })
     }
