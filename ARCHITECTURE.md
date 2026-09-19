@@ -28,7 +28,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   the next send only after `Command::Sent` writes `Delivery::Sent` (first
   tick) or `Failed`; parallel batches still use `forward_batch`.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
-  link-time history sync.
+  link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
+  real `unread` counts still come from the phone. Opening the chat or a new
+  incoming message clears the flag.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 
 See root `AGENTS.md` for invariants (privacy, polls, receipts, selection, updates).
