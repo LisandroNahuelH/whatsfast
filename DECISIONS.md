@@ -4,6 +4,8 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | One-click update toast; download auto ON by default | Wizard users update with one click; last chat already restores | Modal Update WhatsFast + explicit Restart |
+| 2026-09-19 | Chat photos open in an in-app viewer | Click must show the photo here, with zoom and pan. The system viewer stays on **Open file**, stickers, and video | `Action::OpenFile` on photo click |
 | 2026-09-19 | No GitHub Actions; Actions disabled in repo settings | Solo dev on PC; GH CI only slowed pushes | CI + Release workflows |
 | 2026-09-19 | Branch protection removed | No required checks without Actions | protection on `main` |
 | 2026-09-19 | Removed crmne Actions (triage, docs Pages, flatpak, packaging) | WhatsFast is not the upstream project; CI = one Windows job + Release on tags | — |
