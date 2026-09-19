@@ -17,7 +17,7 @@ Rebrand pass after pulling changes from upstream (crmne/zapfast or whatsapp-rust
 | Icons | `packaging/icons/whatsfast-1024.png`, `packaging/windows/whatsfast.ico`. |
 | Portable marker | `packaging/whatsfast-portable.txt`. |
 | Installer | `packaging/windows/whatsfast.iss`. |
-| Release artifacts | `whatsfast-v*-<target>.zip`, `whatsfast-*-setup.exe`. |
+| Release artifacts | `whatsfast-v*-*-pc-windows-msvc-setup.exe` only on GitHub Releases. |
 | Homepage / repo URLs | `LisandroNahuelH/whatsfast` only in this fork. |
 
 ## After merge
