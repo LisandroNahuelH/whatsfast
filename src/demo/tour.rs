@@ -702,13 +702,13 @@ mod tests {
             frame(&mut app, &mut tour, &ctx, Vec::new());
         }
         click(&mut app, &mut tour, &ctx, "Recent and pinned");
-        for name in ["Off", "This chat", "Recent and pinned"] {
+        for name in ["Off", "Current Chat", "Recent and pinned"] {
             assert!(
                 tour.labels.contains_key(name),
                 "missing history prefetch choice {name}"
             );
         }
-        click(&mut app, &mut tour, &ctx, "This chat");
+        click(&mut app, &mut tour, &ctx, "Current Chat");
         assert_eq!(app.settings.history_prefetch, HistoryPrefetch::Focused);
         assert!(
             tour.labels.keys().any(|text| text.contains("30 days")),

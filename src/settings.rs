@@ -40,8 +40,18 @@ impl HistoryPrefetch {
     pub fn label(self) -> &'static str {
         match self {
             Self::Off => "Off",
-            Self::Focused => "This chat",
+            Self::Focused => "Current Chat",
             Self::RecentAndPinned => "Recent and pinned",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            Self::Off => "Do not fetch older messages in the background.",
+            Self::Focused => "Fetch older messages and files for the open chat only.",
+            Self::RecentAndPinned => {
+                "Fetch older history for pinned chats and the ten most recent chats."
+            }
         }
     }
 }
@@ -311,6 +321,14 @@ mod tests {
         assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
         assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Auto);
         assert_eq!(parsed.chat_wallpaper_index, 0);
+    }
+
+    #[test]
+    fn history_prefetch_names_the_open_chat_current_chat() {
+        assert_eq!(HistoryPrefetch::Focused.label(), "Current Chat");
+        assert!(HistoryPrefetch::Off.hint().contains("Do not fetch"));
+        assert!(HistoryPrefetch::Focused.hint().contains("open chat"));
+        assert!(HistoryPrefetch::RecentAndPinned.hint().contains("pinned"));
     }
 
     #[test]

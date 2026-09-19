@@ -4,7 +4,9 @@ use egui::{CornerRadius, Frame, Margin, Order, Sense, pos2, vec2};
 
 use crate::app::App;
 use crate::model::{Action, Dialog, Page};
-use crate::settings::{ChatWallpaper, ThemeChoice, WALLPAPER_SLOTS, WallpaperFamily};
+use crate::settings::{
+    ChatWallpaper, HistoryPrefetch, ThemeChoice, WALLPAPER_SLOTS, WallpaperFamily,
+};
 use crate::theme::{self, Icon};
 
 use super::wallpaper;
@@ -180,12 +182,22 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         |ui| {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
                                 let selected = app.settings.history_prefetch.label();
+                                let mut hint = None;
                                 let response = egui::ComboBox::from_id_salt("history_prefetch")
                                     .selected_text(" ")
                                     .width(200.0_f32.min(ui.available_width()))
                                     .show_ui(ui, |ui| {
-                                        for choice in crate::settings::HistoryPrefetch::ALL {
-                                            if theme_option(ui, &palette, choice.label(), app.settings.history_prefetch == choice) {
+                                        for choice in HistoryPrefetch::ALL {
+                                            let row = wallpaper_option(
+                                                ui,
+                                                &palette,
+                                                choice.label(),
+                                                app.settings.history_prefetch == choice,
+                                            );
+                                            if row.hovered() {
+                                                hint = Some(choice.hint());
+                                            }
+                                            if row.clicked() {
                                                 app.actions.push(Action::SetHistoryPrefetch(choice));
                                             }
                                         }
@@ -198,6 +210,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                     info.current_text_value = Some(selected.to_owned());
                                     info
                                 });
+                                show_prefetch_hint(ui, app, hint);
                             });
                         },
                     );
@@ -418,10 +431,7 @@ fn wallpaper_option(
     response
 }
 
-fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(WallpaperFamily, u8)>) {
-    let Some((family, slot)) = preview else {
-        return;
-    };
+fn settings_hover_slot(ui: &egui::Ui, app: &App, height: f32) -> Option<(f32, egui::Pos2)> {
     let window = ui.ctx().content_rect();
     let sidebar = if app.sidebar_visible {
         app.settings.sidebar_width
@@ -439,11 +449,21 @@ fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(Wallpap
         gap.min(window.width() * 0.32).clamp(160.0, 420.0)
     };
     if width < 80.0 {
-        return;
+        return None;
     }
-    let height = width * 9.0 / 16.0;
     let top = (window.top() + 72.0).min(window.bottom() - height - 16.0);
-    let origin = pos2(col_right + 8.0, top.max(window.top() + 8.0));
+    Some((width, pos2(col_right + 8.0, top.max(window.top() + 8.0))))
+}
+
+fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(WallpaperFamily, u8)>) {
+    let Some((family, slot)) = preview else {
+        return;
+    };
+    let height_guess = 160.0 * 9.0 / 16.0;
+    let Some((width, origin)) = settings_hover_slot(ui, app, height_guess) else {
+        return;
+    };
+    let height = width * 9.0 / 16.0;
     egui::Area::new(egui::Id::new("wallpaper-preview"))
         .order(Order::Foreground)
         .fixed_pos(origin)
@@ -458,6 +478,33 @@ fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(Wallpap
                     let size = vec2(width, height);
                     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
                     wallpaper::paint_in(ui, family, slot, rect);
+                });
+        });
+}
+
+fn show_prefetch_hint(ui: &mut egui::Ui, app: &App, hint: Option<&str>) {
+    let Some(hint) = hint else {
+        return;
+    };
+    let Some((width, origin)) = settings_hover_slot(ui, app, 88.0) else {
+        return;
+    };
+    egui::Area::new(egui::Id::new("prefetch-hint"))
+        .order(Order::Foreground)
+        .fixed_pos(origin)
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            Frame::new()
+                .fill(app.palette.panel)
+                .stroke(egui::Stroke::new(1.0, app.palette.dim))
+                .corner_radius(CornerRadius::same(8))
+                .inner_margin(Margin::symmetric(10, 8))
+                .show(ui, |ui| {
+                    ui.set_max_width(width);
+                    let line =
+                        widgets::line(ui, hint, theme::regular(13.0), app.palette.text, width, 4);
+                    let (rect, _) = ui.allocate_exact_size(line.size(), Sense::hover());
+                    line.paint(ui, rect.min, app.palette.text);
                 });
         });
 }
