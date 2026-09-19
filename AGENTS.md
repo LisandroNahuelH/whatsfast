@@ -25,6 +25,21 @@ Working artifacts go in `AGENTS/`. No `CLAUDE.md`. Push commits directly to
 `main` (solo maintainer). **No GitHub Actions** — run *Definition of done*
 checks only on your PC before push.
 
+## Dev watch (auto rebuild)
+
+When the user asks to start the watcher, auto-build, live rebuild, or
+`cargo watch` for local development: open a terminal in the repo root and
+leave this running (do not wait for it to exit):
+
+```sh
+cargo watch -s "taskkill /IM whatsfast.exe /F 2>nul & cargo run"
+```
+
+If `cargo watch` is missing, `cargo install cargo-watch` first. A second
+`whatsfast.exe` only surfaces the copy that holds the instance port, so
+the command kills every `whatsfast.exe` (including an installer copy)
+then runs the new debug build. Do not use `cargo watch -x run` here.
+
 ## Product boundaries
 
 WhatsFast is a small native client. No browser engine, no telemetry, no hosted
