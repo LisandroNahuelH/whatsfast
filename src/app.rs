@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use crate::audio::{Player, Recorder};
 use crate::backend::{Backend, Command, Event, LinkStatus, Waker};
 use crate::model::{
-    Action, Chat, ChatFilter, ChatId, Contact, Content, Delivery, Dialog, Gif, GifError, Media,
-    MediaState, Message, Page, PickerTab, StickerPack, Toast, ToastKind,
+    Action, Chat, ChatId, Contact, Content, Delivery, Dialog, Gif, GifError, Media, MediaState,
+    Message, Page, PickerTab, StickerPack, Toast, ToastKind,
 };
 use crate::paths::AppDirs;
 use crate::settings::{Settings, ThemeChoice};
@@ -178,6 +178,24 @@ pub struct App {
     pub reaction_anchor: Option<egui::Rect>,
     /// Demo/test: keep this message's context menu open.
     pub open_message_menu: Option<String>,
+    /// Messages picked while the selection bar is up.
+    pub selecting: Option<crate::model::Selecting>,
+    /// Scheduled messages, soonest first, and whether the left panel lists them.
+    pub scheduled: Vec<crate::archive::Scheduled>,
+    pub show_scheduled: bool,
+    /// Starred messages, newest star first, and whether the left panel lists
+    /// them. The three panels (chats, scheduled, starred) share one slot.
+    pub starred: Vec<crate::archive::Starred>,
+    pub show_starred: bool,
+    /// Ids of the starred messages of each chat, for the mark in the
+    /// conversation. Filled when a chat opens and on every confirmed star.
+    pub stars: HashMap<ChatId, HashSet<String>>,
+    /// Draft of the schedule dialog: the day, the month shown, and the time.
+    pub schedule_day: jiff::civil::Date,
+    pub schedule_month: jiff::civil::Date,
+    pub schedule_hour: i8,
+    pub schedule_minute: i8,
+    pub schedule_repeat: crate::schedule::Repeat,
     /// Emoji-grid header to scroll into view.
     pub emoji_jump: Option<&'static str>,
     /// Attachments pending in the composer.
@@ -233,10 +251,6 @@ pub struct App {
     pub pair_phone: String,
     pub sidebar_visible: bool,
     pub show_archived: bool,
-    /// Chat-list filter; applies to the main list, not to search or the archive.
-    pub chat_filter: ChatFilter,
-    /// Chats opened from the Unread list, kept there until the filter changes.
-    unread_kept: HashSet<ChatId>,
     pub toasts: Vec<Toast>,
     pub actions: Vec<Action>,
     /// A newer release than this build, once GitHub has said so.
@@ -348,6 +362,7 @@ impl App {
                 _ => Palette::dark(),
             });
         let open_chat = settings.last_chat.clone();
+        let today = jiff::Zoned::now().date();
         let mut app = Self {
             dirs,
             settings,
@@ -398,6 +413,17 @@ impl App {
             reaction_target: None,
             reaction_anchor: None,
             open_message_menu: None,
+            selecting: None,
+            scheduled: Vec::new(),
+            show_scheduled: false,
+            starred: Vec::new(),
+            show_starred: false,
+            stars: HashMap::new(),
+            schedule_day: today,
+            schedule_month: today,
+            schedule_hour: 9,
+            schedule_minute: 0,
+            schedule_repeat: crate::schedule::Repeat::Once,
             emoji_jump: None,
             pending: Vec::new(),
             player: Player::new(waker.clone()),
@@ -435,8 +461,6 @@ impl App {
             pair_phone: String::new(),
             sidebar_visible: true,
             show_archived: false,
-            chat_filter: ChatFilter::All,
-            unread_kept: HashSet::new(),
             toasts: Vec::new(),
             actions: Vec::new(),
             update: None,
@@ -832,21 +856,13 @@ impl App {
         names.join(", ")
     }
 
-    /// Visible chats filtered by search, archive state, and the chat filter,
-    /// with pinned first.
+    /// Visible chats filtered by search and archive state, with pinned first.
     pub fn visible_chats(&self) -> Vec<&Chat> {
         let needle = crate::util::search_key(self.search.trim());
-        let filtering = needle.is_empty() && !self.show_archived;
         let mut chats: Vec<&Chat> = self
             .chats
             .iter()
             .filter(|chat| chat.archived == self.show_archived || !needle.is_empty())
-            .filter(|chat| {
-                !filtering
-                    || self.chat_filter.matches(chat)
-                    || (self.chat_filter == ChatFilter::Unread
-                        && self.unread_kept.contains(&chat.id))
-            })
             .filter(|chat| {
                 needle.is_empty()
                     || crate::util::search_key(&chat.name).contains(&needle)
@@ -899,14 +915,6 @@ impl App {
 
     pub fn archived_count(&self) -> usize {
         self.chats.iter().filter(|chat| chat.archived).count()
-    }
-
-    /// Unarchived chats with unread messages that a filter would list.
-    pub fn unread_chats(&self, filter: ChatFilter) -> usize {
-        self.chats
-            .iter()
-            .filter(|chat| !chat.archived && chat.unread > 0 && filter.matches(chat))
-            .count()
     }
 
     pub fn unread_total(&self) -> u32 {
@@ -1205,6 +1213,32 @@ impl App {
                     self.actions.push(Action::StartChat { id, name });
                 }
                 Event::Info(message) => self.toast(message),
+                Event::Progress {
+                    key,
+                    message,
+                    finished,
+                } => self.toast_progress(key, message, finished),
+                Event::Scheduled(list) => self.scheduled = list,
+                Event::Stars { chat, ids } => {
+                    self.stars.insert(chat, ids.into_iter().collect());
+                }
+                Event::StarChanged {
+                    chat,
+                    message,
+                    starred,
+                } => {
+                    let ids = self.stars.entry(chat).or_default();
+                    if starred {
+                        ids.insert(message);
+                    } else {
+                        ids.remove(&message);
+                    }
+                    // The open list would otherwise show the old state.
+                    if self.show_starred {
+                        self.backend.send(Command::LoadStarred);
+                    }
+                }
+                Event::StarredList(list) => self.starred = list,
                 Event::UpdateAvailable { version, url } => {
                     let notice = crate::updates::Release { version, url };
                     if self.update.as_ref() != Some(&notice) {
@@ -1409,6 +1443,8 @@ impl App {
             self.reaction_target = None;
             self.reaction_anchor = None;
             self.emoji_jump = None;
+            // A selection belongs to the chat it was made in.
+            self.selecting = None;
             if let Some(previous) = self.open_chat.take() {
                 let draft = std::mem::take(&mut self.composer);
                 // Discard an unfinished edit instead of keeping it as a draft.
@@ -1663,8 +1699,16 @@ impl App {
             typers.retain(|(_, since)| now.duration_since(*since) < TYPING_TIMEOUT);
         }
         self.typing.retain(|_, typers| !typers.is_empty());
-        self.toasts
-            .retain(|toast| toast.created.elapsed() < Duration::from_millis(3200));
+        self.toasts.retain(|toast| {
+            // A progress toast lives while its batch does; 60 seconds without
+            // an update is the backstop for a batch that never closes.
+            let life = if toast.key.is_some() {
+                Duration::from_secs(60)
+            } else {
+                Duration::from_millis(3200)
+            };
+            toast.created.elapsed() < life
+        });
         if self.settings.check_for_updates
             && !self.backend.is_offline()
             && self
@@ -1864,6 +1908,7 @@ impl App {
                 }
             }
             Action::CloseChat => {
+                self.selecting = None;
                 if let Some(chat) = self.open_chat.take() {
                     self.stop_composing(&chat);
                     let draft = std::mem::take(&mut self.composer);
@@ -1963,17 +2008,143 @@ impl App {
             Action::CancelReply => self.reply_to = None,
             Action::Forward {
                 from_chat,
-                message,
+                messages,
                 to_chat,
             } => {
                 self.backend.send(Command::Forward {
                     from_chat,
-                    message,
+                    messages,
                     to_chat,
                     in_order: self.settings.forward_in_order,
                 });
                 self.dialog = None;
                 self.forward_search.clear();
+                self.selecting = None;
+            }
+            Action::StartSelecting { message } => {
+                if let Some(chat) = self.open_chat.clone() {
+                    self.open_message_menu = None;
+                    self.selecting = Some(crate::model::Selecting {
+                        chat,
+                        ids: message.into_iter().collect(),
+                    });
+                }
+            }
+            Action::ToggleSelected { message } => {
+                if let Some(selecting) = self.selecting.as_mut() {
+                    if !selecting.ids.remove(&message) {
+                        selecting.ids.insert(message);
+                    }
+                }
+                if self
+                    .selecting
+                    .as_ref()
+                    .is_some_and(|selecting| selecting.ids.is_empty())
+                {
+                    self.selecting = None;
+                }
+            }
+            Action::ClearSelection => self.selecting = None,
+            Action::SelectAllMessages => {
+                if let Some(chat) = self
+                    .selecting
+                    .as_ref()
+                    .map(|selecting| selecting.chat.clone())
+                {
+                    let ids: std::collections::HashSet<String> = self
+                        .conversations
+                        .get(&chat)
+                        .map(|conversation| {
+                            conversation
+                                .messages
+                                .iter()
+                                .map(|message| message.id.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    if let Some(selecting) = self.selecting.as_mut() {
+                        selecting.ids = ids;
+                    }
+                }
+            }
+            Action::DownloadSelected { chat, messages } => {
+                self.backend.send(Command::SaveMedia {
+                    chat,
+                    messages,
+                    // Without a window there is nothing to hang a dialog on, so
+                    // the batch goes to Downloads.
+                    ask: self.settings.ask_where_to_save && !self.window_hidden,
+                });
+                self.selecting = None;
+            }
+            Action::StarSelected {
+                chat,
+                messages,
+                starred,
+            } => {
+                self.backend.send(Command::SetStar {
+                    chat,
+                    messages,
+                    starred,
+                });
+                self.selecting = None;
+            }
+            Action::ToggleScheduled => {
+                self.show_scheduled = !self.show_scheduled;
+                if self.show_scheduled {
+                    // One panel at a time, so going back always lands on chats.
+                    self.show_archived = false;
+                    self.show_starred = false;
+                    self.backend.send(Command::LoadScheduled);
+                }
+            }
+            Action::ToggleStarred => {
+                self.show_starred = !self.show_starred;
+                if self.show_starred {
+                    self.show_archived = false;
+                    self.show_scheduled = false;
+                    self.backend.send(Command::LoadStarred);
+                }
+            }
+            Action::ToggleSettings => {
+                if self.page == Page::Settings {
+                    // The same button that opened settings closes them, and
+                    // closing lands on the empty window a fresh start shows.
+                    self.page = Page::Chats;
+                    self.open_chat = None;
+                    self.dialog = None;
+                } else {
+                    self.page = Page::Settings;
+                }
+            }
+            Action::CancelScheduled { id } => {
+                self.backend.send(Command::CancelScheduled { id });
+            }
+            Action::ScheduleText {
+                chat,
+                text,
+                kind,
+                hour,
+                minute,
+                weekday,
+                day_of_month,
+                nth,
+                next_at,
+            } => {
+                self.backend.send(Command::ScheduleMessage {
+                    chat,
+                    text,
+                    kind,
+                    hour,
+                    minute,
+                    weekday,
+                    day_of_month,
+                    nth,
+                    next_at,
+                });
+                self.dialog = None;
+                self.composer.clear();
+                self.composer_mentions.clear();
             }
             Action::Edit(id) => {
                 let text = self
@@ -2293,6 +2464,16 @@ impl App {
                     self.new_contact_last.clear();
                     self.new_contact_pending = false;
                 }
+                if matches!(&dialog, Dialog::ScheduleMessage(_)) {
+                    // Start on today, at the next hour, once.
+                    let now = jiff::Zoned::now();
+                    let today = now.date();
+                    self.schedule_day = today;
+                    self.schedule_month = today;
+                    self.schedule_hour = (now.hour() + 1).rem_euclid(24);
+                    self.schedule_minute = 0;
+                    self.schedule_repeat = crate::schedule::Repeat::Once;
+                }
                 self.contact_edit = None;
                 self.dialog = Some(dialog);
             }
@@ -2329,18 +2510,6 @@ impl App {
                 });
             }
             Action::ToggleSidebar => self.sidebar_visible = !self.sidebar_visible,
-            Action::SetChatFilter(filter) => {
-                self.chat_filter = filter;
-                self.unread_kept.clear();
-            }
-            // Reading a chat must not pull its row out from under the pointer.
-            // Only the filtered list sends this: search results and
-            // notifications open chats without keeping them.
-            Action::KeepUnread(id) => {
-                if self.chat_filter == ChatFilter::Unread {
-                    self.unread_kept.insert(id);
-                }
-            }
             Action::FocusSearch => {
                 self.sidebar_visible = true;
                 self.page = Page::Chats;
@@ -2488,8 +2657,39 @@ impl App {
             message: message.into(),
             kind: ToastKind::Info,
             created: Instant::now(),
+            key: None,
         });
         self.toasts.truncate(4);
+    }
+
+    /// Shows a batch's progress in one toast that updates in place: a newer
+    /// message replaces the older one with the same key instead of stacking,
+    /// and the key keeps it alive while the batch runs.
+    pub fn toast_progress(
+        &mut self,
+        key: &'static str,
+        message: impl Into<String>,
+        finished: bool,
+    ) {
+        let message = message.into();
+        match self.toasts.iter_mut().find(|toast| toast.key == Some(key)) {
+            Some(toast) => {
+                toast.message = message;
+                toast.created = Instant::now();
+                if finished {
+                    toast.key = None;
+                }
+            }
+            None => {
+                self.toasts.push(Toast {
+                    message,
+                    kind: ToastKind::Info,
+                    created: Instant::now(),
+                    key: (!finished).then_some(key),
+                });
+                self.toasts.truncate(4);
+            }
+        }
     }
 
     pub fn toast_error(&mut self, message: impl Into<String>) {
@@ -2499,7 +2699,9 @@ impl App {
             message,
             kind: ToastKind::Error,
             created: Instant::now(),
+            key: None,
         });
+        self.toasts.truncate(4);
     }
 
     /// Processes app state shared by windowed and headless modes.
@@ -2909,6 +3111,25 @@ mod tests {
     }
 
     #[test]
+    fn progress_toasts_replace_instead_of_stacking() {
+        let mut app = app();
+        app.toast_progress("forward", "Forwarded 1 of 3", false);
+        app.toast_progress("forward", "Forwarded 2 of 3", false);
+        assert_eq!(app.toasts.len(), 1, "one toast for the whole batch");
+        assert_eq!(app.toasts[0].message, "Forwarded 2 of 3");
+        assert_eq!(app.toasts[0].key, Some("forward"));
+        app.toast_progress("forward", "Forwarded 3 of 3", true);
+        assert_eq!(app.toasts.len(), 1);
+        assert_eq!(
+            app.toasts[0].key, None,
+            "a finished batch lets the toast expire"
+        );
+        // A different batch keeps its own toast.
+        app.toast_progress("star", "Starred 1 of 2", false);
+        assert_eq!(app.toasts.len(), 2);
+    }
+
+    #[test]
     fn failed_poll_requests_keep_the_draft_and_clear_pending_controls() {
         let directory = tempfile::tempdir().unwrap();
         let (mut app, events) =
@@ -3280,83 +3501,6 @@ mod tests {
             .map(|chat| chat.name.as_str())
             .collect();
         assert_eq!(names, vec!["Ada"]);
-    }
-
-    #[test]
-    fn the_chat_filter_narrows_the_main_list_only() {
-        let mut app = app();
-        let mut ada = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
-        ada.last_activity = 40;
-        ada.unread = 2;
-        let mut bob = Chat::new("2@s.whatsapp.net".into(), "Bob".into());
-        bob.last_activity = 30;
-        let mut club = Chat::new("3@g.us".into(), "Club".into());
-        club.last_activity = 20;
-        club.unread = 1;
-        let mut news = Chat::new("4@newsletter".into(), "News".into());
-        news.last_activity = 10;
-        let mut old = Chat::new("5@g.us".into(), "Old group".into());
-        old.archived = true;
-        old.unread = 3;
-        app.chats = vec![ada, bob, club, news, old];
-        let names = |app: &App| -> Vec<String> {
-            app.visible_chats()
-                .iter()
-                .map(|chat| chat.name.clone())
-                .collect()
-        };
-        assert_eq!(names(&app), ["Ada", "Bob", "Club", "News"]);
-        app.chat_filter = ChatFilter::Unread;
-        assert_eq!(names(&app), ["Ada", "Club"]);
-        app.chat_filter = ChatFilter::Private;
-        assert_eq!(names(&app), ["Ada", "Bob"], "no groups or broadcasts");
-        app.chat_filter = ChatFilter::Groups;
-        assert_eq!(names(&app), ["Club"], "archived groups stay in the archive");
-        // Unread chats per chip, archived ones left out.
-        assert_eq!(app.unread_chats(ChatFilter::Unread), 2);
-        assert_eq!(app.unread_chats(ChatFilter::Private), 1);
-        assert_eq!(app.unread_chats(ChatFilter::Groups), 1);
-        // Search and the archive ignore the filter.
-        app.search = "bob".into();
-        assert_eq!(names(&app), ["Bob"]);
-        app.search = String::new();
-        app.show_archived = true;
-        assert_eq!(names(&app), ["Old group"]);
-    }
-
-    #[test]
-    fn the_unread_filter_keeps_the_open_chat_after_it_is_read() {
-        let mut app = app();
-        let mut ada = Chat::new("1@s.whatsapp.net".into(), "Ada".into());
-        ada.unread = 1;
-        let bob = Chat::new("2@s.whatsapp.net".into(), "Bob".into());
-        app.chats = vec![ada, bob];
-        let mut cy = Chat::new("3@s.whatsapp.net".into(), "Cy".into());
-        cy.unread = 1;
-        app.chats.push(cy);
-        app.chat_filter = ChatFilter::Unread;
-        let ctx = egui::Context::default();
-        // Every chat opened from the list stays, not only the latest.
-        for index in [0, 2] {
-            let id = app.chats[index].id.clone();
-            app.apply(Action::KeepUnread(id.clone()), &ctx);
-            app.open_chat(id);
-            app.chats[index].unread = 0;
-        }
-        assert_eq!(app.visible_chats().len(), 2, "both still listed once read");
-        // Choosing a filter again forgets the kept chats.
-        app.apply(Action::SetChatFilter(ChatFilter::Unread), &ctx);
-        assert!(app.visible_chats().is_empty());
-        // A chat opened from search or a notification is not kept.
-        app.chats[0].unread = 1;
-        app.open_chat("1@s.whatsapp.net".into());
-        app.chats[0].unread = 0;
-        assert!(app.visible_chats().is_empty());
-        // Nothing is kept under another filter.
-        app.apply(Action::SetChatFilter(ChatFilter::Private), &ctx);
-        app.apply(Action::KeepUnread("2@s.whatsapp.net".into()), &ctx);
-        app.apply(Action::SetChatFilter(ChatFilter::Unread), &ctx);
-        assert!(app.visible_chats().is_empty());
     }
 
     #[test]

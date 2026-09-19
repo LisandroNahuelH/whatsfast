@@ -872,6 +872,352 @@ mod tests {
     }
 
     #[test]
+    fn the_schedule_dialog_stacks_its_parts() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.composer = "See you at nine".to_owned();
+        app.dialog = Some(crate::model::Dialog::ScheduleMessage(chat));
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+
+        let months = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+        ];
+        let mut month: Option<Pos2> = None;
+        let mut numbers: Vec<(String, Pos2)> = Vec::new();
+        let mut time: Option<Pos2> = None;
+        let mut repeat: Option<Pos2> = None;
+        let mut schedule: Option<Pos2> = None;
+        for clipped in &output.shapes {
+            let egui::Shape::Text(text) = &clipped.shape else {
+                continue;
+            };
+            let content = text.galley.text();
+            assert!(
+                text.pos.x.is_finite() && text.pos.y.is_finite(),
+                "every label has a real position"
+            );
+            if months.iter().any(|name| content.starts_with(name)) {
+                month = Some(text.pos);
+            } else if content.parse::<u8>().is_ok() {
+                numbers.push((content.to_owned(), text.pos));
+            } else if content == "Time" {
+                time = Some(text.pos);
+            } else if content == "Repeat" {
+                repeat = Some(text.pos);
+            } else if content == "Schedule" {
+                schedule = Some(text.pos);
+            }
+        }
+        let month = month.expect("the month header is drawn");
+        let time = time.expect("the time row is drawn");
+        let repeat = repeat.expect("the repeat row is drawn");
+        schedule.expect("the schedule button is drawn");
+        // The calendar's days: the numbers between the month header and the
+        // time row, so numbers elsewhere on the screen do not count.
+        let days: Vec<Pos2> = numbers
+            .iter()
+            .filter(|(_, pos)| pos.y > month.y + 10.0 && pos.y < time.y)
+            .map(|(_, pos)| *pos)
+            .collect();
+        assert!(days.len() >= 28, "a month shows its days");
+        let first_day = days.iter().map(|pos| pos.y).fold(f32::MAX, f32::min);
+        let last_day = days.iter().map(|pos| pos.y).fold(f32::MIN, f32::max);
+        assert!(
+            month.y < first_day,
+            "the month header sits above the calendar, not beside it"
+        );
+        assert!(
+            time.y > last_day && repeat.y > last_day,
+            "the time and repeat rows sit under the calendar"
+        );
+        assert!(repeat.y > time.y, "repeat follows time");
+        // Seven to a row at most, and the month wraps onto several rows.
+        let mut rows: Vec<f32> = days.iter().map(|pos| pos.y).collect();
+        rows.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rows.dedup_by(|a, b| (*a - *b).abs() < 4.0);
+        assert!(rows.len() >= 4, "the days wrap onto several rows");
+        for row in &rows {
+            let count = days.iter().filter(|pos| (pos.y - row).abs() < 4.0).count();
+            assert!(count <= 7, "no row holds more than seven days");
+        }
+    }
+
+    #[test]
+    fn a_second_click_on_settings_closes_it() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        assert!(app.open_chat.is_some(), "a chat is open to start");
+        app.actions.push(crate::model::Action::ToggleSettings);
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        assert_eq!(
+            app.page,
+            crate::model::Page::Settings,
+            "the first click opens settings"
+        );
+        app.actions.push(crate::model::Action::ToggleSettings);
+        step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        assert_eq!(
+            app.page,
+            crate::model::Page::Chats,
+            "the second click closes settings"
+        );
+        assert!(
+            app.open_chat.is_none(),
+            "closing settings lands on the empty window a fresh start shows"
+        );
+    }
+
+    #[test]
+    fn the_pick_circle_sits_on_the_middle_of_the_row() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        // One frame registers the rows, the next paints their circles.
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let row_id = |message: &str| egui::Id::new(("message-row", chat.as_str(), message));
+        let message = app.conversations[&chat]
+            .messages
+            .iter()
+            .find(|message| {
+                ctx.data(|data| data.get_temp::<(Rect, bool)>(row_id(&message.id)).is_some())
+            })
+            .expect("a row registered its rect")
+            .id
+            .clone();
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let (row, _) = ctx
+            .data(|data| data.get_temp::<(Rect, bool)>(row_id(&message)))
+            .expect("the row kept its rect");
+        let inside: Vec<Pos2> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Circle(circle) if (9.0..12.0).contains(&circle.radius) => {
+                    Some(circle.center)
+                }
+                _ => None,
+            })
+            .filter(|center| row.contains(*center))
+            .collect();
+        assert_eq!(inside.len(), 1, "the row draws one pick circle");
+        let center = inside[0];
+        assert!(
+            (center.y - row.center().y).abs() < 2.0,
+            "the pick circle sits on the row's middle line, not at its top"
+        );
+        let margin = (center.x - row.left()).min(row.right() - center.x);
+        assert!(
+            margin >= 14.0,
+            "the circle keeps a margin from the row's edge, inside its highlight"
+        );
+    }
+
+    #[test]
+    fn a_picked_row_keeps_its_highlight() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: Default::default(),
+        });
+        // One frame registers the rows, the next paints their highlight.
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let first = app.conversations[&chat]
+            .messages
+            .iter()
+            .find(|message| {
+                ctx.data(|data| {
+                    data.get_temp::<(Rect, bool)>(egui::Id::new((
+                        "message-row",
+                        chat.as_str(),
+                        message.id.as_str(),
+                    )))
+                })
+                .is_some()
+            })
+            .expect("a row registered its rect")
+            .id
+            .clone();
+        app.selecting = Some(crate::model::Selecting {
+            chat: chat.clone(),
+            ids: [first].into_iter().collect(),
+        });
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let expected = app.palette.accent.gamma_multiply(0.16);
+        assert!(
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == expected)
+            }),
+            "a picked row keeps a highlight of its own"
+        );
+    }
+
+    #[test]
+    fn the_forward_dialog_lists_several_chats() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        app.dialog = Some(crate::model::Dialog::Forward {
+            chat,
+            messages: vec!["m1".to_owned()],
+        });
+        step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        // Only the dialog's own column, so the chat list behind it does not count.
+        let in_dialog: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.pos.x > 400.0 && text.pos.x < 880.0 => {
+                    Some(text.galley.text().to_owned())
+                }
+                _ => None,
+            })
+            .collect();
+        let titles: Vec<String> = app.chats.iter().map(|chat| app.chat_title(chat)).collect();
+        let shown = titles
+            .iter()
+            .filter(|title| in_dialog.iter().any(|text| text == *title))
+            .count();
+        assert!(
+            shown >= 3,
+            "the forward dialog lists several chats, not a single row"
+        );
+    }
+
+    #[test]
+    fn the_starred_list_shows_the_message_and_the_mark() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let message = app.conversations[&chat]
+            .messages
+            .first()
+            .expect("the chat has messages")
+            .id
+            .clone();
+        // The star reaches the open chat: this is what the footer paints from.
+        app.stars
+            .insert(chat.clone(), [message.clone()].into_iter().collect());
+        app.show_starred = true;
+        app.starred = vec![crate::archive::Starred {
+            chat: chat.clone(),
+            id: message.clone(),
+            starred_at: crate::util::now(),
+            text: "See you at nine".to_owned(),
+            from_me: false,
+            sent_at: crate::util::now(),
+        }];
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let texts: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.iter().any(|text| text == "Starred"),
+            "the header names the panel"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("See you at nine")),
+            "the row shows the starred message itself"
+        );
+        assert!(
+            app.stars[&chat].contains(&message),
+            "the open chat knows which messages are starred"
+        );
+    }
+
+    #[test]
+    fn the_scheduled_list_shows_the_message() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let chat = app.open_chat.clone().expect("a chat is open");
+        let now = crate::util::now();
+        app.show_scheduled = true;
+        app.scheduled = vec![crate::archive::Scheduled {
+            id: "sched-1".to_owned(),
+            chat,
+            text: "See you at nine".to_owned(),
+            kind: "daily".to_owned(),
+            hour: 9,
+            minute: 0,
+            weekday: None,
+            day_of_month: None,
+            nth: None,
+            next_at: now + 3600,
+            state: "pending".to_owned(),
+            message_id: None,
+            last_error: None,
+            created_at: now,
+            last_fired_at: None,
+        }];
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.1, true);
+        let texts: Vec<String> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) => Some(text.galley.text().to_owned()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            texts.iter().any(|text| text == "Scheduled"),
+            "the panel header names the list"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("See you at nine")),
+            "the row shows the scheduled message itself"
+        );
+        assert!(
+            texts.iter().any(|text| text.contains("Every day")),
+            "the row shows how it repeats"
+        );
+    }
+
+    #[test]
     fn a_click_on_a_row_picks_its_message() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
