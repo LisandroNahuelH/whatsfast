@@ -1,4 +1,4 @@
-//! Where ZapFast keeps its files.
+//! Where WhatsFast keeps its files.
 //!
 //! Configuration, session state, and caches use separate standard platform
 //! directories. Clearing a cache does not remove device keys.
@@ -16,14 +16,14 @@ pub struct AppDirs {
 
 impl AppDirs {
     pub fn discover() -> Self {
-        match Self::of("zapfast") {
+        match Self::of("whatsfast") {
             Some(dirs) => dirs,
             None => {
                 let fallback = std::env::current_dir().unwrap_or_default();
                 Self {
-                    config: fallback.join("zapfast-config"),
-                    state: fallback.join("zapfast-state"),
-                    cache: fallback.join("zapfast-cache"),
+                    config: fallback.join("whatsfast-config"),
+                    state: fallback.join("whatsfast-state"),
+                    cache: fallback.join("whatsfast-cache"),
                 }
             }
         }
@@ -45,12 +45,12 @@ impl AppDirs {
     /// Adopts earlier names, newest first, without replacing existing data.
     /// Call only after acquiring the instance guard, and never for demo runs.
     pub fn adopt_previous_names(&self) -> std::io::Result<()> {
-        for name in ["fastsapp", "fastwhatsapp"] {
+        for name in ["fastsapp", "fastwhatsapp", "zapfast"] {
             if let Some(old) = Self::of(name) {
                 self.adopt(&old)?;
             }
             if let (Some(from), Some(to)) =
-                (eframe::storage_dir(name), eframe::storage_dir("zapfast"))
+                (eframe::storage_dir(name), eframe::storage_dir("whatsfast"))
             {
                 adopt_directory(&from, &to)?;
             }
@@ -95,7 +95,7 @@ impl AppDirs {
 
     /// Current-run log, replaced at startup.
     pub fn log_file(&self) -> PathBuf {
-        self.state.join("zapfast.log")
+        self.state.join("whatsfast.log")
     }
 
     /// Panic log written before process exit.
@@ -186,7 +186,7 @@ mod tests {
 
     fn root(name: &str) -> PathBuf {
         let root =
-            std::env::temp_dir().join(format!("zapfast-paths-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("whatsfast-paths-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
@@ -245,10 +245,10 @@ mod tests {
 
     #[test]
     fn rename_preserves_session_archive_settings_and_cached_files() {
-        for name in ["fastsapp", "fastwhatsapp"] {
+        for name in ["fastsapp", "fastwhatsapp", "zapfast"] {
             let root = root(name);
             let old = AppDirs::under(&root.join(name));
-            let new = AppDirs::under(&root.join("zapfast"));
+            let new = AppDirs::under(&root.join("whatsfast"));
             old.ensure().unwrap();
             for path in [
                 old.settings_file(),
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn newest_data_wins_without_merging_archives() {
         let root = root("precedence");
-        let new = AppDirs::under(&root.join("zapfast"));
+        let new = AppDirs::under(&root.join("whatsfast"));
         let recent = AppDirs::under(&root.join("fastsapp"));
         let oldest = AppDirs::under(&root.join("fastwhatsapp"));
         recent.ensure().unwrap();

@@ -1574,7 +1574,7 @@ mod tests {
     #[test]
     fn the_hidden_sidebar_keeps_a_way_back_unless_the_setting_says_otherwise() {
         let root = std::env::temp_dir().join(format!(
-            "zapfast-compact-sidebar-{}-{:?}",
+            "whatsfast-compact-sidebar-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -1598,7 +1598,7 @@ mod tests {
     #[test]
     fn moving_a_pinned_chat_rewrites_the_order() {
         let root = std::env::temp_dir().join(format!(
-            "zapfast-pin-order-{}-{:?}",
+            "whatsfast-pin-order-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -1639,7 +1639,7 @@ mod tests {
     #[test]
     fn alt_navigation_scrolls_the_destination_chat_into_view() {
         let root = std::env::temp_dir().join(format!(
-            "zapfast-chat-list-{}-{:?}",
+            "whatsfast-chat-list-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));

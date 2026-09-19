@@ -251,7 +251,7 @@ fn about(app: &mut App, ui: &mut egui::Ui) {
             egui::Color32::WHITE,
         );
         ui.vertical(|ui| {
-            theme::text(ui, "ZapFast", theme::bold(17.0), palette.text);
+            theme::text(ui, "WhatsFast", theme::bold(17.0), palette.text);
             theme::text(
                 ui,
                 format!("Version {}", env!("CARGO_PKG_VERSION")),
