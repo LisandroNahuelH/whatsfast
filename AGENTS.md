@@ -10,6 +10,7 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 2. **Build** — full checks in *Definition of done* below.
 2.5 **Jev gate** when Rust source changed (quota; skip if no key).
 3. **Commits** — atomic, English conventional messages.
+3.1 **Push** — when the user asked for repository changes, push to `origin/main` in the same turn after commits (and after build or jev when they apply). Do not wait for a separate "push" request.
 4. **AGENTS.md** — operating facts only.
 5. **ARCHITECTURE.md** — structural facts only.
 6. **Other owners** — `README.md` when user-visible behavior changes (same PR).
