@@ -80,6 +80,9 @@ pub struct Settings {
     pub forward_in_order: bool,
     /// Also add saved contacts to the phone's address book.
     pub save_contacts_to_phone: bool,
+    /// Hide the sidebar outright instead of narrowing it to the chat pictures.
+    #[serde(default)]
+    pub hide_sidebar_fully: bool,
 }
 
 impl Default for Settings {
@@ -108,6 +111,7 @@ impl Default for Settings {
             save_contacts_to_phone: true,
             forward_in_order: true,
             voice_speed: 1.0,
+            hide_sidebar_fully: false,
         }
     }
 }
