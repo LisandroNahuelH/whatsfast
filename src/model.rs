@@ -487,6 +487,9 @@ pub struct PinDrag {
     pub since: f64,
     /// Set once the hold passed the threshold: the rows show their handles.
     pub active: bool,
+    /// Where the pointer sat inside the row when it was pressed, so the held
+    /// row keeps that spot under the cursor.
+    pub grab_y: f32,
 }
 
 /// The tabs of the picker above the composer.
