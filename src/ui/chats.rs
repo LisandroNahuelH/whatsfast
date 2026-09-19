@@ -152,6 +152,7 @@ fn compact_list(app: &mut App, ui: &mut egui::Ui) {
             for chat in &chats {
                 let title = app.chat_title(chat);
                 let picture = app.avatar(&chat.id);
+                let muted = chat.muted(crate::util::now());
                 let (rect, response) =
                     ui.allocate_exact_size(vec2(ui.available_width(), COMPACT_ROW), Sense::click());
                 if ui.is_rect_visible(rect) {
@@ -168,14 +169,21 @@ fn compact_list(app: &mut App, ui: &mut egui::Ui) {
                         &chat.id,
                         picture.as_deref(),
                     );
+                    if chat.marked_unread && chat.unread == 0 {
+                        ui.painter().circle_filled(
+                            pos2(avatar_rect.right() - 4.0, avatar_rect.bottom() - 4.0),
+                            5.0,
+                            if muted { palette.dim } else { palette.accent },
+                        );
+                    }
                 }
-                if response
+                let response = response
                     .on_hover_text(&title)
-                    .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .clicked()
-                {
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                if response.clicked() {
                     app.actions.push(Action::OpenChat(chat.id.clone()));
                 }
+                attach_context_menu(app, &response, chat, &palette);
             }
         });
 }
@@ -1349,7 +1357,7 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
         } else {
             String::new()
         };
-        let unread = chat.unread > 0;
+        let unread = chat.looks_unread();
         let stamp_color = if unread && !muted {
             palette.accent
         } else {
@@ -1377,11 +1385,12 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
         let mut badge_right = right;
         let line_y = rect.top() + 38.0;
         if unread {
-            let width = widgets::badge(
+            let width = widgets::unread_indicator(
                 ui,
                 &palette,
                 pos2(badge_right - 10.0, line_y + 8.0),
                 chat.unread,
+                chat.marked_unread,
                 muted,
             );
             badge_right -= width + 6.0;
@@ -1474,18 +1483,29 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
         app.actions.push(Action::OpenChat(chat.id.clone()));
     }
     let menu_palette = palette;
-    egui::Popup::context_menu(&response)
-        .frame(widgets::menu_frame(&menu_palette))
-        .show(|ui| {
-            ui.set_min_width(190.0);
-            context_menu(app, ui, chat, &menu_palette);
-        });
+    attach_context_menu(app, &response, chat, &menu_palette);
     response
 }
 
+fn attach_context_menu(app: &mut App, response: &egui::Response, chat: &Chat, palette: &Palette) {
+    egui::Popup::context_menu(response)
+        .frame(widgets::menu_frame(palette))
+        .show(|ui| {
+            ui.set_min_width(190.0);
+            context_menu(app, ui, chat, palette);
+        });
+}
+
 fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette) {
-    if chat.unread > 0 && widgets::menu_item(ui, palette, Some(Icon::CheckCheck), "Mark as read") {
+    if chat.looks_unread()
+        && widgets::menu_item(ui, palette, Some(Icon::CheckCheck), "Mark as read")
+    {
         app.actions.push(Action::MarkRead(chat.id.clone()));
+    }
+    if !chat.looks_unread()
+        && widgets::menu_item(ui, palette, Some(Icon::MessageCircle), "Mark as unread")
+    {
+        app.actions.push(Action::MarkUnread(chat.id.clone()));
     }
     if widgets::menu_item(
         ui,

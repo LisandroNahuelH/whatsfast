@@ -206,6 +206,11 @@ pub enum Command {
         chat: ChatId,
         receipts: bool,
     },
+    /// Stores the local empty unread reminder. Does not send receipts.
+    SetMarkedUnread {
+        chat: ChatId,
+        marked: bool,
+    },
     /// Result of a private read-state update to the other linked devices.
     ReadSyncFinished {
         chat: ChatId,

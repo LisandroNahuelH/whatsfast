@@ -207,6 +207,30 @@ pub fn badge(ui: &Ui, palette: &Palette, at: egui::Pos2, count: u32, muted: bool
     width
 }
 
+/// Empty unread reminder: the same accent round as a count badge, no digit.
+pub fn unread_dot(ui: &Ui, palette: &Palette, at: egui::Pos2, muted: bool) -> f32 {
+    let fill = if muted { palette.dim } else { palette.accent };
+    ui.painter().circle_filled(at, 5.0, fill);
+    10.0
+}
+
+pub fn unread_indicator(
+    ui: &Ui,
+    palette: &Palette,
+    at: egui::Pos2,
+    count: u32,
+    marked: bool,
+    muted: bool,
+) -> f32 {
+    if count > 0 {
+        badge(ui, palette, at, count, muted)
+    } else if marked {
+        unread_dot(ui, palette, at, muted)
+    } else {
+        0.0
+    }
+}
+
 /// Minimum width needed for menu labels.
 pub fn menu_width(ui: &Ui, labels: &[&str], icons: bool) -> f32 {
     let widest = labels

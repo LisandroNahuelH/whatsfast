@@ -107,7 +107,7 @@ END;
 const CHAT_COLUMNS: &str =
     "c.id, c.name, c.kind, c.last_activity, c.unread, c.archived, c.pinned, c.muted_until,
                     m.from_me, m.sender_name, m.content, m.status, m.sender, c.participants, c.read_only,
-                    c.pinned_at, c.ephemeral_expiration";
+                    c.pinned_at, c.ephemeral_expiration, c.marked_unread";
 
 /// Adds columns introduced after the initial schema when missing.
 const MIGRATIONS: &[(&str, &str, &str)] = &[
@@ -125,6 +125,7 @@ const MIGRATIONS: &[(&str, &str, &str)] = &[
     ("chats", "pinned_at", "INTEGER NOT NULL DEFAULT 0"),
     ("chats", "pin_updated_at", "INTEGER"),
     ("chats", "mute_updated_at", "INTEGER"),
+    ("chats", "marked_unread", "INTEGER NOT NULL DEFAULT 0"),
 ];
 const CHAT_JOIN: &str = "FROM chats c
              LEFT JOIN messages m ON m.chat = c.id AND m.rowid = (
@@ -156,6 +157,7 @@ fn chat_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
         kind: kind_from_name(&kind),
         last_activity: row.get(3)?,
         unread: row.get(4)?,
+        marked_unread: row.get(17)?,
         archived: row.get(5)?,
         pinned: row.get(6)?,
         pinned_at: row.get(15)?,
@@ -395,7 +397,7 @@ impl Archive {
 
     pub fn mark_read(&self, id: &str) -> Result<()> {
         self.connection.execute(
-            "UPDATE chats SET unread = 0,
+            "UPDATE chats SET unread = 0, marked_unread = 0,
              read_through = MAX(COALESCE(read_through, 0), last_activity) WHERE id = ?1",
             params![id],
         )?;
@@ -482,8 +484,18 @@ impl Archive {
 
     pub fn set_unread(&self, id: &str, unread: u32) -> Result<()> {
         self.connection.execute(
-            "UPDATE chats SET unread = ?2 WHERE id = ?1",
+            "UPDATE chats SET unread = ?2,
+             marked_unread = CASE WHEN ?2 > 0 THEN 0 ELSE marked_unread END
+             WHERE id = ?1",
             params![id, unread],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_marked_unread(&self, id: &str, marked: bool) -> Result<()> {
+        self.connection.execute(
+            "UPDATE chats SET marked_unread = ?2 WHERE id = ?1",
+            params![id, marked],
         )?;
         Ok(())
     }
@@ -506,7 +518,7 @@ impl Archive {
 
     pub fn bump_unread(&self, id: &str) -> Result<()> {
         self.connection.execute(
-            "UPDATE chats SET unread = unread + 1 WHERE id = ?1",
+            "UPDATE chats SET unread = unread + 1, marked_unread = 0 WHERE id = ?1",
             params![id],
         )?;
         Ok(())
@@ -1338,6 +1350,7 @@ pub(crate) mod tests {
         assert_eq!(chats.len(), 1);
         assert!(chats[0].participants.is_empty());
         assert!(!chats[0].read_only);
+        assert!(!chats[0].marked_unread);
         let mut with_thumbnail = message("1@s.whatsapp.net", "m1", 1, false);
         with_thumbnail.thumbnail = Some(vec![1, 2, 3]);
         archive
@@ -1930,6 +1943,35 @@ pub(crate) mod tests {
         assert_eq!(ids, vec!["m2", "m1"]);
         archive.mark_read(chat).expect("read");
         assert_eq!(archive.chat(chat).expect("chat").expect("exists").unread, 0);
+    }
+
+    #[test]
+    fn marked_unread_stays_a_dot_until_read_or_a_real_count() {
+        let archive = Archive::in_memory().expect("opens");
+        let chat = "1@s.whatsapp.net";
+        archive.ensure_chat(chat, "A").expect("chat");
+        archive.set_marked_unread(chat, true).expect("mark");
+        let row = archive.chat(chat).expect("chat").expect("exists");
+        assert!(row.marked_unread);
+        assert_eq!(row.unread, 0);
+        archive.set_unread(chat, 0).expect("keep");
+        assert!(
+            archive
+                .chat(chat)
+                .expect("chat")
+                .expect("exists")
+                .marked_unread,
+            "a zero snapshot must not clear the local reminder"
+        );
+        archive.bump_unread(chat).expect("bump");
+        let row = archive.chat(chat).expect("chat").expect("exists");
+        assert_eq!(row.unread, 1);
+        assert!(!row.marked_unread, "a real count replaces the empty dot");
+        archive.set_marked_unread(chat, true).expect("mark");
+        archive.mark_read(chat).expect("read");
+        let row = archive.chat(chat).expect("chat").expect("exists");
+        assert_eq!(row.unread, 0);
+        assert!(!row.marked_unread);
     }
 
     #[test]

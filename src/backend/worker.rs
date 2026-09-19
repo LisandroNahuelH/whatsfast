@@ -2645,6 +2645,10 @@ impl Worker {
                 });
             }
             Command::MarkRead { chat, receipts } => self.mark_read(chat, receipts),
+            Command::SetMarkedUnread { chat, marked } => {
+                let _ = self.archive.set_marked_unread(&chat, marked);
+                self.emit_chat(&chat);
+            }
             Command::ReadSyncFinished {
                 chat,
                 through,

@@ -1455,11 +1455,26 @@ impl App {
         self.notifications.clear(chat);
         if let Some(known) = self.chat_mut(chat) {
             known.unread = 0;
+            known.marked_unread = false;
         }
         // Clear local unread state regardless of receipt settings.
         self.backend.send(Command::MarkRead {
             chat: chat.to_owned(),
             receipts: self.settings.send_read_receipts,
+        });
+    }
+
+    fn mark_unread(&mut self, chat: &str) {
+        let Some(known) = self.chat_mut(chat) else {
+            return;
+        };
+        if known.unread > 0 {
+            return;
+        }
+        known.marked_unread = true;
+        self.backend.send(Command::SetMarkedUnread {
+            chat: chat.to_owned(),
+            marked: true,
         });
     }
 
@@ -1506,7 +1521,10 @@ impl App {
         {
             self.fetch_older(&id);
         }
-        if self.chat(&id).is_some_and(|chat| chat.unread > 0) {
+        if self
+            .chat(&id)
+            .is_some_and(|chat| chat.unread > 0 || chat.marked_unread)
+        {
             self.mark_read(&id);
         }
         if self.settings.last_chat.as_deref() != Some(id.as_str()) {
@@ -2024,6 +2042,7 @@ impl App {
                 }
             }
             Action::MarkRead(chat) => self.mark_read(&chat),
+            Action::MarkUnread(chat) => self.mark_unread(&chat),
             Action::LoadOlder(chat) => self.load_older(&chat),
             Action::FetchOlder(chat) => self.fetch_older(&chat),
             Action::Download { chat, message } => {
@@ -3190,6 +3209,35 @@ mod tests {
         // A different batch keeps its own toast.
         app.toast_progress("star", "Starred 1 of 2", false);
         assert_eq!(app.toasts.len(), 2);
+    }
+
+    #[test]
+    fn marking_unread_uses_the_empty_dot_until_the_chat_opens() {
+        let mut app = app();
+        let id = "1@s.whatsapp.net".to_owned();
+        app.chats.push(Chat::new(id.clone(), "Ada".to_owned()));
+        app.mark_unread(&id);
+        let chat = app.chat(&id).expect("chat");
+        assert!(chat.marked_unread);
+        assert_eq!(chat.unread, 0);
+        assert!(chat.looks_unread());
+        app.open_chat(id.clone());
+        let chat = app.chat(&id).expect("chat");
+        assert!(!chat.marked_unread);
+        assert!(!chat.looks_unread());
+    }
+
+    #[test]
+    fn marking_unread_leaves_a_real_count_alone() {
+        let mut app = app();
+        let id = "1@s.whatsapp.net".to_owned();
+        let mut chat = Chat::new(id.clone(), "Ada".to_owned());
+        chat.unread = 3;
+        app.chats.push(chat);
+        app.mark_unread(&id);
+        let chat = app.chat(&id).expect("chat");
+        assert_eq!(chat.unread, 3);
+        assert!(!chat.marked_unread);
     }
 
     #[test]
