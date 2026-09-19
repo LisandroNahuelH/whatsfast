@@ -29,7 +29,7 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   tick) or `Failed`; parallel batches still use `forward_batch`. Background
   history prefetch asks the phone one page at a time and downloads files
   one at a time into the archive; it does not prepend those pages into the
-  open conversation.
+  open conversation. A failed file is retried with backoff for 30 days.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
