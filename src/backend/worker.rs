@@ -3,7 +3,7 @@
 //! Messages are archived before reaching the UI. Privacy ids (`@lid`) are
 //! canonicalized to phone-number ids as soon as their mapping is known.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -218,6 +218,7 @@ pub async fn run(
         star_batch: None,
         save_dialog_open: false,
         forward_batch: None,
+        forward_serial: None,
         scheduled_seq: 0,
         read_sync: ReadSync::default(),
         poll_decrypting: 0,
@@ -321,6 +322,8 @@ struct Worker {
     save_dialog_open: bool,
     /// Ids of a parallel forward batch, for its progress count.
     forward_batch: Option<(HashSet<String>, usize)>,
+    /// One-at-a-time forward; the next send waits for this id's first tick.
+    forward_serial: Option<ForwardSerial>,
     /// Counter that keeps scheduled ids unique within a run.
     scheduled_seq: u64,
 }
@@ -332,6 +335,76 @@ struct ParsedHistory {
     lids: Vec<(String, String)>,
     /// Recent phone stickers included with history sync.
     stickers: Vec<wa::StickerMetadata>,
+}
+
+/// Sequential forward: the next job starts after `current` is Sent or Failed.
+struct ForwardSerial {
+    to_chat: ChatId,
+    jid: Jid,
+    client: Arc<Client>,
+    queue: SerialForward<(wa::Message, Option<u32>)>,
+}
+
+/// Pure queue used by serial forward. `T` is the payload to send.
+struct SerialForward<T> {
+    remaining: VecDeque<(String, T)>,
+    current: String,
+    done: usize,
+    total: usize,
+}
+
+enum SerialAck<T> {
+    Ignore,
+    Next {
+        id: String,
+        payload: T,
+        done: usize,
+        total: usize,
+    },
+    Finished {
+        done: usize,
+        total: usize,
+    },
+}
+
+impl<T> SerialForward<T> {
+    fn start(jobs: Vec<(String, T)>) -> Option<(Self, String, T)> {
+        let total = jobs.len();
+        let mut jobs = jobs.into_iter();
+        let (id, first) = jobs.next()?;
+        Some((
+            Self {
+                remaining: jobs.collect(),
+                current: id.clone(),
+                done: 0,
+                total,
+            },
+            id,
+            first,
+        ))
+    }
+
+    fn ack(&mut self, id: &str) -> SerialAck<T> {
+        if self.current != id {
+            return SerialAck::Ignore;
+        }
+        self.done += 1;
+        match self.remaining.pop_front() {
+            Some((next_id, payload)) => {
+                self.current = next_id.clone();
+                SerialAck::Next {
+                    id: next_id,
+                    payload,
+                    done: self.done,
+                    total: self.total,
+                }
+            }
+            None => SerialAck::Finished {
+                done: self.done,
+                total: self.total,
+            },
+        }
+    }
 }
 
 struct ParsedChat {
@@ -3058,21 +3131,21 @@ impl Worker {
                 if let Some(error) = error {
                     self.emit(Event::Error(format!("Message not sent: {error}")));
                 }
-                // A parallel forward batch counts each landing here.
-                let progress = self.forward_batch.as_mut().and_then(|(ids, total)| {
-                    if !ids.remove(&id) {
-                        return None;
-                    }
-                    Some((*total - ids.len(), *total, ids.is_empty()))
-                });
-                if let Some((done, total, finished)) = progress {
-                    self.emit(Event::Progress {
-                        key: "forward",
-                        message: format!("Forwarded {done} of {total}"),
-                        finished,
+                if let Some((done, total, finished)) = self.advance_serial_forward(&id) {
+                    self.emit_forward_progress(done, total, finished);
+                } else {
+                    // A parallel forward batch counts each landing here.
+                    let progress = self.forward_batch.as_mut().and_then(|(ids, total)| {
+                        if !ids.remove(&id) {
+                            return None;
+                        }
+                        Some((*total - ids.len(), *total, ids.is_empty()))
                     });
-                    if finished {
-                        self.forward_batch = None;
+                    if let Some((done, total, finished)) = progress {
+                        self.emit_forward_progress(done, total, finished);
+                        if finished {
+                            self.forward_batch = None;
+                        }
                     }
                 }
             }
@@ -3434,12 +3507,9 @@ impl Worker {
 
     /// Forwards archived messages to another chat, oldest first.
     ///
-    /// With `in_order` the sends run one after another: each one starts only
-    /// once the send before it came back, which is what the first tick
-    /// reports. Firing the batch together lets light messages overtake heavy
-    /// ones, so the pictures and videos land after the text that came before
-    /// them. That is what the setting turns off, for people who would rather
-    /// have the whole batch leave at once.
+    /// With `in_order` each send waits for `Command::Sent` of the one before
+    /// it (`Delivery::Sent`, the first tick). Firing the batch together lets
+    /// light messages overtake heavy ones. That is what the setting turns off.
     fn forward_messages(
         &mut self,
         from_chat: ChatId,
@@ -3458,50 +3528,94 @@ impl Worker {
         if jobs.is_empty() {
             return;
         }
-        let commands = self.commands.clone();
         if !in_order {
             // Parallel batches count their landings in the Sent handler.
             let ids: HashSet<String> = jobs.iter().map(|(id, _, _)| id.clone()).collect();
             self.forward_batch = Some((ids, jobs.len()));
             for (id, message, expiration) in jobs {
-                tokio::spawn(send_outgoing(
+                self.spawn_outgoing(
                     client.clone(),
-                    commands.clone(),
                     to_chat.clone(),
                     jid.clone(),
                     id,
                     message,
                     expiration,
-                ));
+                );
             }
             return;
         }
-        let events = self.events.clone();
-        let waker = self.waker.clone();
-        tokio::spawn(async move {
-            let total = jobs.len();
-            for (index, (id, message, expiration)) in jobs.into_iter().enumerate() {
-                send_outgoing(
-                    client.clone(),
-                    commands.clone(),
-                    to_chat.clone(),
-                    jid.clone(),
-                    id,
-                    message,
-                    expiration,
-                )
-                .await;
-                // Each send came back, so the next one starts now: this is the
-                // order the receiver sees, and the count the user sees.
-                let done = index + 1;
-                let _ = events.send(Event::Progress {
-                    key: "forward",
-                    message: format!("Forwarded {done} of {total}"),
-                    finished: done >= total,
-                });
-                waker.wake();
-            }
+        if self.forward_serial.is_some() {
+            self.emit(Event::Error(
+                "Wait for the current forward to finish".to_owned(),
+            ));
+            return;
+        }
+        let jobs: Vec<_> = jobs
+            .into_iter()
+            .map(|(id, message, expiration)| (id, (message, expiration)))
+            .collect();
+        let Some((queue, id, (message, expiration))) = SerialForward::start(jobs) else {
+            return;
+        };
+        self.forward_serial = Some(ForwardSerial {
+            to_chat: to_chat.clone(),
+            jid: jid.clone(),
+            client: client.clone(),
+            queue,
         });
+        self.spawn_outgoing(client, to_chat, jid, id, message, expiration);
+    }
+
+    fn spawn_outgoing(
+        &self,
+        client: Arc<Client>,
+        to_chat: ChatId,
+        jid: Jid,
+        id: String,
+        message: wa::Message,
+        expiration: Option<u32>,
+    ) {
+        let commands = self.commands.clone();
+        tokio::spawn(send_outgoing(
+            client, commands, to_chat, jid, id, message, expiration,
+        ));
+    }
+
+    fn emit_forward_progress(&self, done: usize, total: usize, finished: bool) {
+        self.emit(Event::Progress {
+            key: "forward",
+            message: format!("Forwarded {done} of {total}"),
+            finished,
+        });
+    }
+
+    /// After the first tick (or a failed send) of the current serial forward.
+    fn advance_serial_forward(&mut self, id: &str) -> Option<(usize, usize, bool)> {
+        let (ack, dest, jid, client) = {
+            let serial = self.forward_serial.as_mut()?;
+            (
+                serial.queue.ack(id),
+                serial.to_chat.clone(),
+                serial.jid.clone(),
+                serial.client.clone(),
+            )
+        };
+        match ack {
+            SerialAck::Ignore => None,
+            SerialAck::Next {
+                id,
+                payload: (message, expiration),
+                done,
+                total,
+            } => {
+                self.spawn_outgoing(client, dest, jid, id, message, expiration);
+                Some((done, total, false))
+            }
+            SerialAck::Finished { done, total } => {
+                self.forward_serial = None;
+                Some((done, total, true))
+            }
+        }
     }
 
     /// Prepares one forwarded message: its stored row and the outgoing
@@ -6511,6 +6625,55 @@ mod tests {
         assert_eq!(seconds(1_700_000_000_000), 1_700_000_000);
         assert_eq!(seconds(-1), 0);
     }
+
+    #[test]
+    fn serial_forward_advances_on_current_ack() {
+        assert!(SerialForward::<i32>::start(Vec::new()).is_none());
+
+        let (mut one, first, payload) =
+            SerialForward::start(vec![("only".into(), 7)]).expect("one");
+        assert_eq!((first, payload), ("only".into(), 7));
+        assert!(matches!(
+            one.ack("only"),
+            SerialAck::Finished { done: 1, total: 1 }
+        ));
+
+        let jobs = vec![("a".into(), 1), ("b".into(), 2), ("c".into(), 3)];
+        let (mut queue, first, payload) = SerialForward::start(jobs).expect("jobs");
+        assert_eq!(first, "a");
+        assert_eq!(payload, 1);
+        assert!(matches!(queue.ack("other"), SerialAck::Ignore));
+        assert_eq!(queue.current, "a");
+
+        let SerialAck::Next {
+            id,
+            payload,
+            done,
+            total,
+        } = queue.ack("a")
+        else {
+            panic!("current Sent starts the next job");
+        };
+        assert_eq!((id, payload, done, total), ("b".into(), 2, 1, 3));
+
+        // Failed sends take this same ack; a stall would leave current as b.
+        let SerialAck::Next {
+            id,
+            payload,
+            done,
+            total,
+        } = queue.ack("b")
+        else {
+            panic!("a Failed send still starts the next job");
+        };
+        assert_eq!((id, payload, done, total), ("c".into(), 3, 2, 3));
+
+        assert!(matches!(
+            queue.ack("c"),
+            SerialAck::Finished { done: 3, total: 3 }
+        ));
+        assert!(queue.remaining.is_empty());
+    }
 }
 
 #[cfg(test)]
@@ -6604,6 +6767,7 @@ mod receipt_tests {
             star_batch: None,
             save_dialog_open: false,
             forward_batch: None,
+            forward_serial: None,
             scheduled_seq: 0,
             read_sync: ReadSync::default(),
             poll_decrypting: 0,

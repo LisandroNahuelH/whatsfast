@@ -77,7 +77,7 @@ pub struct Settings {
     pub names_from_contacts: bool,
     /// Voice and audio playback speed multiplier.
     pub voice_speed: f32,
-    /// Send a forwarded batch one message at a time, in its original order.
+    /// Send a forwarded batch one at a time, waiting for each first tick.
     pub forward_in_order: bool,
     /// Show the Create poll button beside the composer.
     pub show_poll_button: bool,
