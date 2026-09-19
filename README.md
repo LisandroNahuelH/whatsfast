@@ -67,12 +67,22 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 <tr>
 <td width="50%" valign="top">
 
+### Chat doodle wallpaper that follows the theme
+
+- **Technical:** The open chat paints a 1080p doodle wallpaper behind the bubbles and scales it to fill the panel as the window resizes. Settings **Chat wallpaper** is Auto by default: Black, Gray, Green, Red, or White from the active palette. You can force a family. Settings itself stays a plain colour.
+- **Daily use:** The thread looks like WhatsApp's doodle paper, tinted to Dark, Nord, Ristretto, or Light, without hiding the bubbles.
+
+</td>
+<td width="50%" valign="top">
+
 ### Mark as unread from the chat list
 
 - **Technical:** Right-click a chat in the left list (or the compact rail) and choose **Mark as unread**. The row uses the unread style with an empty round badge and no number. Opening the chat, **Mark as read**, or a real new message clears it. Counted unread badges stay numbered.
 - **Daily use:** Flag a thread you still need to answer without pretending there is a pending count. Same empty dot as WhatsApp Desktop.
 
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### One-click in-app updates
@@ -81,8 +91,6 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 - **Daily use:** You do not hunt for a setup file. Click Update when the toast appears, wait a few seconds, and keep working in the same chat.
 
 </td>
-</tr>
-<tr>
 <td width="50%" valign="top">
 
 ### In-app photo viewer with zoom and pan
@@ -91,6 +99,8 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 - **Daily use:** You can read a screenshot or a document photo without leaving WhatsFast or waiting for Photos to open. Zoom in on the part you need, move around, then go back to the thread.
 
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### Composer caret stays visible while the window has focus
