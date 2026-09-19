@@ -11,6 +11,7 @@ pub mod schedule;
 pub mod settings;
 pub mod update;
 pub mod viewer;
+pub mod wallpaper;
 pub mod widgets;
 
 use egui::{Align2, CornerRadius, Frame, Margin, Stroke, vec2};
@@ -43,11 +44,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         chats::show_compact(app, ui);
     }
     let palette = app.palette;
+    let wallpaper = app.settings.chat_wallpaper.resolve(&palette);
     egui::CentralPanel::default()
         .frame(Frame::new().fill(palette.chat))
         .show(ui, |ui| match app.page {
             Page::Settings => settings::show(app, ui),
-            Page::Chats => conversation::show(app, ui),
+            Page::Chats => {
+                wallpaper::paint(ui, wallpaper);
+                conversation::show(app, ui);
+            }
         });
     picker::show(app, ctx);
     dialogs::show(app, ctx);

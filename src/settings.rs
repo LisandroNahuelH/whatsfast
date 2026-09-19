@@ -46,6 +46,50 @@ impl HistoryPrefetch {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum WallpaperFamily {
+    Black,
+    Gray,
+    Green,
+    Red,
+    #[default]
+    White,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatWallpaper {
+    #[default]
+    Auto,
+    Black,
+    Gray,
+    Green,
+    Red,
+    White,
+}
+
+impl ChatWallpaper {
+    pub const ALL: [ChatWallpaper; 6] = [
+        Self::Auto,
+        Self::Black,
+        Self::Gray,
+        Self::Green,
+        Self::Red,
+        Self::White,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Black => "Black",
+            Self::Gray => "Gray",
+            Self::Green => "Green",
+            Self::Red => "Red",
+            Self::White => "White",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -111,6 +155,8 @@ pub struct Settings {
     pub hide_sidebar_fully: bool,
     /// Slowly fetch older phone history and files in the background.
     pub history_prefetch: HistoryPrefetch,
+    /// Doodle wallpaper behind the open chat. Auto follows the theme colours.
+    pub chat_wallpaper: ChatWallpaper,
 }
 
 fn default_true() -> bool {
@@ -147,6 +193,7 @@ impl Default for Settings {
             voice_speed: 1.0,
             hide_sidebar_fully: false,
             history_prefetch: HistoryPrefetch::RecentAndPinned,
+            chat_wallpaper: ChatWallpaper::Auto,
         }
     }
 }
@@ -224,6 +271,7 @@ mod tests {
         assert!(parsed.check_for_updates);
         assert!(parsed.download_updates_automatically);
         assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
+        assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Auto);
     }
 
     #[test]

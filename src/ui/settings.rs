@@ -89,6 +89,35 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     widgets::setting_row(
                         ui,
                         &palette,
+                        "Chat wallpaper",
+                        "Auto picks a doodle from the theme colours. You can force Black, Gray, Green, Red, or White. More pictures per colour come later.",
+                        |ui| {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                                let selected = app.settings.chat_wallpaper.label();
+                                let response = egui::ComboBox::from_id_salt("chat_wallpaper")
+                                    .selected_text(" ")
+                                    .width(200.0_f32.min(ui.available_width()))
+                                    .show_ui(ui, |ui| {
+                                        for choice in crate::settings::ChatWallpaper::ALL {
+                                            if theme_option(ui, &palette, choice.label(), app.settings.chat_wallpaper == choice) {
+                                                app.actions.push(Action::SetChatWallpaper(choice));
+                                            }
+                                        }
+                                    });
+                                let rect = response.response.rect;
+                                let text = widgets::line(ui, selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
+                                text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
+                                response.response.widget_info(|| {
+                                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Chat wallpaper");
+                                    info.current_text_value = Some(selected.to_owned());
+                                    info
+                                });
+                            });
+                        },
+                    );
+                    widgets::setting_row(
+                        ui,
+                        &palette,
                         "Zoom",
                         "You can also use Ctrl+plus and Ctrl+minus.",
                         |ui| {

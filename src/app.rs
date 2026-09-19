@@ -2845,6 +2845,10 @@ impl App {
                 self.mark_settings_dirty();
                 self.sync_prefetch();
             }
+            Action::SetChatWallpaper(choice) => {
+                self.settings.chat_wallpaper = choice;
+                self.mark_settings_dirty();
+            }
             Action::SetCustomTheme(filename) => {
                 if let Some(theme) = self.custom_themes.find(&filename) {
                     self.settings.custom_theme_cache = Some(theme.clone());

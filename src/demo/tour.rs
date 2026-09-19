@@ -717,6 +717,28 @@ mod tests {
     }
 
     #[test]
+    fn the_chat_wallpaper_dropdown_lists_auto_and_the_five_families() {
+        use crate::settings::ChatWallpaper;
+        let mut app = super::super::tests::app();
+        app.page = Page::Settings;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        click(&mut app, &mut tour, &ctx, "Auto");
+        for name in ["Auto", "Black", "Gray", "Green", "Red", "White"] {
+            assert!(
+                tour.labels.contains_key(name),
+                "missing chat wallpaper choice {name}"
+            );
+        }
+        click(&mut app, &mut tour, &ctx, "Green");
+        assert_eq!(app.settings.chat_wallpaper, ChatWallpaper::Green);
+    }
+
+    #[test]
     fn real_input_opens_menus_completes_text_and_sends_offline_media() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
