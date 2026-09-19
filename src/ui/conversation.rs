@@ -26,7 +26,7 @@ const AUTO_DOWNLOAD_LIMIT: u64 = 64 * 1024 * 1024;
 /// Group-message avatar size.
 const SENDER_AVATAR: f32 = 28.0;
 const BODY_SIZE: f32 = 14.5;
-/// Empty/one-line composer is taller than one text line so the first line sits in the middle.
+/// Empty/one-line composer is taller than one text line so the caret fills the band.
 const COMPOSER_MIN_HEIGHT_FACTOR: f32 = 1.35;
 /// Panel gap under the composer bubble. Was 8; 20% more is 10.
 const COMPOSER_BOTTOM_INSET: i8 = 10;
@@ -1042,9 +1042,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 .layout_no_wrap("x".to_owned(), theme::regular(BODY_SIZE), palette.text)
                 .size()
                 .y;
-            // Match the button to a one-line field. The field grows to six
-            // lines while the row stays bottom-aligned. The empty field is
-            // 35% taller so the first line sits in the middle.
+            // Match the send disc to a one-line field. The field grows to six
+            // lines. One line is 35% taller so the caret and the first line
+            // fill the bubble; attach, emoji, send, and schedule stay centered.
             let field_padding = 14.0;
             let button_width = line_height + field_padding;
             let min_row = (line_height + field_padding) * COMPOSER_MIN_HEIGHT_FACTOR;
@@ -1052,12 +1052,16 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 .ctx()
                 .data(|data| data.get_temp::<f32>(id.with("galley-h")))
                 .unwrap_or(line_height);
+            let galley_rows = ui
+                .ctx()
+                .data(|data| data.get_temp::<usize>(id.with("galley-rows")))
+                .unwrap_or(1);
             let text_height = galley_h.clamp(line_height, line_height * 6.0);
             let row_height = (text_height + field_padding).max(min_row).max(button_width);
             let min_text = (row_height - field_padding).max(line_height);
             ui.allocate_ui_with_layout(
                 vec2(ui.available_width(), row_height),
-                Layout::left_to_right(Align::Max),
+                Layout::left_to_right(Align::Center),
                 |ui| {
                 if app.editing.is_none()
                     && theme::icon_button(
@@ -1142,6 +1146,9 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     let (mut job, found) =
                                         crate::emoji::editor_job(text.as_str(), &format);
                                     job.wrap.max_width = wrap;
+                                    if galley_rows <= 1 {
+                                        job.first_row_min_height = min_text;
+                                    }
                                     clusters = found;
                                     let mut galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
                                     crate::bidi::reorder_rtl_runs(std::sync::Arc::make_mut(
@@ -1251,6 +1258,10 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 }
                                 ui.ctx().data_mut(|data| {
                                     data.insert_temp(id.with("galley-h"), output.galley.size().y);
+                                    data.insert_temp(
+                                        id.with("galley-rows"),
+                                        output.galley.rows.len(),
+                                    );
                                 });
                             });
                     });

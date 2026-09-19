@@ -916,6 +916,29 @@ mod tests {
             caret_in(&focused, &app),
             "the caret is painted in the composer while the window has focus"
         );
+        let bubble = ctx
+            .read_response(egui::Id::new("composer-bubble"))
+            .expect("composer bubble")
+            .rect;
+        let caret_h = focused
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::LineSegment { points, stroke }
+                    if stroke.width >= 1.5
+                        && stroke.color == app.palette.accent
+                        && points[0].y > 700.0 =>
+                {
+                    Some((points[1].y - points[0].y).abs())
+                }
+                _ => None,
+            })
+            .fold(0.0_f32, f32::max);
+        assert!(
+            caret_h + 0.5 >= bubble.height(),
+            "caret height {caret_h} should fill the empty composer {bubble_h}",
+            bubble_h = bubble.height()
+        );
         let unfocused = step_output(&mut app, &ctx, Vec::new(), 0.2, false);
         assert!(
             !caret_in(&unfocused, &app),
