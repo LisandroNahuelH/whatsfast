@@ -897,12 +897,11 @@ impl App {
             && self.chats.iter().filter(|chat| chat.pinned).count() > 1
     }
 
-    /// Whether hiding the sidebar leaves the narrow rail behind. It does when
-    /// the setting asks for it and no conversation takes the window, so a
-    /// user who does not know the shortcut is never stuck.
+    /// Whether hiding the sidebar leaves the narrow rail behind. It does
+    /// unless the setting asks for the old behavior, so a user who does not
+    /// know the shortcut always has a way back.
     pub fn compact_sidebar(&self) -> bool {
         !self.settings.hide_sidebar_fully
-            && (self.open_chat.is_none() || self.page == Page::Settings)
     }
 
     /// Matching individual contacts without an existing chat, sorted by name.

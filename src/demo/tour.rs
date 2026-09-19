@@ -1068,6 +1068,24 @@ mod tests {
     }
 
     #[test]
+    fn the_rail_stays_with_a_chat_open() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        app.sidebar_visible = false;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        assert!(app.open_chat.is_some(), "a chat is open");
+        assert!(
+            output.shapes.iter().any(|clipped| matches!(
+                &clipped.shape,
+                egui::Shape::Circle(circle) if circle.center.x < 72.0 && circle.radius > 20.0
+            )),
+            "the rail draws the chat pictures with a chat open too"
+        );
+    }
+
+    #[test]
     fn the_compact_sidebar_opens_a_chat_from_its_picture() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
