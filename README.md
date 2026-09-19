@@ -39,7 +39,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Sequential forwarding for batched messages
 
-- **Technical:** When you forward several messages at once, an optional Settings mode sends them one after another on the wire instead of relying on a single burst that can arrive out of order on the phone or in group history.
+- **Technical:** When you forward several messages at once, Settings **Forward messages in order** (on by default) sends them one after another. Each one waits until the message before it shows its first tick, so mixed text, pictures, and videos keep the original chat order. When off, they send together and may arrive out of order.
 - **Daily use:** Instructions, numbered steps, and screenshots stay in the order you selected. Better for handoffs, checklists, and “read top to bottom” threads at work.
 
 ### Close Settings by clicking the active section again
