@@ -101,7 +101,11 @@ Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
   without opening a window.
 - `src/theme.rs` owns colours, fonts, and icons; `src/ui/widgets.rs` the
   shared controls. New icons go in `assets/icons/` as 24px Lucide-style SVGs
-  and in the `icons!` table.
+  and in the `icons!` table. The **app mark** is the ZapFast message-circle on
+  amber `#E85D04` in `packaging/icons/whatsfast.svg` (window, tray, `.ico`,
+  login, About, empty chat, README). After SVG edits, run
+  `cargo test --locked util::tests::write_packaging_pngs -- --ignored` then rebuild
+  `packaging/windows/whatsfast.ico`.
 - `src/markup.rs` turns WhatsApp's text markup, links, and mentions into an
   egui `LayoutJob`; `src/emoji.rs` swaps every emoji for a placeholder
   glyph at layout time and paints the desktop's colour emoji bitmap over
