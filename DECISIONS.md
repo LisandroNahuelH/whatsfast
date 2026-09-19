@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | End each coding turn with `cargo build --locked` (debug) | Incremental rebuild so `target/debug/whatsfast.exe` is ready to try at once | Waiting for `--release` or a later `cargo run` that may only surface the installer copy |
 | 2026-09-19 | One-click update toast; download auto ON by default | Wizard users update with one click; last chat already restores | Modal Update WhatsFast + explicit Restart |
 | 2026-09-19 | Chat photos open in an in-app viewer | Click must show the photo here, with zoom and pan. The system viewer stays on **Open file**, stickers, and video | `Action::OpenFile` on photo click |
 | 2026-09-19 | No GitHub Actions; Actions disabled in repo settings | Solo dev on PC; GH CI only slowed pushes | CI + Release workflows |
