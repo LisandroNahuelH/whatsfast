@@ -26,7 +26,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   whatsapp-rust `Bot`, archive, downloads, profile pictures. Talks to UI via
   `Command` and `Event`. Serial `Command::Forward` keeps a queue and starts
   the next send only after `Command::Sent` writes `Delivery::Sent` (first
-  tick) or `Failed`; parallel batches still use `forward_batch`.
+  tick) or `Failed`; parallel batches still use `forward_batch`. Background
+  history prefetch asks the phone one page at a time and downloads files
+  one at a time into the archive; it does not prepend those pages into the
+  open conversation.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
