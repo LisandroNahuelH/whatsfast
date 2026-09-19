@@ -18,7 +18,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 
 - **`src/ui/`** — egui views; emit `model::Action`; no direct archive access.
   The open chat paints a bundled doodle wallpaper behind the bubbles, scaled
-  to cover the panel. Settings keeps a plain `palette.chat` fill.
+  to cover the panel. Each family has three PNGs; Settings names them
+  `Black 1` and so on, and the chat menu **Next wallpaper** steps the slot.
+  Settings keeps a plain `palette.chat` fill.
   Clicking a downloaded chat photo opens `ui/viewer.rs`, a full-window overlay
   with wheel zoom, click-and-drag pan, and previous/next among downloaded
   photos in that chat. Stickers, videos, and **Open file** still use the
