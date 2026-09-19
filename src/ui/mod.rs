@@ -46,13 +46,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let wallpaper = app.settings.chat_wallpaper.resolve(&palette);
     let wallpaper_slot = app.settings.wallpaper_slot();
+    let show_split = app.sidebar_visible || app.compact_sidebar();
     egui::CentralPanel::default()
         .frame(Frame::new().fill(palette.chat))
-        .show(ui, |ui| match app.page {
-            Page::Settings => settings::show(app, ui),
-            Page::Chats => {
-                wallpaper::paint(ui, wallpaper, wallpaper_slot);
-                conversation::show(app, ui);
+        .show(ui, |ui| {
+            match app.page {
+                Page::Settings => settings::show(app, ui),
+                Page::Chats => {
+                    wallpaper::paint(ui, wallpaper, wallpaper_slot);
+                    conversation::show(app, ui);
+                }
+            }
+            if show_split {
+                chats::paint_split(ui, &palette);
             }
         });
     picker::show(app, ctx);

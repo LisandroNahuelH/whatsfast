@@ -1,6 +1,6 @@
 //! The left panel: the chat list.
 
-use egui::{Align, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
+use egui::{Align, Color32, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
 
 use crate::app::App;
 use crate::model::{Action, Chat, ChatListId, Contact, Dialog, Message, Page};
@@ -29,13 +29,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         app.settings.sidebar_width = width;
         app.actions.push(Action::SettingsChanged);
     }
-    // Separate the panel from the conversation.
-    let rect = response.response.rect;
-    ui.painter().vline(
-        rect.right(),
-        rect.y_range(),
-        egui::Stroke::new(1.0, palette.outline),
-    );
 }
 
 /// Width of the sidebar when it narrows to its bones.
@@ -55,16 +48,32 @@ pub fn show_compact(app: &mut App, ui: &mut egui::Ui) {
         .size_range(COMPACT_WIDTH..=COMPACT_WIDTH)
         .show_separator_line(false)
         .frame(Frame::new().fill(palette.panel).inner_margin(Margin::ZERO));
-    let response = panel.show(ui, |ui| {
+    panel.show(ui, |ui| {
         compact_header(app, ui);
         compact_list(app, ui);
     });
-    // Separate the panel from the conversation.
-    let rect = response.response.rect;
-    ui.painter().vline(
-        rect.right(),
-        rect.y_range(),
-        egui::Stroke::new(1.0, palette.outline),
+}
+
+fn split_color(palette: &Palette) -> Color32 {
+    if palette.dark {
+        Color32::from_white_alpha(42)
+    } else {
+        Color32::from_black_alpha(36)
+    }
+}
+
+/// One physical pixel on the chat side of the sidebar, after the wallpaper.
+pub fn paint_split(ui: &egui::Ui, palette: &Palette) {
+    let rect = ui.max_rect();
+    let width = 1.0 / ui.pixels_per_point().max(1.0);
+    let color = split_color(palette);
+    ui.painter().rect_filled(
+        Rect::from_min_max(
+            pos2(rect.left(), rect.top()),
+            pos2(rect.left() + width, rect.bottom()),
+        ),
+        0.0,
+        color,
     );
 }
 
@@ -1776,6 +1785,15 @@ mod tests {
         );
         // Without the archived row the same pointer reads one higher.
         assert_eq!(pinned_slot(pressed, grab, 0.0, 0.0, stride, 0, pinned), 2);
+    }
+
+    #[test]
+    fn the_sidebar_split_is_a_faint_one_pixel_hairline() {
+        assert_eq!(split_color(&Palette::dark()), Color32::from_white_alpha(42));
+        assert_eq!(
+            split_color(&Palette::light()),
+            Color32::from_black_alpha(36)
+        );
     }
 
     #[test]
