@@ -1521,8 +1521,8 @@ mod tests {
         );
         app.open_chat = Some("491700000000@s.whatsapp.net".to_owned());
         assert!(
-            !app.compact_sidebar(),
-            "an open chat takes the whole window"
+            app.compact_sidebar(),
+            "an open chat keeps the rail: the way back is always there"
         );
         app.page = crate::model::Page::Settings;
         assert!(app.compact_sidebar(), "settings keeps the rail");
