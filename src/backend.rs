@@ -144,6 +144,8 @@ pub enum Command {
         from_chat: ChatId,
         message: String,
         to_chat: ChatId,
+        /// One at a time, waiting for each message's first tick.
+        in_order: bool,
     },
     /// Updates our typing state in a chat.
     Composing {
