@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | App version is `0.15.(100 + N)` and every git commit bumps the patch by 1 | Agents left `0.15.1` stuck; the millesimal patch tracks `git rev-list --count HEAD` | Bumping `Cargo.toml` only when cutting a GitHub release |
 | 2026-09-19 | Failed attachment prefetch retries with backoff for 30 days | A one-shot skip left holes when CDN links expired; the phone can re-upload later | Permanent `media_skip` until reconnect |
 | 2026-09-19 | README hero uses PNG (`app-mark.png`, `hero-banner.png`) | GitHub strips or caches SVG; same URL kept the old 3-dot mark | README `<img>` pointing at `.svg` |
 | 2026-09-19 | App mark is the ZapFast message-circle on amber `#E85D04` | Same glyph as upstream, colour split from WhatsApp green | Teal 3-dot `whatsfast.svg` / green ZapFast mark |
