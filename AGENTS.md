@@ -8,6 +8,11 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 
 1. **Backup** files you will edit.
 2. **Build** — full checks in *Definition of done* below.
+2.1 **Debug exe** — after the last Rust change of the turn, run
+    `cargo build --locked` (default debug profile, incremental). If
+    `target/debug/whatsfast.exe` is running, stop that process first so
+    the linker can replace the file. Leave the new exe ready to try.
+    Do not use `--release` here.
 2.5 **Jev gate** when Rust source changed (quota; skip if no key).
 3. **Commits** — atomic, English conventional messages.
 3.1 **Push** — when the user asked for repository changes, push to `origin/main` in the same turn after commits (and after build or jev when they apply). Do not wait for a separate "push" request.
@@ -178,7 +183,8 @@ Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
   (ksni), `src/tray_native.rs` the Windows and macOS item (tray-icon; on
   macOS made with the first window and pumped by `tray::idle` while none
   exists). `src/single_instance.rs` holds a loopback port so a second
-  launch surfaces the first. `src/notify.rs` sends desktop notifications
+  launch surfaces the first, including `cargo run` while the installer
+  copy is still open. `src/notify.rs` sends desktop notifications
   for `Event::Incoming` (live messages from others, not history) when the
   reader is away from that chat. macOS has no title bar: the content runs
   to the top. `src/macos.rs` keeps native application menus alive across window
@@ -271,6 +277,11 @@ A release is not finished when the tag is pushed. For WhatsFast (no CI on GitHub
 
   Do not weaken a lint, delete a test, or add an `allow` merely to make
   them pass without explaining why the rule does not apply.
+- After Rust changed this turn, run `cargo build --locked` so
+  `target/debug/whatsfast.exe` is current. Incremental debug only. Stop
+  that debug process first if Windows has the exe locked. A second launch
+  surfaces the process that already holds the instance port, so an
+  installer copy still running hides this debug binary.
 - Report platform coverage honestly: say what was run and what was only
   compiled.
 - Never log message contents, phone numbers, keys, or QR payloads at a
