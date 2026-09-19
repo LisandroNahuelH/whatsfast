@@ -83,7 +83,7 @@ fn try_legacy_archive_key(
             continue;
         };
         let key = secret_to_key(secret)?;
-        if keyed(path, &*key).is_ok() {
+        if keyed(path, &key).is_ok() {
             return Ok(Some(key));
         }
     }
@@ -307,7 +307,10 @@ mod tests {
         let store = keyring_core::mock::Store::new().unwrap();
         let entry = store.build("whatsfast-test", "archive", None).unwrap();
         let key = key_from_entry(&path, &entry, store.as_ref()).unwrap();
-        assert_eq!(*key, *key_from_entry(&path, &entry, store.as_ref()).unwrap());
+        assert_eq!(
+            *key,
+            *key_from_entry(&path, &entry, store.as_ref()).unwrap()
+        );
         let connection = open(&path, &key).unwrap();
         connection
             .execute_batch(
