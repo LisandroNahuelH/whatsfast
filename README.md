@@ -47,8 +47,31 @@ Run fmt, clippy, and tests locally before you push (see `AGENTS.md`).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+WhatsFast is distributed under the **[MIT License](LICENSE)**.
+
+The `LICENSE` file includes the copyright notice that applies to this
+repository's source distribution (including lineage from the ZapFast project).
+You may use, modify, and redistribute the software under the conditions in
+that file. The software is provided **as is**, without warranty.
+
+For a full list of credits and third-party components, see
+[Attributions](#attributions) below and [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
 
 ## Attributions
 
-See [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+WhatsFast stands on work by many open-source authors. **Thank you** to:
+
+- **[Carmine Paolino](https://github.com/crmne)** and contributors of
+  **[ZapFast](https://github.com/crmne/zapfast)** — foundation of this client
+  (MIT).
+- **[oxidezap/whatsapp-rust](https://github.com/oxidezap/whatsapp-rust)** —
+  WhatsApp linked-device protocol.
+- **[egui](https://github.com/emilk/egui)** — native UI toolkit.
+- **Lucide** icon authors ([license](assets/icons/LICENSE.txt)) and **Inter**
+  font authors ([license](assets/fonts/Inter-LICENSE.txt)) — interface assets.
+
+WhatsApp is a trademark of **Meta Platforms, Inc.** WhatsFast is independent
+and is not affiliated with WhatsApp or Meta.
+
+Details, maintainer information, and dependency notes:
+**[ATTRIBUTIONS.md](ATTRIBUTIONS.md)**.
