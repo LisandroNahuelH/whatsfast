@@ -2055,13 +2055,9 @@ impl App {
                     if !selecting.ids.remove(&message) {
                         selecting.ids.insert(message);
                     }
-                }
-                if self
-                    .selecting
-                    .as_ref()
-                    .is_some_and(|selecting| selecting.ids.is_empty())
-                {
-                    self.selecting = None;
+                    if selecting.ids.is_empty() {
+                        self.selecting = None;
+                    }
                 }
             }
             Action::ClearSelection => self.selecting = None,

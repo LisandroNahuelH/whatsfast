@@ -837,18 +837,17 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .as_ref()
         .filter(|drag| drag.active)
         .map(|drag| (drag.chat.clone(), drag.grab_y));
-    if let Some((id, grab_y)) = held {
-        if let Some(chat) = app.chat(&id).cloned() {
-            let title = app.chat_title(&chat);
-            let picture = app.avatar(&chat.id);
-            if let Some(pointer) = ui.input(|input| input.pointer.interact_pos()) {
-                let rect = Rect::from_min_size(
-                    pos2(ui.max_rect().left(), pointer.y - grab_y),
-                    vec2(ui.max_rect().width(), row_height),
-                );
-                paint_dragged(ui, &palette, rect, &title, &chat.id, picture.as_deref());
-            }
-        }
+    if let Some((id, grab_y)) = held
+        && let Some(chat) = app.chat(&id).cloned()
+        && let Some(pointer) = ui.input(|input| input.pointer.interact_pos())
+    {
+        let title = app.chat_title(&chat);
+        let picture = app.avatar(&chat.id);
+        let rect = Rect::from_min_size(
+            pos2(ui.max_rect().left(), pointer.y - grab_y),
+            vec2(ui.max_rect().width(), row_height),
+        );
+        paint_dragged(ui, &palette, rect, &title, &chat.id, picture.as_deref());
     }
     // The rows have drawn with the gesture still set, so the release cannot
     // read as a click that opens the chat.

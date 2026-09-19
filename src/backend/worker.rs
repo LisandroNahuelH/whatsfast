@@ -3052,7 +3052,7 @@ impl Worker {
                 // A scheduled send ends its occurrence here: a one-off is done,
                 // a recurrence waits for its next time.
                 if let Ok(Some(entry)) = self.archive.scheduled_for_message(&chat, &id) {
-                    let error = error.as_ref().map(|text| text.clone());
+                    let error = error.clone();
                     self.close_scheduled(&entry, error, crate::util::now());
                 }
                 if let Some(error) = error {
@@ -3167,6 +3167,7 @@ impl Worker {
     }
 
     /// Stores a scheduled message the user picked a time for.
+    #[allow(clippy::too_many_arguments)]
     fn schedule_message(
         &mut self,
         chat: ChatId,

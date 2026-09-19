@@ -157,15 +157,14 @@ impl Archive {
 
     /// The scheduled message waiting for this outgoing message, if any.
     pub fn scheduled_for_message(&self, chat: &str, message_id: &str) -> Result<Option<Scheduled>> {
-        Ok(self
-            .connection
+        self.connection
             .query_row(
                 "SELECT id, chat, text, kind, hour, minute, weekday, day_of_month, nth, next_at, state, message_id, last_error, created_at, last_fired_at
                  FROM scheduled WHERE chat = ?1 AND message_id = ?2 AND state = 'sending'",
                 params![chat, message_id],
                 row_of,
             )
-            .optional()?)
+            .optional()
     }
 
     /// Closes an occurrence the way its kind asks for.
