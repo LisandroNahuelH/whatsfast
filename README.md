@@ -307,7 +307,7 @@ After you edit a palette, run `whatsfast reload-themes`. The command also works 
 
 ### Updating WhatsFast
 
-WhatsFast checks GitHub once a day when **Check for updates** is enabled. **Download updates automatically** is on by default. A sticky toast says a new version is available. Click **Update** to install the verified GitHub release, restart, and reopen the last chat. Downloads contact GitHub's API and release-asset hosts and are checked against the release's SHA-256 checksums. The updater keeps a backup and restores it if the updated app cannot start.
+WhatsFast checks GitHub every 10 minutes when **Check for updates** is enabled. **Download updates automatically** is on by default. A sticky toast says a new version is available. Click **Update** to install the verified GitHub release, restart, and reopen the last chat. Downloads contact GitHub's API and release-asset hosts and are checked against the release's SHA-256 checksums. The updater keeps a backup and restores it if the updated app cannot start.
 
 The in-app updater supports marked portable downloads and the Windows installer. Keep `whatsfast-portable.txt` beside a portable executable. A package-manager install, if you built one yourself, keeps that manager's update path. No account or additional service is needed.
 
