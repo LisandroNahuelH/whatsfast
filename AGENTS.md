@@ -16,6 +16,13 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
     the linker can replace the file. Leave the new exe ready to try.
     Do not use `--release` here.
 2.5 **Jev gate** when Rust source changed (quota; skip if no key).
+2.6 **Version** — every git commit (product or docs) bumps the app patch
+    by 1. Scheme: `0.15.(100 + N)` where `N` is `git rev-list --count HEAD`
+    **after** that commit. Before `git commit`, set `package.version` in
+    `Cargo.toml` and the `name = "whatsfast"` row in `Cargo.lock` to
+    `0.15.(100 + current_count + 1)`. Stage both files in the same commit.
+    Do not skip this on docs-only commits. A GitHub release does not add
+    another bump: tag the version already on `main`.
 3. **Commits** — atomic, English conventional messages.
 3.1 **Push** — when the user asked for repository changes, push to `origin/main` in the same turn after commits (and after build or jev when they apply). Do not wait for a separate "push" request.
 4. **AGENTS.md** — operating facts only.
@@ -272,8 +279,9 @@ released, which goes out as soon as it is fixed.
 
 A release is not finished when the tag is pushed. For WhatsFast (no CI on GitHub):
 
-1. Bump `version` in `Cargo.toml` and update `Cargo.lock` with a build. Run
-   the full local checks in *Definition of done*, commit, and push.
+1. Use the current `Cargo.toml` version (step 2.6 already bumps it on every
+   commit). Run the full local checks in *Definition of done*, commit any
+   remaining release notes, and push. Do not add an extra version bump here.
 2. Build the Windows installer locally: `cargo build --locked --release`, then Inno Setup per `packaging/windows/whatsfast.iss` (output `whatsfast-v*-*-pc-windows-msvc-setup.exe`). Tag `vX.Y.Z`, push the tag.
 3. Publish GitHub Releases with **only** `whatsfast-v*-*-pc-windows-msvc-setup.exe`. Do not attach zips, standalone `whatsfast.exe`, or other archives unless the user changes this policy. Use the **curl upload runbook** ([`AGENTS/github-release-upload.md`](AGENTS/github-release-upload.md)): one installer, sequential `curl.exe` to `uploads.github.com`, then `gh release edit --draft=false`. Avoid `gh release upload` for large binaries. Write release notes by hand; mention the installer in **Install (Windows)**.
 
