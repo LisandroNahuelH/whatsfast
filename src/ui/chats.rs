@@ -102,6 +102,18 @@ fn compact_header(app: &mut App, ui: &mut egui::Ui) {
                 ui.add_space(2.0);
                 if theme::icon_button(
                     ui,
+                    Icon::PanelLeft,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    "Show the chat list (Ctrl+B)",
+                )
+                .clicked()
+                {
+                    app.actions.push(Action::ToggleSidebar);
+                }
+                if theme::icon_button(
+                    ui,
                     Icon::Search,
                     18.0,
                     palette.secondary,
