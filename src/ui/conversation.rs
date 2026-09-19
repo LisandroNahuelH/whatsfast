@@ -129,19 +129,6 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 if !app.sidebar_visible && theme::macos_chrome(ui.ctx()) {
                     ui.add_space((theme::traffic_light_inset(ui.ctx()) - 14.0).max(0.0));
                 }
-                if !app.sidebar_visible
-                    && theme::icon_button(
-                        ui,
-                        Icon::PanelLeft,
-                        18.0,
-                        palette.secondary,
-                        palette.text,
-                        "Show the chat list (Ctrl+B)",
-                    )
-                    .clicked()
-                {
-                    app.actions.push(Action::ToggleSidebar);
-                }
                 let picture = app.avatar(&chat.id);
                 let (subtitle, color) = subtitle(app, chat);
                 let right_controls = 52.0;
