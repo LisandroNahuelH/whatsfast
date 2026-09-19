@@ -67,7 +67,7 @@ Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
   filed under its phone number once the mapping is known. Use
   `Worker::canonical` for anything that arrives as a `Jid`.
 - `src/updates/` downloads verified GitHub releases and hands installation to a
-  helper after an explicit restart action. Keep package-manager detection, asset
+  helper from a one-click Update toast. Keep package-manager detection, asset
   checksums, startup acknowledgement and rollback intact. Portable releases carry
   `packaging/zapfast-portable.txt`; the Windows installer has its own marker.
 - `src/theme/custom.rs` scans local JSON palettes off the UI thread, caching the
