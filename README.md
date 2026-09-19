@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packaging/icons/whatsfast.svg" alt="WhatsFast" width="96" height="96" />
+<img src="docs/assets/images/app-mark.png" alt="WhatsFast" width="96" height="96" />
 
 # WhatsFast
 
@@ -24,7 +24,7 @@ Rust + [egui](https://github.com/emilk/egui). Protocol: [whatsapp-rust](https://
 
 <br />
 
-<img src="docs/assets/images/readme-banner.svg" alt="WhatsFast: native WhatsApp client for Windows" width="920" />
+<img src="docs/assets/images/hero-banner.png" alt="WhatsFast: native WhatsApp client for Windows" width="920" />
 
 <img src="docs/assets/images/demo-chat.png" alt="WhatsFast demo window: chat list, photo, voice messages, document, and link preview. Synthetic sample data only." width="920" />
 
