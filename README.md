@@ -30,7 +30,8 @@ WhatsApp or Meta.
 If you used ZapFast on this PC, link again after installing WhatsFast. Your
 linked device entry may still show the old name until you unlink and pair.
 WhatsFast reads the same archive path after the one-time folder rename from
-`zapfast` to `whatsfast` under your app data directory.
+`zapfast` to `whatsfast` under your app data directory. The Windows credential
+manager key from ZapFast is picked up automatically on first launch.
 
 ## Install (Windows)
 
