@@ -103,7 +103,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Background download of older chat history
 
-- **Technical:** Settings **Download older history in the background** (Recent and pinned by default) slowly asks the phone for older messages and then downloads their files up to 64 MB. It fills the local archive, not the visible thread. Off turns it off. This chat covers only the open conversation. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned. It keeps running from the tray.
+- **Technical:** Settings **Download older history in the background** (Recent and pinned by default) slowly asks the phone for older messages and then downloads their files up to 64 MB. Failed files are asked again with a long wait, for up to 30 days. It fills the local archive, not the visible thread. Off turns it off. This chat covers only the open conversation. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned. It keeps running from the tray.
 - **Daily use:** Scroll up later and the older text, photos, videos, and documents are already there, without hitting WhatsApp's rate limit from a fast flick.
 
 ### Sequential forwarding for batched messages
