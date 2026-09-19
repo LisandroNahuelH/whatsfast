@@ -43,6 +43,8 @@ Download the latest release from
 cargo build --release
 ```
 
+Run fmt, clippy, and tests locally before you push (see `AGENTS.md`).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

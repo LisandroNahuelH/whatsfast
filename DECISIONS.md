@@ -4,7 +4,8 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
-| 2026-09-19 | Squashed `main` to a single owner commit | GitHub Contributors listed upstream authors from copied history; repo is Lisandro-only access | prior linear history |
+| 2026-09-19 | No GitHub Actions; `allow_actions=disabled` | Solo dev on PC; GH CI only slowed pushes | CI + Release workflows |
+| 2026-09-19 | Branch protection removed | No required checks without Actions | protection on `main` |
 | 2026-09-19 | Removed crmne Actions (triage, docs Pages, flatpak, packaging) | WhatsFast is not the upstream project; CI = one Windows job + Release on tags | — |
 | 2026-09-19 | Post-verify fixes: default branch main, no Release→packaging job | GitHub showed inaugural branch; Actions queue blocked Release | — |
 | 2026-09-19 | Jev gate skipped on G1–G9 integration PRs | quota/time; full checks run on Windows main before tag | — |

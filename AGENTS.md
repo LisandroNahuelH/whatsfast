@@ -15,8 +15,9 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 6. **Other owners** — `README.md` when user-visible behavior changes (same PR).
 7. **Cleanup** temps in `AGENTS/` when the task closes.
 
-Working artifacts go in `AGENTS/`. No `CLAUDE.md`. Internal features merge via
-GitHub PRs on `origin` (portfolio). Upstream optional; always rebrand after sync.
+Working artifacts go in `AGENTS/`. No `CLAUDE.md`. Push commits directly to
+`main` (solo maintainer). **No GitHub Actions** — run *Definition of done*
+checks only on your PC before push.
 
 ## Product boundaries
 
@@ -241,31 +242,14 @@ fixes worth a changelog entry. Five patch releases in a day is what this
 rule exists to prevent. The exception is a regression in something just
 released, which goes out as soon as it is fixed.
 
-A release is not finished when the tag is pushed. Do these in order:
+A release is not finished when the tag is pushed. For WhatsFast (no CI on GitHub):
 
 1. Bump `version` in `Cargo.toml` and update `Cargo.lock` with a build. Run
-   the full checks, commit, and push before tagging so the binaries report
-   the right version.
-2. Tag `vX.Y.Z` and push the tag. Wait for every platform build, artifact,
-   and `checksums.txt`.
-3. Replace the generated GitHub notes with written release notes. Start with
-   a short summary, group user-visible changes under headings such as `New`
-   and `Fixed`, credit contributors and reporters where it helps, and end
-   with a full-changelog link comparing the previous tag. Write about what
-   changed for the user, not the commit history.
-4. After the release files exist, update both `zapfast_version` in
-   `docs/_config.yml` and the version menu in `docs/_data/versions.yml`.
-   The menu lists only the current version, which points to `/download/`,
-   and the Changelog link; do not add older versions to it. Never point the
-   download page at files that do not exist yet. Set `release_asset_prefix` to
-   `zapfast` and `release_app_name` to `ZapFast` only once those assets exist.
-5. Update the AUR packages from the templates in `packaging/arch/`. The shared
-   packaging workflow generates versions, hashes and `.SRCINFO` after the
-   release exists, and publishes when `PUBLISH_AUR` and the required secrets
-   are configured. Otherwise use `native-packages` to build, stage,
-   review and publish the generated recipes; see `PACKAGING.md`. Validate
-   native builds with `makepkg -f`. A recipe-only `zapfast-git` change does
-   not require an application release.
+   the full local checks in *Definition of done*, commit, and push.
+2. Build Windows artifacts locally (`cargo build --locked --release`, zip and
+   Inno Setup per `packaging/windows/whatsfast.iss`). Tag `vX.Y.Z`, push the tag.
+3. Publish assets with `gh release create` (or the GitHub Releases UI) when you
+   want downloads public. Write release notes by hand.
 
 ## Definition of done
 

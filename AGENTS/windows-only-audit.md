@@ -1,33 +1,17 @@
-# Windows-only CI and packaging audit
+# Windows-only packaging audit
 
-WhatsFast targets **Windows x64 MSVC** only. This documents what was removed from CI/release and what stays deferred.
+WhatsFast targets **Windows x64 MSVC** only.
 
-## Removed CI targets (2026-09-19)
+## GitHub
 
-| Former target | Workflow | Notes |
-|---------------|----------|-------|
-| `ubuntu-latest` (quality + test) | `ci.yml` | Quality and tests run on `windows-latest`. |
-| `macos-latest` (test, demo shot, preview artifact) | `ci.yml` | macOS window smoke test removed. |
-| `windows-latest` / `aarch64-pc-windows-msvc` compile check | `ci.yml` | `windows-arm64` job removed. |
+- **No GitHub Actions** (`allow_actions=disabled`). No `.github/workflows/`.
+- Verification: run *Definition of done* in `AGENTS.md` on your PC before push.
+- Releases: build zip/setup locally; publish with `gh release create` when ready.
 
-## Removed release builds
+## Removed upstream automation (historical)
 
-| Former target / job | Workflow | Notes |
-|---------------------|----------|-------|
-| `x86_64-unknown-linux-gnu` | `release.yml` | No `.tar.gz` Linux portable. |
-| `aarch64-unknown-linux-gnu` | `release.yml` | No arm64 Linux build. |
-| `aarch64-pc-windows-msvc` | `release.yml` | No Windows arm64 release. |
-| `macos` (universal DMG, notarize) | `release.yml` | Entire job removed. |
-| `flatpak` (Flathub bundle) | `release.yml` | Entire job removed; needs Linux artifact. |
+crmne triage, Pages, Flatpak, packaging matrix, and Windows CI jobs on GitHub were removed.
 
-## Kept
+## Deferred in tree (not shipped)
 
-- `windows-latest` + `x86_64-pc-windows-msvc` release build.
-- Artifacts: `whatsfast-<tag>-x86_64-pc-windows-msvc.zip`, Inno Setup `*-setup.exe`, `checksums.txt` on GitHub Releases.
-- `ci.yml`: one Windows job (fmt, clippy, test). No upstream triage, Pages, Flatpak, or `crmne/native-packages`.
-
-## Deferred (not deleted from repo)
-
-- `packaging/flatpak/` — unused until a Linux product exists again.
-- `packaging/macos/` — unused until macOS returns to scope.
-- Linux desktop files under `packaging/applications/` — legacy ZapFast paths; not shipped by WhatsFast releases.
+- `packaging/flatpak/`, `packaging/macos/`, Linux desktop files, `native-packages.yaml` (upstream templates).

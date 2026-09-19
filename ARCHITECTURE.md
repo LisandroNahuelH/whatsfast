@@ -29,5 +29,6 @@ See root `AGENTS.md` for invariants (privacy, polls, receipts, selection, update
 
 ## Platform scope
 
-Supported product: **Windows desktop** releases and CI. Non-Windows code may
-remain temporarily but is not supported or released.
+Supported product: **Windows desktop** releases. Verification runs **locally**
+only (see `AGENTS.md` *Definition of done*). There are no GitHub Actions
+workflows. Non-Windows code may remain temporarily but is not supported or released.

@@ -6,7 +6,7 @@ Rebrand pass after pulling changes from upstream (crmne/zapfast or whatsapp-rust
 
 1. Fetch upstream tags and `main`. Read the release notes for breaking UI or protocol changes.
 2. List files that still carry ZapFast naming: `grep -ri zapfast -- .` (exclude `DECISIONS.md`, git history, and this runbook).
-3. Confirm Windows-only CI still matches `.github/workflows/ci.yml` and `release.yml` (single `x86_64-pc-windows-msvc` target).
+3. Confirm upstream did not re-add `.github/workflows/` (this repo uses **local checks only**; see `DECISIONS.md`).
 
 ## Rebrand checklist
 
