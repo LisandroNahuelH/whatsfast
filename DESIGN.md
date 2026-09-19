@@ -15,3 +15,5 @@ Chat wallpaper names in Settings are Auto or `Black 1` to `White 3`. Hover a nam
 The chat side of the sidebar is a 1-physical-pixel hairline, faint white on dark palettes and faint black on light. Reason: panel `outline` matches the sidebar and the CentralPanel used to cover a line painted on the panel edge.
 
 Check for updates and Download updates automatically sit in Settings **About**, under the version row. Reason: they describe this build, not the window.
+
+Hover a name in **Download older history in the background** to show a short card to the right of Settings. The open-chat choice is **Current Chat**. Reason: the three modes look alike until you read what each one fetches.
