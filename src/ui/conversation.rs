@@ -73,8 +73,8 @@ fn empty(app: &mut App, ui: &mut egui::Ui) {
         ui,
         center - vec2(0.0, 60.0),
         72.0,
-        palette.surface,
-        palette.dim,
+        theme::MARK,
+        egui::Color32::WHITE,
     );
     ui.painter().text(
         center,

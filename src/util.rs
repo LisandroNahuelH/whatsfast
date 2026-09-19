@@ -259,35 +259,31 @@ pub fn hue(seed: &str) -> f32 {
 /// Embedded SVG app logo used across platform surfaces.
 const MARK: &[u8] = include_bytes!("../packaging/icons/whatsfast.svg");
 
+fn raster_svg_rgba(svg: &[u8], size: usize) -> Option<Vec<u8>> {
+    let side = size.max(1) as u32;
+    let tree = resvg::usvg::Tree::from_data(svg, &resvg::usvg::Options::default()).ok()?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(side, side)?;
+    let scale = side as f32 / tree.size().width();
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    Some(
+        pixmap
+            .pixels()
+            .iter()
+            .flat_map(|pixel| {
+                let color = pixel.demultiply();
+                [color.red(), color.green(), color.blue(), color.alpha()]
+            })
+            .collect(),
+    )
+}
+
 /// Rasterizes the logo to straight-alpha RGBA.
 pub fn app_icon_rgba(size: usize) -> Vec<u8> {
-    let side = size.max(1) as u32;
-    let rendered = resvg::usvg::Tree::from_data(MARK, &resvg::usvg::Options::default())
-        .ok()
-        .and_then(|tree| {
-            let mut pixmap = resvg::tiny_skia::Pixmap::new(side, side)?;
-            let scale = side as f32 / tree.size().width();
-            resvg::render(
-                &tree,
-                resvg::tiny_skia::Transform::from_scale(scale, scale),
-                &mut pixmap.as_mut(),
-            );
-            Some(
-                pixmap
-                    .pixels()
-                    .iter()
-                    .flat_map(|pixel| {
-                        let color = pixel.demultiply();
-                        [color.red(), color.green(), color.blue(), color.alpha()]
-                    })
-                    .collect::<Vec<u8>>(),
-            )
-        });
-    match rendered {
-        Some(rgba) => rgba,
-        // Fall back to an accent disc if the embedded SVG cannot render.
-        None => plain_disc(size),
-    }
+    raster_svg_rgba(MARK, size).unwrap_or_else(|| plain_disc(size))
 }
 
 fn plain_disc(size: usize) -> Vec<u8> {
@@ -300,9 +296,9 @@ fn plain_disc(size: usize) -> Vec<u8> {
             let distance = ((px - center).powi(2) + (py - center).powi(2)).sqrt();
             let coverage = (radius - distance + 0.5).clamp(0.0, 1.0);
             let index = (y * size + x) * 4;
-            rgba[index] = 0;
-            rgba[index + 1] = 168;
-            rgba[index + 2] = 132;
+            rgba[index] = 0xe8;
+            rgba[index + 1] = 0x5d;
+            rgba[index + 2] = 0x04;
             rgba[index + 3] = (coverage * 255.0) as u8;
         }
     }
@@ -431,5 +427,33 @@ mod tests {
         assert_eq!(icon[3], 0);
         let middle = (16 * 32 + 16) * 4;
         assert_eq!(icon[middle + 3], 255);
+        assert!(
+            icon[middle] > 180 && icon[middle + 2] < 80,
+            "the disc is amber, not WhatsApp green"
+        );
+    }
+
+    #[test]
+    #[ignore = "run with --ignored to refresh packaging PNG assets from the SVG mark"]
+    fn write_packaging_pngs() {
+        let circle = app_icon_rgba(1024);
+        image::save_buffer(
+            "packaging/icons/whatsfast-1024.png",
+            &circle,
+            1024,
+            1024,
+            image::ExtendedColorType::Rgba8,
+        )
+        .expect("circle png");
+        let macos = raster_svg_rgba(include_bytes!("../packaging/macos/icon-1024.svg"), 1024)
+            .expect("macos svg");
+        image::save_buffer(
+            "packaging/macos/icon-1024.png",
+            &macos,
+            1024,
+            1024,
+            image::ExtendedColorType::Rgba8,
+        )
+        .expect("macos png");
     }
 }

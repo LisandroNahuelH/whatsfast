@@ -580,10 +580,13 @@ pub fn circle_button(
     }
 }
 
+/// ZapFast message-circle mark on amber. Used for the app logo, not chat accent.
+pub const MARK: Color32 = Color32::from_rgb(0xE8, 0x5D, 0x04);
+
 /// Draws the app logo.
 pub fn logo(ui: &egui::Ui, center: egui::Pos2, diameter: f32, disc: Color32, glyph: Color32) {
     ui.painter().circle_filled(center, diameter / 2.0, disc);
-    // Match `packaging/icons/whatsfast.svg`.
+    // Match `packaging/icons/whatsfast.svg` (ZapFast glyph, amber disc).
     let icon_size = diameter * 0.56;
     let icon_rect = egui::Rect::from_center_size(
         center - Vec2::new(0.0, diameter * 0.02),
