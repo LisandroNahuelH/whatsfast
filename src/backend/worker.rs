@@ -3259,7 +3259,21 @@ impl Worker {
                 return;
             }
         }
-        // The write is the truth: hand the list back in its new order.
+        // The write is the truth: read it back, so a row the guard refused
+        // shows up instead of a silent half-order.
+        match self.archive.pinned_order() {
+            Ok(after) => {
+                for (index, id) in wanted.iter().enumerate() {
+                    let expected = base + count - index as i64;
+                    match after.iter().find(|(known, _)| known == id) {
+                        Some((_, version)) if *version == expected => {}
+                        Some(_) => log::warn!("the reordered chat {id} kept its old place"),
+                        None => log::warn!("the reordered chat {id} is no longer pinned"),
+                    }
+                }
+            }
+            Err(error) => self.emit(Event::Error(error.to_string())),
+        }
         self.emit_chats();
     }
 

@@ -962,8 +962,11 @@ mod tests {
     fn holding_a_pinned_row_starts_the_gesture_and_the_release_ends_it() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
+        let open = app.open_chat.clone();
+        // Pinned but not the chat already open, so a click that slips
+        // through shows up instead of looking like no change.
         for (index, chat) in app.chats.iter_mut().enumerate() {
-            chat.pinned = index < 2;
+            chat.pinned = index >= 1;
             chat.pinned_at = 1_000 - index as i64;
         }
         let ctx = egui::Context::default();
@@ -1006,6 +1009,54 @@ mod tests {
         }];
         step_output(&mut app, &ctx, release.to_vec(), 0.6, true);
         assert!(app.pin_drag.is_none(), "the release ends the gesture");
+        assert_eq!(
+            app.open_chat.as_deref(),
+            open.as_deref(),
+            "a hold that ends where it started does not open the chat"
+        );
+    }
+
+    #[test]
+    fn a_short_click_on_a_pinned_row_still_opens_the_chat() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        // Pinned but not the chat already open, so a click that slips
+        // through shows up instead of looking like no change.
+        for (index, chat) in app.chats.iter_mut().enumerate() {
+            chat.pinned = index >= 1;
+            chat.pinned_at = 1_000 - index as i64;
+        }
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let pinned = app
+            .visible_chats()
+            .first()
+            .map(|chat| chat.id.clone())
+            .expect("a chat");
+        let title = app.chat_title(app.chat(&pinned).expect("the chat exists"));
+        let spot = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.text() == title && text.pos.x < 320.0 => {
+                    Some(text.pos + vec2(20.0, 6.0))
+                }
+                _ => None,
+            })
+            .expect("the pinned row is drawn in the list");
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(spot, egui::PointerButton::Primary),
+            0.1,
+            true,
+        );
+        assert_eq!(
+            app.open_chat.as_deref(),
+            Some(pinned.as_str()),
+            "a short click on a pinned row opens its chat"
+        );
     }
 
     #[test]
