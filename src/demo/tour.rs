@@ -1001,19 +1001,70 @@ mod tests {
             app.pin_drag.as_ref().is_some_and(|drag| drag.active),
             "holding past the threshold turns the gesture on"
         );
+        // The second pinned row, to have somewhere to move the first one.
+        let second = app
+            .visible_chats()
+            .get(1)
+            .map(|chat| app.chat_title(chat))
+            .expect("a second pinned chat");
+        let onto = output
+            .shapes
+            .iter()
+            .find_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.galley.text() == second && text.pos.x < 320.0 => {
+                    Some(text.pos + vec2(20.0, 6.0))
+                }
+                _ => None,
+            })
+            .expect("the second row is drawn in the list");
+        let moved = [egui::Event::PointerMoved(onto)];
+        let output = step_output(&mut app, &ctx, moved.to_vec(), 0.6, true);
+        // The list already draws the order a release would write: the held
+        // row sits where the second one was, and its slot shows the gap.
+        let rows = list_rows(&output);
+        let spots: Vec<f32> = rows
+            .iter()
+            .filter(|(_, text)| text == &title)
+            .map(|(y, _)| *y)
+            .collect();
+        assert_eq!(
+            spots.len(),
+            2,
+            "the held chat is drawn in its slot and under the pointer"
+        );
+        assert!(
+            (spots[0] - (onto.y - 6.0)).abs() < 24.0,
+            "the held chat took the slot under the pointer before the release"
+        );
         let release = [egui::Event::PointerButton {
-            pos: from,
+            pos: onto,
             button: egui::PointerButton::Primary,
             pressed: false,
             modifiers: egui::Modifiers::NONE,
         }];
-        step_output(&mut app, &ctx, release.to_vec(), 0.6, true);
+        step_output(&mut app, &ctx, release.to_vec(), 0.7, true);
         assert!(app.pin_drag.is_none(), "the release ends the gesture");
         assert_eq!(
             app.open_chat.as_deref(),
             open.as_deref(),
-            "a hold that ends where it started does not open the chat"
+            "a hold that ends elsewhere does not open the chat"
         );
+    }
+
+    /// The text the chat list draws in the left panel, top first.
+    fn list_rows(output: &egui::FullOutput) -> Vec<(f32, String)> {
+        let mut rows: Vec<(f32, String)> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped| match &clipped.shape {
+                egui::Shape::Text(text) if text.pos.x < 320.0 => {
+                    Some((text.pos.y, text.galley.text().to_owned()))
+                }
+                _ => None,
+            })
+            .collect();
+        rows.sort_by(|left, right| left.0.total_cmp(&right.0));
+        rows
     }
 
     #[test]

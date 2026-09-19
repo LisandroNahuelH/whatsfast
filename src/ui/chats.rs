@@ -336,7 +336,7 @@ fn scheduled_list(app: &mut App, ui: &mut egui::Ui) {
             &palette,
             Icon::Clock,
             "No scheduled messages",
-            "Write a message and pick a time with the clock beside the composer.",
+            "Write a message and pick a time with the clock beside the send button.",
         );
         return;
     }
@@ -606,7 +606,7 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         results(app, ui);
         return;
     }
-    let chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
+    let mut chats: Vec<Chat> = app.visible_chats().into_iter().cloned().collect();
     let archived = app.archived_count();
     let show_archive_row = !app.show_archived && archived > 0;
     if chats.is_empty() && !show_archive_row {
@@ -633,6 +633,15 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         .y;
     let pinned = chats.iter().filter(|chat| chat.pinned).count();
     let finished = pin_gesture(app, ui, list_top, offset, pinned, stride);
+    // The list draws the order a release would write: the held chat sits in
+    // the slot under the pointer and the rest close the gap behind it, so the
+    // user sees where it lands before letting go.
+    if let Some(drag) = app.pin_drag.as_ref().filter(|drag| drag.active)
+        && drag.from < chats.len()
+    {
+        let chat = chats.remove(drag.from);
+        chats.insert(drag.to.min(chats.len()), chat);
+    }
     let total = chats.len() + usize::from(show_archive_row);
     let mut scroll_area = egui::ScrollArea::vertical()
         .id_salt("chat-list")
@@ -671,14 +680,25 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
             ui.push_id(("chat", &chat.id), |ui| row(app, ui, chat, row_index));
         }
     });
-    // The slot the held chat would land in.
-    if let Some(drag) = app.pin_drag.as_ref().filter(|drag| drag.active) {
-        let y = list_top + drag.to as f32 * stride - offset;
-        ui.painter().hline(
-            (ui.max_rect().left() + 8.0)..=(ui.max_rect().right() - 8.0),
-            y,
-            Stroke::new(2.0, palette.accent),
-        );
+    // The held chat itself rides with the pointer, so the list reads as
+    // picked up instead of pasted into place.
+    let held = app
+        .pin_drag
+        .as_ref()
+        .filter(|drag| drag.active)
+        .map(|drag| (drag.chat.clone(), drag.grab_y));
+    if let Some((id, grab_y)) = held {
+        if let Some(chat) = app.chat(&id).cloned() {
+            let title = app.chat_title(&chat);
+            let picture = app.avatar(&chat.id);
+            if let Some(pointer) = ui.input(|input| input.pointer.interact_pos()) {
+                let rect = Rect::from_min_size(
+                    pos2(ui.max_rect().left(), pointer.y - grab_y),
+                    vec2(ui.max_rect().width(), row_height),
+                );
+                paint_dragged(ui, &palette, rect, &title, &chat.id, picture.as_deref());
+            }
+        }
     }
     // The rows have drawn with the gesture still set, so the release cannot
     // read as a click that opens the chat.
@@ -738,6 +758,43 @@ fn pin_gesture(
     ui.ctx().request_repaint();
     app.pin_drag = Some(drag);
     false
+}
+
+/// Paints the held chat riding under the pointer, above the list.
+fn paint_dragged(
+    ui: &egui::Ui,
+    palette: &Palette,
+    rect: Rect,
+    title: &str,
+    id: &str,
+    picture: Option<&std::path::Path>,
+) {
+    let painter = ui.painter();
+    // The lift: a shadow under the row, the row itself on top.
+    painter.rect_filled(rect.translate(vec2(0.0, 3.0)), 10.0, palette.shadow);
+    painter.rect_filled(rect, 10.0, palette.surface_active);
+    painter.rect_stroke(
+        rect,
+        10.0,
+        egui::Stroke::new(1.0, palette.outline),
+        egui::StrokeKind::Inside,
+    );
+    let avatar_rect =
+        Rect::from_center_size(pos2(rect.left() + 38.0, rect.center().y), Vec2::splat(48.0));
+    widgets::paint_avatar(ui, palette, avatar_rect, title, id, picture);
+    let name = widgets::line(
+        ui,
+        title,
+        theme::medium(14.5),
+        palette.text,
+        rect.right() - 14.0 - (rect.left() + 76.0),
+        1,
+    );
+    name.paint(
+        ui,
+        pos2(rect.left() + 76.0, rect.top() + 14.0),
+        palette.text,
+    );
 }
 
 /// The pinned chats, with the one at `from` moved to `to`, top first.
@@ -1060,11 +1117,18 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
             to: index,
             since: ui.input(|input| input.time),
             active: false,
+            grab_y: ui
+                .input(|input| input.pointer.interact_pos())
+                .map_or(0.0, |pointer| pointer.y - rect.top()),
         });
     }
     // While a pinned chat is held, every pinned row shows its handle and the
     // pointer says it can be grabbed.
     let moving = app.pin_drag.as_ref().is_some_and(|drag| drag.active) && chat.pinned;
+    let held = app
+        .pin_drag
+        .as_ref()
+        .is_some_and(|drag| drag.active && drag.chat == chat.id);
     let response = response.on_hover_cursor(if moving {
         egui::CursorIcon::Grabbing
     } else {
@@ -1228,6 +1292,13 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
             rect.bottom() - 0.5,
             egui::Stroke::new(1.0, palette.outline),
         );
+        // The held chat rides under the pointer: its slot shows the gap it
+        // leaves, so the list reads as moving instead of copied.
+        if held {
+            ui.painter().rect_filled(rect, 0.0, palette.panel);
+            ui.painter()
+                .rect_filled(rect.shrink(8.0), 10.0, palette.surface_hover);
+        }
     }
     // While a pinned chat is held, a release moves it instead of opening it:
     // egui still counts a hold of up to 0.8 s as a click.
