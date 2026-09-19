@@ -21,6 +21,7 @@ WhatsApp or Meta. Use it only as a linked device paired with your own phone.
 
 ## WhatsFast improvements
 
+- The composer caret stays visible while the WhatsApp window has focus.
 Features land through reviewed pull requests on this repo. This section updates
 as each one merges. (Inaugural baseline: upstream ZapFast 0.14.x capabilities
 on Windows; local enhancements follow in order.)
