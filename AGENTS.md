@@ -247,10 +247,8 @@ A release is not finished when the tag is pushed. For WhatsFast (no CI on GitHub
 
 1. Bump `version` in `Cargo.toml` and update `Cargo.lock` with a build. Run
    the full local checks in *Definition of done*, commit, and push.
-2. Build Windows artifacts locally (`cargo build --locked --release`, zip and
-   Inno Setup per `packaging/windows/whatsfast.iss`). Tag `vX.Y.Z`, push the tag.
-3. Publish assets with `gh release create` (or the GitHub Releases UI) when you
-   want downloads public. Write release notes by hand.
+2. Build the Windows installer locally: `cargo build --locked --release`, then Inno Setup per `packaging/windows/whatsfast.iss` (output `whatsfast-v*-*-pc-windows-msvc-setup.exe`). Tag `vX.Y.Z`, push the tag.
+3. Publish GitHub Releases with **only** that `*-setup.exe` asset (`gh release create` or `gh release upload`). Do not attach portable zips, standalone `whatsfast.exe`, or other archives unless the user changes this policy. Write release notes by hand; mention the installer in **Install (Windows)**.
 
 ## Definition of done
 
