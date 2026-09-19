@@ -1136,10 +1136,13 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 // Replace emoji with placeholders in the galley, then
                                 // paint their color bitmaps over the field.
                                 let mut clusters: Vec<(usize, usize, String)> = Vec::new();
-                                let format = egui::TextFormat::simple(
+                                let mut format = egui::TextFormat::simple(
                                     theme::regular(BODY_SIZE),
                                     palette.text,
                                 );
+                                // Default valign is bottom; a tall first row then sits the
+                                // letters on the floor of the bubble. Center them in the band.
+                                format.valign = Align::Center;
                                 let mut layouter = |ui: &egui::Ui,
                                                     text: &dyn egui::TextBuffer,
                                                     wrap: f32| {
