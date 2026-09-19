@@ -6,7 +6,7 @@ WhatsFast targets **Windows x64 MSVC** only.
 
 - **No GitHub Actions** (`allow_actions=disabled`). No `.github/workflows/`.
 - Verification: run *Definition of done* in `AGENTS.md` on your PC before push.
-- Releases: build the Inno Setup installer locally; publish **only** `*-setup.exe` on GitHub Releases (see `AGENTS.md` Releasing).
+- Releases: build Inno Setup installer; publish **only** `*-setup.exe` via [`AGENTS/github-release-upload.md`](github-release-upload.md) (curl to `uploads.github.com`, not parallel `gh release upload`).
 
 ## Removed upstream automation (historical)
 
