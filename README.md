@@ -157,7 +157,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Composer caret stays visible while the window has focus
 
-- **Technical:** The message composer keeps a visible text caret (insertion point) whenever the WhatsApp window has keyboard focus, including after repaints and layout updates in egui. The empty field is 35% taller than one line, the first line sits in the middle, and the bubble sits 20% farther from the window's bottom edge than before.
+- **Technical:** The message composer keeps a visible text caret (insertion point) whenever the WhatsApp window has keyboard focus, including after repaints and layout updates in egui. The empty field is 35% taller than one line, the caret fills that height, attach/emoji/send/schedule sit on the row's vertical center, and the bubble sits 20% farther from the window's bottom edge than before.
 - **Daily use:** You always see where the next character will land. Long replies, edits, and paste-at-cursor work feel like a normal desktop editor, not a web view that hides the caret.
 
 </td>
