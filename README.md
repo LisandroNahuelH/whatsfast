@@ -15,15 +15,52 @@ WhatsApp or Meta.
 
 ## WhatsFast improvements
 
-- The composer caret stays visible while the WhatsApp window has focus.
-- Settings can hide the create poll button beside the attachment menu.
-- Forwarded batches can send one message at a time to preserve order, with a Settings toggle.
-- Click the active settings section again to close the panel.
-- Star messages from the chat and browse them in a sidebar list with bubble previews.
-- Schedule messages once or on a repeat rule from the composer clock control.
-- A narrow sidebar rail keeps navigation visible in every view.
-- Hold and drag pinned chats to reorder them on the chat list.
-- Select multiple messages from the bubble menu or row, then forward, download, or star the batch.
+Each item below is a WhatsFast change on top of the upstream ZapFast baseline. Under every title: what it does in the app, then why it helps day to day.
+
+### Composer caret stays visible while the window has focus
+
+- **Technical:** The message composer keeps a visible text caret (insertion point) whenever the WhatsApp window has keyboard focus, including after repaints and layout updates in egui.
+- **Daily use:** You always see where the next character will land. Long replies, edits, and paste-at-cursor work feel like a normal desktop editor, not a web view that hides the caret.
+
+### Hide the create-poll control in Settings
+
+- **Technical:** Settings exposes a toggle that removes the create-poll entry from the attachment menu next to the composer. The rest of poll viewing and voting is unchanged.
+- **Daily use:** If you never create polls, the menu stays shorter and you stop mis-tapping poll when you wanted a file or photo. Cleaner composer for work chats that rarely use polls.
+
+### Sequential forwarding for batched messages
+
+- **Technical:** When you forward several messages at once, an optional Settings mode sends them one after another on the wire instead of relying on a single burst that can arrive out of order on the phone or in group history.
+- **Daily use:** Instructions, numbered steps, and screenshots stay in the order you selected. Better for handoffs, checklists, and “read top to bottom” threads at work.
+
+### Close Settings by clicking the active section again
+
+- **Technical:** The settings panel treats a second click on the already selected section as “close panel,” without adding a separate dismiss control.
+- **Daily use:** One click to open a section, one click on the same row to get back to the chat. Fewer stray clicks when you only wanted to tweak one option.
+
+### Starred messages with sidebar list and bubble previews
+
+- **Technical:** Messages can be starred from the chat; stars are stored in the archive and shown in a dedicated sidebar list with bubble-style previews (same rendering path as the main transcript).
+- **Daily use:** Bookmark decisions, links, and client notes and find them later without scrolling the whole history. The preview shows context so you know which star is which.
+
+### Scheduled sends (once or on a repeat rule)
+
+- **Technical:** The composer clock control schedules outbound messages for a future time, once or on a repeat rule defined in the app; the backend queues them and sends when due.
+- **Daily use:** Remind a team Monday morning, ping a contact in their timezone, or send a follow-up without staying online. Handy for support windows and async work.
+
+### Narrow sidebar rail for navigation
+
+- **Technical:** A slim rail stays visible at the edge of the UI so chat list, starred, scheduled, and related navigation remain one click away in every view.
+- **Daily use:** You do not lose your place when switching tasks. Jump between inbox, stars, and scheduled sends without hunting for hidden menus.
+
+### Reorder pinned chats by drag and hold
+
+- **Technical:** Pinned chats in the list support click-and-drag reorder; order is persisted so the archive reflects your chosen pin stack.
+- **Daily use:** Put your boss, active project, and family groups where you want them every day. Less scrolling past pins you rarely open.
+
+### Multi-select messages for forward, download, and star
+
+- **Technical:** Bubble menu and row actions enter a selection mode across multiple messages; batch forward, save attachments, or star applies to the whole selection with one confirmation path.
+- **Daily use:** Forward a week of updates, save every PDF from a thread, or star a run of messages in one go. Less repetitive right-click work in heavy group chats.
 
 ## Upgrading from ZapFast
 
