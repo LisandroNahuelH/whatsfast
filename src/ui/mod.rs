@@ -107,7 +107,7 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
             let update = update.as_ref().expect("checked above");
             (
                 Icon::Info,
-                format!("ZapFast {} is available", update.version),
+                format!("WhatsFast {} is available", update.version),
                 palette.accent,
                 false,
                 Some(update.url.clone()),

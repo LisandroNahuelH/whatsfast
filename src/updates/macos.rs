@@ -15,7 +15,7 @@ pub(super) fn bundle_root(executable: &Path) -> Result<&Path> {
         .context("Missing app bundle")?;
     ensure!(
         root.extension().is_some_and(|extension| extension == "app")
-            && root.join("Contents/MacOS/zapfast") == executable,
+            && root.join("Contents/MacOS/whatsfast") == executable,
         "Move the app to Applications, then open it to update."
     );
     Ok(root)
@@ -33,9 +33,9 @@ fn plist(bundle: &Path, key: &str) -> Result<String> {
 fn identity(bundle: &Path) -> Result<()> {
     ensure!(
         plist(bundle, "CFBundleIdentifier")? == IDENTIFIER
-            && plist(bundle, "CFBundleExecutable")? == "zapfast"
+            && plist(bundle, "CFBundleExecutable")? == "whatsfast"
             && plist(bundle, "CFBundlePackageType")? == "APPL",
-        "The download is not a ZapFast app bundle"
+        "The download is not a WhatsFast app bundle"
     );
     Ok(())
 }
@@ -56,7 +56,7 @@ pub(super) fn detect(executable: &Path) -> Result<()> {
     ];
     for prefix in prefixes.into_iter().flatten() {
         ensure!(
-            !["zapfast", "fastsapp"]
+            !["whatsfast", "fastsapp"]
                 .iter()
                 .any(|name| cask_owns(&prefix.join("Caskroom").join(name), bundle)),
             "Update this installation with Homebrew."
@@ -71,7 +71,7 @@ fn cask_owns(cask: &Path, bundle: &Path) -> bool {
     };
     fs::read_dir(cask).is_ok_and(|versions| {
         versions.flatten().any(|version| {
-            ["ZapFast.app", "FastsApp.app"].iter().any(|name| {
+            ["WhatsFast.app", "FastsApp.app"].iter().any(|name| {
                 version
                     .path()
                     .join(name)
@@ -127,7 +127,7 @@ fn validate(bundle: &Path, installation: &Installation, version: &str) -> Result
             "macOS could not approve this update for launch"
         );
     }
-    install::verify_version(&bundle.join("Contents/MacOS/zapfast"), version)
+    install::verify_version(&bundle.join("Contents/MacOS/whatsfast"), version)
 }
 
 struct Mounted(PathBuf);
@@ -164,7 +164,7 @@ impl Mounted {
 }
 
 fn image_bundle(root: &Path) -> Result<PathBuf> {
-    for name in ["ZapFast.app", "FastsApp.app"] {
+    for name in ["WhatsFast.app", "FastsApp.app"] {
         let bundle = root.join(name);
         match fs::symlink_metadata(&bundle) {
             Ok(metadata) => {
@@ -178,7 +178,7 @@ fn image_bundle(root: &Path) -> Result<PathBuf> {
             Err(error) => return Err(error.into()),
         }
     }
-    anyhow::bail!("The disk image has no ZapFast app bundle")
+    anyhow::bail!("The disk image has no WhatsFast app bundle")
 }
 
 impl Drop for Mounted {
@@ -206,7 +206,7 @@ pub(super) fn validate_download(
 pub(super) fn replace(prepared: &Prepared) -> Result<()> {
     let target = bundle_root(&prepared.installation.executable)?;
     let backup = prepared.directory.join("previous");
-    let candidate = prepared.directory.join("ZapFast.app");
+    let candidate = prepared.directory.join("WhatsFast.app");
     ensure!(
         !backup.exists() && !candidate.exists(),
         "This update was already applied"
@@ -252,13 +252,13 @@ mod tests {
     #[test]
     fn renamed_images_prefer_the_new_bundle_and_still_accept_old_images() {
         let root =
-            std::env::temp_dir().join(format!("zapfast-image-test-{}", rand::random::<u64>()));
+            std::env::temp_dir().join(format!("whatsfast-image-test-{}", rand::random::<u64>()));
         fs::create_dir(&root).unwrap();
         assert!(image_bundle(&root).is_err());
         let legacy = root.join("FastsApp.app");
         fs::create_dir(&legacy).unwrap();
         assert_eq!(image_bundle(&root).unwrap(), legacy);
-        let app = root.join("ZapFast.app");
+        let app = root.join("WhatsFast.app");
         fs::create_dir(&app).unwrap();
         assert_eq!(image_bundle(&root).unwrap(), app);
         fs::remove_dir(&app).unwrap();
@@ -273,14 +273,14 @@ mod tests {
     #[test]
     fn homebrew_ownership_survives_the_bundle_rename() {
         let root =
-            std::env::temp_dir().join(format!("zapfast-cask-test-{}", rand::random::<u64>()));
-        for name in ["ZapFast.app", "FastsApp.app"] {
+            std::env::temp_dir().join(format!("whatsfast-cask-test-{}", rand::random::<u64>()));
+        for name in ["WhatsFast.app", "FastsApp.app"] {
             let installed = root.join("Applications").join(name);
-            let version = root.join("Caskroom/zapfast/0.8.0");
+            let version = root.join("Caskroom/whatsfast/0.8.0");
             fs::create_dir_all(&installed).unwrap();
             fs::create_dir_all(&version).unwrap();
             std::os::unix::fs::symlink(&installed, version.join(name)).unwrap();
-            assert!(cask_owns(&root.join("Caskroom/zapfast"), &installed));
+            assert!(cask_owns(&root.join("Caskroom/whatsfast"), &installed));
             assert!(!cask_owns(&root.join("Caskroom/unrelated"), &installed));
         }
         fs::remove_dir_all(root).unwrap();
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn another_mount_attempt_leaves_the_previous_volume_alone() {
         let directory =
-            std::env::temp_dir().join(format!("zapfast-mount-test-{}", rand::random::<u64>()));
+            std::env::temp_dir().join(format!("whatsfast-mount-test-{}", rand::random::<u64>()));
         fs::create_dir(&directory).unwrap();
         let archive = directory.join("update.dmg");
         let first = mountpoint(&archive).unwrap();
@@ -307,14 +307,14 @@ mod tests {
     #[test]
     fn homebrew_app_symlink_does_not_claim_other_copies() {
         let directory =
-            std::env::temp_dir().join(format!("zapfast-cask-test-{}", rand::random::<u64>()));
-        let installed = directory.join("Applications/ZapFast.app");
-        let cask = directory.join("Caskroom/zapfast");
-        let copy = directory.join("dev/ZapFast.app");
+            std::env::temp_dir().join(format!("whatsfast-cask-test-{}", rand::random::<u64>()));
+        let installed = directory.join("Applications/WhatsFast.app");
+        let cask = directory.join("Caskroom/whatsfast");
+        let copy = directory.join("dev/WhatsFast.app");
         for path in [&installed, &copy, &cask.join("0.7.1")] {
             fs::create_dir_all(path).unwrap();
         }
-        std::os::unix::fs::symlink(&installed, cask.join("0.7.1/ZapFast.app")).unwrap();
+        std::os::unix::fs::symlink(&installed, cask.join("0.7.1/WhatsFast.app")).unwrap();
         assert!(cask_owns(&cask, &installed));
         assert!(!cask_owns(&cask, &copy));
         fs::remove_dir_all(directory).unwrap();
@@ -323,20 +323,20 @@ mod tests {
     #[test]
     fn rollback_restores_resources_and_executable_together() {
         let directory =
-            std::env::temp_dir().join(format!("zapfast-mac-test-{}", rand::random::<u64>()));
-        let app = directory.join("ZapFast.app");
+            std::env::temp_dir().join(format!("whatsfast-mac-test-{}", rand::random::<u64>()));
+        let app = directory.join("WhatsFast.app");
         fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
-        fs::write(app.join("Contents/MacOS/zapfast"), b"new executable").unwrap();
+        fs::write(app.join("Contents/MacOS/whatsfast"), b"new executable").unwrap();
         fs::write(app.join("Contents/Info.plist"), b"new metadata").unwrap();
         let installation = Installation {
-            executable: app.join("Contents/MacOS/zapfast"),
+            executable: app.join("Contents/MacOS/whatsfast"),
             kind: install::Kind::MacBundle,
         };
         let stage = install::staging(&installation).unwrap();
         assert_eq!(stage.parent(), Some(directory.as_path()));
         let backup = stage.join("previous");
         fs::create_dir_all(backup.join("Contents/MacOS")).unwrap();
-        fs::write(backup.join("Contents/MacOS/zapfast"), b"old executable").unwrap();
+        fs::write(backup.join("Contents/MacOS/whatsfast"), b"old executable").unwrap();
         fs::write(backup.join("Contents/Info.plist"), b"old metadata").unwrap();
         let prepared = Prepared {
             installation,
@@ -347,7 +347,7 @@ mod tests {
         };
         restore(&prepared).unwrap();
         assert_eq!(
-            fs::read(app.join("Contents/MacOS/zapfast")).unwrap(),
+            fs::read(app.join("Contents/MacOS/whatsfast")).unwrap(),
             b"old executable"
         );
         assert_eq!(
@@ -366,27 +366,27 @@ mod tests {
     fn only_expected_bundle_layout_is_accepted() {
         assert_eq!(
             bundle_root(Path::new(
-                "/Applications/ZapFast.app/Contents/MacOS/zapfast"
+                "/Applications/WhatsFast.app/Contents/MacOS/whatsfast"
             ))
             .unwrap(),
-            Path::new("/Applications/ZapFast.app")
+            Path::new("/Applications/WhatsFast.app")
         );
         for path in [
-            "/Applications/ZapFast.app/zapfast",
-            "/tmp/Contents/MacOS/zapfast",
-            "/usr/local/bin/zapfast",
+            "/Applications/WhatsFast.app/whatsfast",
+            "/tmp/Contents/MacOS/whatsfast",
+            "/usr/local/bin/whatsfast",
         ] {
             assert!(bundle_root(Path::new(path)).is_err());
         }
         assert!(
             detect(Path::new(
-                "/Volumes/ZapFast/ZapFast.app/Contents/MacOS/zapfast"
+                "/Volumes/WhatsFast/WhatsFast.app/Contents/MacOS/whatsfast"
             ))
             .is_err()
         );
         assert!(
             detect(Path::new(
-                "/private/var/folders/test/AppTranslocation/test/ZapFast.app/Contents/MacOS/zapfast"
+                "/private/var/folders/test/AppTranslocation/test/WhatsFast.app/Contents/MacOS/whatsfast"
             ))
             .is_err()
         );

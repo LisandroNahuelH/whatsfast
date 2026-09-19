@@ -55,14 +55,14 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          name="zapfast-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="whatsfast-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "dist/$name"
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp "target/${{ matrix.target }}/release/zapfast.exe" "dist/$name/"
+            cp "target/${{ matrix.target }}/release/whatsfast.exe" "dist/$name/"
           else
-            cp "target/${{ matrix.target }}/release/zapfast" "dist/$name/"
+            cp "target/${{ matrix.target }}/release/whatsfast" "dist/$name/"
           fi
-          cp README.md LICENSE packaging/zapfast-portable.txt "dist/$name/"
+          cp README.md LICENSE packaging/whatsfast-portable.txt "dist/$name/"
           if [ "${{ runner.os }}" = "Linux" ]; then
             # Desktop integration for package builds and hand-installs.
             cp --parents packaging/applications/zapfast.desktop packaging/icons/zapfast.svg contrib/omarchy/zapfast.json.tpl contrib/omarchy/zapfast-theme "dist/$name/"
@@ -85,8 +85,8 @@ jobs:
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           & $iscc "/DVersion=$version" "/DArch=$arch" `
-            "/DBinary=$PWD\target\${{ matrix.target }}\release\zapfast.exe" `
-            "/DOutputDir=$PWD\dist" packaging\windows\zapfast.iss
+            "/DBinary=$PWD\target\${{ matrix.target }}\release\whatsfast.exe" `
+            "/DOutputDir=$PWD\dist" packaging\windows\whatsfast.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v7
@@ -128,9 +128,9 @@ jobs:
         run: |
           mkdir -p universal
           lipo -create \
-            target/aarch64-apple-darwin/release/zapfast \
-            target/x86_64-apple-darwin/release/zapfast \
-            -output universal/zapfast
+            target/aarch64-apple-darwin/release/whatsfast \
+            target/x86_64-apple-darwin/release/whatsfast \
+            -output universal/whatsfast
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -142,7 +142,7 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist/macos-input
-          bash packaging/macos/bundle.sh universal/zapfast dist/macos-input/ZapFast.app "$version"
+          bash packaging/macos/bundle.sh universal/whatsfast dist/macos-input/WhatsFast.app "$version"
           cp README.md LICENSE dist/macos-input/
 
       - name: Package, sign and notarize macOS app
@@ -153,7 +153,7 @@ jobs:
           cp "$RUNNER_TEMP/macos-packages/packages/macos-universal/dmg/"*.dmg dist/
 
       - name: Verify the notarized release app
-        run: bash packaging/macos/verify.sh "dist/zapfast-${GITHUB_REF_NAME}-macos-universal.dmg"
+        run: bash packaging/macos/verify.sh "dist/whatsfast-${GITHUB_REF_NAME}-macos-universal.dmg"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -179,8 +179,8 @@ jobs:
           path: dist
       - name: Unpack the Linux build
         run: |
-          tar xzf dist/zapfast-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu.tar.gz -C packaging/flatpak
-          mv packaging/flatpak/zapfast-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu packaging/flatpak/built
+          tar xzf dist/whatsfast-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu.tar.gz -C packaging/flatpak
+          mv packaging/flatpak/whatsfast-${GITHUB_REF_NAME}-x86_64-unknown-linux-gnu packaging/flatpak/built
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: packaging/flatpak/rocks.zapfast.ZapFast.bundle.yml
