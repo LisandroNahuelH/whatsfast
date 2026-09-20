@@ -50,13 +50,25 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.set_min_height(32.0);
-                if theme::icon_button(ui, Icon::X, 18.0, palette.secondary, palette.text, "Close")
-                    .clicked()
+                if theme::icon_button(
+                    ui,
+                    Icon::X,
+                    18.0,
+                    palette.secondary,
+                    palette.text,
+                    i18n::t(Key::CommonClose),
+                )
+                .clicked()
                 {
                     app.actions.push(Action::CloseRightPane);
                 }
                 ui.add_space(6.0);
-                theme::text(ui, "Search messages", theme::semibold(16.0), palette.text);
+                theme::text(
+                    ui,
+                    i18n::t(Key::PaneSearchTitle),
+                    theme::semibold(16.0),
+                    palette.text,
+                );
             });
             ui.add_space(10.0);
             ui.horizontal(|ui| {
@@ -71,7 +83,7 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
                         palette.secondary
                     },
                     palette.text,
-                    "Filter by date",
+                    i18n::t(Key::PaneFilterByDate),
                 );
                 calendar_btn = calendar.rect;
                 ui.ctx().data_mut(|data| {
@@ -88,7 +100,7 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     egui::Id::new("chat-message-search"),
                     &mut text,
-                    "Search",
+                    i18n::t(Key::PaneSearchHint),
                     width,
                 );
                 if text != app.chat_search {
@@ -108,7 +120,7 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
         ui.centered_and_justified(|ui| {
             theme::text(
                 ui,
-                format!("Search messages with {title}"),
+                i18n::f(Key::PaneSearchWith, &[("title", title.as_str())]),
                 theme::regular(13.5),
                 palette.dim,
             );
@@ -122,8 +134,8 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
             ui,
             &palette,
             Icon::Search,
-            "No messages found",
-            "Try another word or pick a different day.",
+            i18n::t(Key::PaneNoMessages),
+            i18n::t(Key::PaneTryAnother),
         );
         return;
     }
@@ -187,7 +199,7 @@ fn month_header(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                 16.0,
                 palette.secondary,
                 palette.text,
-                "Next month",
+                i18n::t(Key::ScheduleNextMonth),
             )
             .clicked()
             {
@@ -199,7 +211,7 @@ fn month_header(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                 16.0,
                 palette.secondary,
                 palette.text,
-                "Previous month",
+                i18n::t(Key::SchedulePreviousMonth),
             )
             .clicked()
             {

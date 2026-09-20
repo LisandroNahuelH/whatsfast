@@ -19,6 +19,7 @@ use egui::{Align2, CornerRadius, Frame, Margin, Stroke, vec2};
 
 use crate::app::App;
 use crate::backend::LinkStatus;
+use crate::i18n::{self, Key};
 use crate::model::{Action, Page, ToastKind};
 use crate::theme::{self, Icon};
 
@@ -95,7 +96,7 @@ fn drop_target(app: &mut App, ctx: &egui::Context) {
                         theme::icon(ui, Icon::Paperclip, 28.0, palette.accent);
                         theme::text(
                             ui,
-                            format!("Drop to send to {name}"),
+                            i18n::f(Key::DropToSendTo, &[("name", name.as_str())]),
                             theme::semibold(15.0),
                             palette.text,
                         );
@@ -111,8 +112,11 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
         LinkStatus::Connected if app.syncing => (
             Icon::Refresh,
             match app.sync_percent {
-                Some(percent) => format!("Loading chat history… {percent}%"),
-                None => "Loading chat history…".to_owned(),
+                Some(percent) => i18n::f(
+                    Key::HistoryLoadingPercent,
+                    &[("percent", &percent.to_string())],
+                ),
+                None => i18n::t(Key::HistoryLoading).to_owned(),
             },
             palette.accent,
             false,
@@ -120,20 +124,20 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
         LinkStatus::Connected => return,
         LinkStatus::Starting | LinkStatus::Connecting => (
             Icon::Refresh,
-            "Connecting to WhatsApp…".to_owned(),
+            i18n::t(Key::LoginConnecting).to_owned(),
             palette.secondary,
             false,
         ),
         LinkStatus::Disconnected { reason } => (
             Icon::WifiOff,
-            format!("Offline ({reason}). Reconnecting…"),
+            i18n::f(Key::OfflineReconnecting, &[("reason", reason)]),
             palette.warning,
             true,
         ),
         LinkStatus::Failed(message) => (Icon::CircleAlert, message.clone(), palette.danger, true),
         LinkStatus::Unlinked { .. } | LinkStatus::LoggedOut => (
             Icon::Smartphone,
-            "Not linked to a phone".to_owned(),
+            i18n::t(Key::NotLinkedPhone).to_owned(),
             palette.warning,
             false,
         ),
@@ -153,8 +157,14 @@ fn banner(app: &mut App, ui: &mut egui::Ui) {
                 theme::text(ui, text, theme::medium(13.0), palette.text);
                 if retry {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if theme::soft_button(ui, &palette, Some(Icon::Refresh), "Retry", false)
-                            .clicked()
+                        if theme::soft_button(
+                            ui,
+                            &palette,
+                            Some(Icon::Refresh),
+                            i18n::t(Key::CommonRetry),
+                            false,
+                        )
+                        .clicked()
                         {
                             app.actions.push(Action::Reconnect);
                         }
@@ -293,7 +303,7 @@ pub fn standalone_header(app: &mut App, ui: &mut egui::Ui) {
                     18.0,
                     palette.secondary,
                     palette.text,
-                    &keys::label("Show the chat list (Ctrl+B)"),
+                    &keys::label(i18n::t(Key::StatusShowChatList)),
                 )
                 .clicked()
                 {

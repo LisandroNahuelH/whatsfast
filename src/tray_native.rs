@@ -14,6 +14,8 @@ use tray_icon::menu::MenuId;
 use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
+use crate::i18n::{self, Key};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
     Show,
@@ -50,9 +52,9 @@ fn build(sender: Sender<TrayCommand>, wake: Wake) -> Result<Item, Box<dyn std::e
     let icon = Icon::from_rgba(crate::util::tray_template_rgba(size as usize), size, size)?;
     let menu = Menu::new();
     menu.append_items(&[
-        &MenuItem::with_id(SHOW, "Show or hide WhatsFast", true, None),
+        &MenuItem::with_id(SHOW, i18n::t(Key::TrayShowHide), true, None),
         &PredefinedMenuItem::separator(),
-        &MenuItem::with_id(QUIT, "Quit", true, None),
+        &MenuItem::with_id(QUIT, i18n::t(Key::CommonQuit), true, None),
     ])?;
     let builder = TrayIconBuilder::new()
         .with_icon(icon)
@@ -127,7 +129,7 @@ mod host {
         }
         ready_rx
             .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| "The tray thread stopped responding".to_string())?
+            .map_err(|_| i18n::t(Key::TrayThreadStopped).to_string())?
     }
 }
 

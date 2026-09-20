@@ -3,6 +3,7 @@
 use egui::{Align, Color32, Frame, Layout, Margin, Rect, Sense, Stroke, Vec2, pos2, vec2};
 
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::{Action, Chat, ChatListId, Contact, Dialog, Message, Page};
 use crate::theme::{self, Icon, Palette};
 
@@ -95,7 +96,10 @@ fn compact_header(app: &mut App, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 let me = app.me.clone().unwrap_or_default();
-                let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
+                let name = app
+                    .me_name
+                    .clone()
+                    .unwrap_or_else(|| i18n::t(Key::DisplayYou).to_owned());
                 let picture = app.avatar(&me);
                 let tooltip = match &app.me_about {
                     Some(about) => format!("{name}\n{about}"),
@@ -115,7 +119,7 @@ fn compact_header(app: &mut App, ui: &mut egui::Ui) {
                     18.0,
                     palette.secondary,
                     palette.text,
-                    "Show the chat list (Ctrl+B)",
+                    i18n::t(Key::StatusShowChatList),
                 )
                 .clicked()
                 {
@@ -127,7 +131,7 @@ fn compact_header(app: &mut App, ui: &mut egui::Ui) {
                     18.0,
                     palette.secondary,
                     palette.text,
-                    "Search (Ctrl+F)",
+                    i18n::t(Key::ChatListSearchCtrl),
                 )
                 .clicked()
                 {
@@ -139,7 +143,7 @@ fn compact_header(app: &mut App, ui: &mut egui::Ui) {
                     18.0,
                     palette.secondary,
                     palette.text,
-                    "Archived chats",
+                    i18n::t(Key::ChatListArchived),
                 )
                 .clicked()
                 {
@@ -219,13 +223,18 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.actions.push(Action::ToggleScheduled);
                     }
-                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListScheduled),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else if app.show_archived {
                     if theme::icon_button(
                         ui,
@@ -233,13 +242,18 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.show_archived = false;
                     }
-                    theme::text(ui, "Archived", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListArchivedShort),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else if app.show_starred {
                     if theme::icon_button(
                         ui,
@@ -247,16 +261,24 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.actions.push(Action::ToggleStarred);
                     }
-                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListStarred),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else {
                     let me = app.me.clone().unwrap_or_default();
-                    let name = app.me_name.clone().unwrap_or_else(|| "You".to_owned());
+                    let name = app
+                        .me_name
+                        .clone()
+                        .unwrap_or_else(|| i18n::t(Key::DisplayYou).to_owned());
                     let picture = app.avatar(&me);
                     let tooltip = match &app.me_about {
                         Some(about) => format!("{name}\n{about}"),
@@ -271,7 +293,12 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         app.actions.push(Action::ToggleSettings);
                     }
                     ui.add_space(2.0);
-                    theme::text(ui, "Chats", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::SettingsSectionChats),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if theme::icon_button(
@@ -284,7 +311,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                             palette.secondary
                         },
                         palette.text,
-                        "Scheduled messages",
+                        i18n::t(Key::ChatListScheduledMessages),
                     )
                     .clicked()
                     {
@@ -300,7 +327,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                             palette.secondary
                         },
                         palette.text,
-                        "Starred messages",
+                        i18n::t(Key::ChatListStarredMessages),
                     )
                     .clicked()
                     {
@@ -316,7 +343,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                             palette.secondary
                         },
                         palette.text,
-                        "Settings (Ctrl+,)",
+                        i18n::t(Key::ChatListSettingsCtrl),
                     )
                     .clicked()
                     {
@@ -328,7 +355,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "New contact",
+                        i18n::t(Key::DialogNewContactTitle),
                     )
                     .clicked()
                     {
@@ -341,7 +368,7 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Hide the chat list (Ctrl+B)",
+                        i18n::t(Key::ChatListHideCtrl),
                     )
                     .clicked()
                     {
@@ -353,7 +380,14 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
             let id = egui::Id::new("chat-search");
             let width = ui.available_width();
             let mut text = app.search.clone();
-            let response = widgets::search_field(ui, &palette, id, &mut text, "Search", width);
+            let response = widgets::search_field(
+                ui,
+                &palette,
+                id,
+                &mut text,
+                i18n::t(Key::PaneSearchHint),
+                width,
+            );
             if text != app.search {
                 app.actions.push(Action::Search(text));
             }
@@ -385,13 +419,18 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.actions.push(Action::ToggleScheduled);
                     }
-                    theme::text(ui, "Scheduled", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListScheduled),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else if app.show_archived {
                     if theme::icon_button(
                         ui,
@@ -399,13 +438,18 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.show_archived = false;
                     }
-                    theme::text(ui, "Archived", theme::bold(16.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListArchivedShort),
+                        theme::bold(16.0),
+                        palette.text,
+                    );
                 } else if app.show_starred {
                     if theme::icon_button(
                         ui,
@@ -413,15 +457,25 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Back to chats",
+                        i18n::t(Key::ChatListBack),
                     )
                     .clicked()
                     {
                         app.actions.push(Action::ToggleStarred);
                     }
-                    theme::text(ui, "Starred", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListStarred),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else {
-                    theme::text(ui, "Chats", theme::bold(20.0), palette.text);
+                    theme::text(
+                        ui,
+                        i18n::t(Key::SettingsSectionChats),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if theme::icon_button(
@@ -434,7 +488,7 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                             palette.secondary
                         },
                         palette.text,
-                        "Starred messages",
+                        i18n::t(Key::ChatListStarredMessages),
                     )
                     .clicked()
                     {
@@ -446,7 +500,7 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "New contact (⌘N)",
+                        i18n::t(Key::ChatListNewContactCmd),
                     )
                     .clicked()
                     {
@@ -458,7 +512,7 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         18.0,
                         palette.secondary,
                         palette.text,
-                        "Hide the chat list (⌘B)",
+                        i18n::t(Key::ChatListHideCmd),
                     )
                     .clicked()
                     {
@@ -473,7 +527,7 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                 &palette,
                 egui::Id::new("chat-search"),
                 &mut text,
-                "Search",
+                i18n::t(Key::PaneSearchHint),
                 ui.available_width(),
             );
             if text != app.search {
@@ -503,15 +557,21 @@ fn list_chips(app: &mut App, ui: &mut egui::Ui) {
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                if filter_chip(ui, &palette, "All", 0, matches!(selected, ChatListId::All))
-                    .clicked()
+                if filter_chip(
+                    ui,
+                    &palette,
+                    i18n::t(Key::ChatListFilterAll),
+                    0,
+                    matches!(selected, ChatListId::All),
+                )
+                .clicked()
                 {
                     app.actions.push(Action::SetChatList(ChatListId::All));
                 }
                 if filter_chip(
                     ui,
                     &palette,
-                    "Unread",
+                    i18n::t(Key::ChatListFilterUnread),
                     unread,
                     matches!(selected, ChatListId::Unread),
                 )
@@ -522,7 +582,7 @@ fn list_chips(app: &mut App, ui: &mut egui::Ui) {
                 if filter_chip(
                     ui,
                     &palette,
-                    "Favorites",
+                    i18n::t(Key::ChatListFilterFavorites),
                     0,
                     matches!(selected, ChatListId::Favorites),
                 )
@@ -533,7 +593,7 @@ fn list_chips(app: &mut App, ui: &mut egui::Ui) {
                 if filter_chip(
                     ui,
                     &palette,
-                    "Groups",
+                    i18n::t(Key::ChatListFilterGroups),
                     0,
                     matches!(selected, ChatListId::Groups),
                 )
@@ -552,12 +612,22 @@ fn list_chips(app: &mut App, ui: &mut egui::Ui) {
                         .frame(widgets::menu_frame(&palette))
                         .show(|ui| {
                             ui.set_min_width(160.0);
-                            if widgets::menu_item(ui, &palette, Some(Icon::Pencil), "Edit") {
+                            if widgets::menu_item(
+                                ui,
+                                &palette,
+                                Some(Icon::Pencil),
+                                i18n::t(Key::CommonEdit),
+                            ) {
                                 app.actions.push(Action::ShowDialog(Dialog::EditChatList {
                                     id: Some(list.id.clone()),
                                 }));
                             }
-                            if widgets::menu_item(ui, &palette, Some(Icon::Trash), "Delete") {
+                            if widgets::menu_item(
+                                ui,
+                                &palette,
+                                Some(Icon::Trash),
+                                i18n::t(Key::CommonDelete),
+                            ) {
                                 app.actions.push(Action::DeleteChatList(list.id.clone()));
                             }
                         });
@@ -646,8 +716,8 @@ fn scheduled_list(app: &mut App, ui: &mut egui::Ui) {
             ui,
             &palette,
             Icon::Clock,
-            "No scheduled messages",
-            "Write a message and pick a time with the clock beside the send button.",
+            i18n::t(Key::ChatListNoScheduled),
+            i18n::t(Key::ChatListNoScheduledHint),
         );
         return;
     }
@@ -691,7 +761,7 @@ fn scheduled_row(
     let rule =
         crate::schedule::recurrence(&entry.kind, entry.weekday, entry.day_of_month, entry.nth)
             .map(|rule| rule.label())
-            .unwrap_or_else(|| "Once".to_owned());
+            .unwrap_or_else(|| i18n::t(Key::ScheduleOnce).to_owned());
     let when = when_label(entry.next_at);
     let top = rect.top();
     // First line: where it goes and how it repeats, with the time on the right.
@@ -777,11 +847,7 @@ fn preview(text: &str) -> String {
 
 /// "Fri 18 Sep, 21:00" in the machine's time zone.
 fn when_label(instant: i64) -> String {
-    jiff::Timestamp::from_second(instant)
-        .ok()
-        .map(|moment| moment.to_zoned(jiff::tz::TimeZone::system()))
-        .map(|moment| moment.strftime("%a %d %b, %H:%M").to_string())
-        .unwrap_or_default()
+    crate::util::short_stamp(instant)
 }
 
 /// The starred messages, in the place the chat list usually takes. Newest
@@ -794,8 +860,8 @@ fn starred_list(app: &mut App, ui: &mut egui::Ui) {
             ui,
             &palette,
             Icon::Star,
-            "No starred messages",
-            "Pick messages in a chat and press Star to keep them here.",
+            i18n::t(Key::ChatListNoStarred),
+            i18n::t(Key::ChatListNoStarredHint),
         );
         return;
     }
@@ -923,26 +989,36 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
         matches!(app.chat_list, ChatListId::All) && !app.show_archived && archived > 0;
     if chats.is_empty() && !show_archive_row {
         let (title, body) = if app.show_archived {
-            ("Nothing archived", "Archived chats appear here.")
+            (
+                i18n::t(Key::ChatListNothingArchived),
+                i18n::t(Key::ChatListArchivedHint),
+            )
         } else if app.syncing {
-            ("Loading your chats", "Receiving history from your phone.")
+            (
+                i18n::t(Key::ChatListLoading),
+                i18n::t(Key::ChatListLoadingHint),
+            )
         } else {
             match &app.chat_list {
-                ChatListId::Unread => {
-                    ("No unread chats", "Chats with unread messages appear here.")
-                }
-                ChatListId::Favorites => (
-                    "No favorites yet",
-                    "Right-click a chat and add it to favorites.",
+                ChatListId::Unread => (
+                    i18n::t(Key::ChatListNoUnread),
+                    i18n::t(Key::ChatListNoUnreadHint),
                 ),
-                ChatListId::Groups => ("No groups", "Group chats appear here."),
+                ChatListId::Favorites => (
+                    i18n::t(Key::ChatListNoFavorites),
+                    i18n::t(Key::ChatListNoFavoritesHint),
+                ),
+                ChatListId::Groups => (
+                    i18n::t(Key::ChatListNoGroups),
+                    i18n::t(Key::ChatListNoGroupsHint),
+                ),
                 ChatListId::Custom(_) => (
-                    "Nothing in this list",
-                    "Right-click this chip and choose Edit to add chats.",
+                    i18n::t(Key::ChatListNothingInList),
+                    i18n::t(Key::ChatListNothingInListHint),
                 ),
                 ChatListId::All => (
-                    "No chats yet",
-                    "New chats appear here. You can start one from your phone.",
+                    i18n::t(Key::ChatListNoChats),
+                    i18n::t(Key::ChatListNoChatsHint),
                 ),
             }
         };
@@ -1200,8 +1276,8 @@ fn results(app: &mut App, ui: &mut egui::Ui) {
             ui,
             &palette,
             Icon::Search,
-            "No results",
-            "Try another name, number, or message text.",
+            i18n::t(Key::ChatListNoResults),
+            i18n::t(Key::ChatListNoResultsHint),
         );
         return;
     }
@@ -1210,7 +1286,7 @@ fn results(app: &mut App, ui: &mut egui::Ui) {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             if !chats.is_empty() {
-                section(ui, &palette, "Chats");
+                section(ui, &palette, i18n::t(Key::SettingsSectionChats));
                 for chat in &chats {
                     let reveal = app.scroll_chat_into_view.as_deref() == Some(chat.id.as_str());
                     let response = ui
@@ -1223,13 +1299,13 @@ fn results(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
             if !hits.is_empty() {
-                section(ui, &palette, "Messages");
+                section(ui, &palette, i18n::t(Key::ChatSearchSectionMessages));
                 for hit in &hits {
                     ui.push_id(("hit", &hit.chat, &hit.id), |ui| hit_row(app, ui, hit));
                 }
             }
             if !contacts.is_empty() {
-                section(ui, &palette, "Contacts");
+                section(ui, &palette, i18n::t(Key::ChatSearchSectionContacts));
                 for contact in &contacts {
                     ui.push_id(("contact", &contact.id), |ui| contact_row(app, ui, contact));
                 }
@@ -1300,7 +1376,7 @@ fn hit_row(app: &mut App, ui: &mut egui::Ui, hit: &Message) {
         if hit.from_me {
             let who = widgets::line(
                 ui,
-                "You: ",
+                i18n::t(Key::DisplayYouPrefix),
                 theme::regular(13.0),
                 palette.dim,
                 (right - x) * 0.5,
@@ -1426,7 +1502,7 @@ fn archive_row(app: &mut App, ui: &mut egui::Ui, count: usize) {
         ui.painter().text(
             pos2(rect.left() + 76.0, rect.center().y),
             egui::Align2::LEFT_CENTER,
-            "Archived",
+            i18n::t(Key::ChatListArchivedShort),
             theme::medium(14.5),
             palette.text,
         );
@@ -1602,7 +1678,10 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
         };
         let preview = if !typing.is_empty() {
             let who = if chat.is_group() {
-                format!("{} is typing…", typing[0].1.trim_start_matches('~'))
+                i18n::f(
+                    Key::TypingOne,
+                    &[("who", typing[0].1.trim_start_matches('~'))],
+                )
             } else {
                 "typing…".to_owned()
             };
@@ -1682,12 +1761,22 @@ fn attach_context_menu(app: &mut App, response: &egui::Response, chat: &Chat, pa
 
 fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette) {
     if chat.looks_unread()
-        && widgets::menu_item(ui, palette, Some(Icon::CheckCheck), "Mark as read")
+        && widgets::menu_item(
+            ui,
+            palette,
+            Some(Icon::CheckCheck),
+            i18n::t(Key::ChatMenuMarkRead),
+        )
     {
         app.actions.push(Action::MarkRead(chat.id.clone()));
     }
     if !chat.looks_unread()
-        && widgets::menu_item(ui, palette, Some(Icon::MessageCircle), "Mark as unread")
+        && widgets::menu_item(
+            ui,
+            palette,
+            Some(Icon::MessageCircle),
+            i18n::t(Key::ChatMenuMarkUnread),
+        )
     {
         app.actions.push(Action::MarkUnread(chat.id.clone()));
     }
@@ -1696,9 +1785,9 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
         palette,
         Some(Icon::Heart),
         if chat.favorite {
-            "Remove from favorites"
+            i18n::t(Key::ChatMenuRemoveFavorite)
         } else {
-            "Add to favorites"
+            i18n::t(Key::ChatMenuAddFavorite)
         },
     ) {
         app.actions
@@ -1709,7 +1798,11 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
         ui,
         palette,
         Some(if pinned_here { Icon::PinOff } else { Icon::Pin }),
-        if pinned_here { "Unpin" } else { "Pin to top" },
+        if pinned_here {
+            i18n::t(Key::DialogUnpin)
+        } else {
+            i18n::t(Key::ChatPinToTop)
+        },
     ) {
         app.actions.push(app.toggle_pin_action(chat));
     }
@@ -1718,9 +1811,9 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
         palette,
         Some(Icon::Archive),
         if chat.archived {
-            "Unarchive"
+            i18n::t(Key::ChatUnarchive)
         } else {
-            "Archive"
+            i18n::t(Key::ChatArchive)
         },
     ) {
         app.actions
@@ -1732,9 +1825,9 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
             palette,
             Some(Icon::LogOut),
             if chat.is_channel() {
-                "Leave channel"
+                i18n::t(Key::DialogLeaveChannelAction)
             } else {
-                "Leave group"
+                i18n::t(Key::DialogLeaveGroupAction)
             },
         )
     {
@@ -1745,14 +1838,14 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
     }
     let now = crate::util::now();
     if chat.muted(now) {
-        if widgets::menu_item(ui, palette, Some(Icon::Bell), "Unmute") {
+        if widgets::menu_item(ui, palette, Some(Icon::Bell), i18n::t(Key::DialogUnmute)) {
             app.actions.push(Action::SetMuted(chat.id.clone(), None));
         }
     } else {
         for (label, until) in [
-            ("Mute for 8 hours", Some(now + 8 * 3600)),
-            ("Mute for a week", Some(now + 7 * 86_400)),
-            ("Mute indefinitely", Some(0)),
+            (i18n::t(Key::ChatMuteFor8Hours), Some(now + 8 * 3600)),
+            (i18n::t(Key::ChatMuteForWeek), Some(now + 7 * 86_400)),
+            (i18n::t(Key::ChatMuteForever), Some(0)),
         ] {
             if widgets::menu_item(ui, palette, Some(Icon::BellOff), label) {
                 app.actions.push(Action::SetMuted(chat.id.clone(), until));
@@ -1761,11 +1854,16 @@ fn context_menu(app: &mut App, ui: &mut egui::Ui, chat: &Chat, palette: &Palette
     }
     widgets::menu_separator(ui, palette);
     if let Some(phone) = chat.phone()
-        && widgets::menu_item(ui, palette, Some(Icon::Copy), "Copy number")
+        && widgets::menu_item(
+            ui,
+            palette,
+            Some(Icon::Copy),
+            i18n::t(Key::DialogCopyNumber),
+        )
     {
         app.actions.push(Action::CopyText(format!("+{phone}")));
     }
-    if widgets::menu_item(ui, palette, Some(Icon::Info), "Info") {
+    if widgets::menu_item(ui, palette, Some(Icon::Info), i18n::t(Key::ChatInfo)) {
         app.actions
             .push(Action::ShowDialog(Dialog::ChatInfo(chat.id.clone())));
     }

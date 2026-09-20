@@ -3,6 +3,12 @@
 use jiff::civil::Date;
 use jiff::{Timestamp, Zoned};
 
+use crate::i18n::{self, Key};
+use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
+
+use crate::i18n::{self, Key};
+use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
+
 /// File-loader identifier for a native path. egui requires a slash after
 /// `file://` on Windows or it interprets a drive path as a UNC hostname.
 /// Keep native characters: egui's loader does not percent-decode URLs.
@@ -35,13 +41,15 @@ pub fn clock(unix_seconds: i64) -> String {
 pub fn copy_stamp(unix_seconds: i64) -> String {
     zoned(unix_seconds)
         .map(|when| {
-            format!(
-                "{}:{:02}, {}/{}/{}",
-                when.hour(),
-                when.minute(),
-                when.month(),
-                when.day(),
-                when.year()
+            let time = format!("{:02}:{:02}", when.hour(), when.minute());
+            i18n::f(
+                Key::CopyStamp,
+                &[
+                    ("time", &time),
+                    ("day", &when.date().day().to_string()),
+                    ("month", &when.date().month().to_string()),
+                    ("year", &when.date().year().to_string()),
+                ],
             )
         })
         .unwrap_or_default()
@@ -62,7 +70,7 @@ fn stamp_relative_to(date: Date, today: Date, when: &Zoned) -> String {
         .unwrap_or(i32::MAX);
     match days {
         0 => format!("{:02}:{:02}", when.hour(), when.minute()),
-        1 => "Yesterday".to_owned(),
+        1 => i18n::t(Key::DateYesterday).to_owned(),
         2..=6 => weekday_name(date.weekday()).to_owned(),
         _ => short_date(date),
     }
@@ -89,10 +97,54 @@ pub fn moment_stamp(unix_seconds: i64) -> String {
         .unwrap_or(i32::MAX);
     match days {
         0 => time,
-        1 => format!("Yesterday at {time}"),
-        2..=6 => format!("{} at {time}", weekday_name(when.date().weekday())),
-        _ => format!("{} at {time}", short_date(when.date())),
+        1 => i18n::f(Key::DateYesterdayAt, &[("time", time.as_str())]),
+        2..=6 => i18n::f(
+            Key::DateAt,
+            &[
+                ("moment", weekday_name(when.date().weekday())),
+                ("time", time.as_str()),
+            ],
+        ),
+        _ => i18n::f(
+            Key::DateAt,
+            &[
+                ("moment", short_date(when.date()).as_str()),
+                ("time", time.as_str()),
+            ],
+        ),
     }
+}
+
+/// Short stamp for lists, such as "Fri 18 Sep, 21:00".
+pub fn short_stamp(unix_seconds: i64) -> String {
+    let Some(when) = zoned(unix_seconds) else {
+        return String::new();
+    };
+    i18n::f(
+        Key::DateStampShort,
+        &[
+            ("weekday", weekday_abbr(when.date().weekday())),
+            ("day", &when.date().day().to_string()),
+            ("month", month_abbr(when.date().month())),
+            ("time", &format!("{:02}:{:02}", when.hour(), when.minute())),
+        ],
+    )
+}
+
+/// Short stamp for lists, such as "Fri 18 Sep, 21:00".
+pub fn short_stamp(unix_seconds: i64) -> String {
+    let Some(when) = zoned(unix_seconds) else {
+        return String::new();
+    };
+    i18n::f(
+        Key::DateStampShort,
+        &[
+            ("weekday", weekday_abbr(when.date().weekday())),
+            ("day", &when.date().day().to_string()),
+            ("month", month_abbr(when.date().month())),
+            ("time", &format!("{:02}:{:02}", when.hour(), when.minute())),
+        ],
+    )
 }
 
 /// Conversation day-separator label.
@@ -107,8 +159,8 @@ pub fn day_label(unix_seconds: i64) -> String {
         .map(|span| span.get_days())
         .unwrap_or(i32::MAX);
     match days {
-        0 => "Today".to_owned(),
-        1 => "Yesterday".to_owned(),
+        0 => i18n::t(Key::DateToday).to_owned(),
+        1 => i18n::t(Key::DateYesterday).to_owned(),
         2..=6 => weekday_name(date.weekday()).to_owned(),
         _ => long_date(date),
     }
@@ -136,51 +188,26 @@ pub fn highlight_flash(elapsed_ms: u64, on_slices: u64) -> Option<bool> {
     }
 }
 
-fn weekday_name(weekday: jiff::civil::Weekday) -> &'static str {
-    match weekday {
-        jiff::civil::Weekday::Monday => "Monday",
-        jiff::civil::Weekday::Tuesday => "Tuesday",
-        jiff::civil::Weekday::Wednesday => "Wednesday",
-        jiff::civil::Weekday::Thursday => "Thursday",
-        jiff::civil::Weekday::Friday => "Friday",
-        jiff::civil::Weekday::Saturday => "Saturday",
-        jiff::civil::Weekday::Sunday => "Sunday",
-    }
-}
-
-fn month_name(month: i8) -> &'static str {
-    match month {
-        1 => "January",
-        2 => "February",
-        3 => "March",
-        4 => "April",
-        5 => "May",
-        6 => "June",
-        7 => "July",
-        8 => "August",
-        9 => "September",
-        10 => "October",
-        11 => "November",
-        _ => "December",
-    }
-}
-
 fn short_date(date: Date) -> String {
-    format!(
-        "{} {} {}",
-        date.day(),
-        &month_name(date.month())[..3],
-        date.year()
+    i18n::f(
+        Key::DateShort,
+        &[
+            ("day", &date.day().to_string()),
+            ("month", month_abbr(date.month())),
+            ("year", &date.year().to_string()),
+        ],
     )
 }
 
 fn long_date(date: Date) -> String {
-    format!(
-        "{}, {} {} {}",
-        weekday_name(date.weekday()),
-        date.day(),
-        month_name(date.month()),
-        date.year()
+    i18n::f(
+        Key::DateLong,
+        &[
+            ("weekday", weekday_name(date.weekday())),
+            ("day", &date.day().to_string()),
+            ("month", month_name(date.month())),
+            ("year", &date.year().to_string()),
+        ],
     )
 }
 

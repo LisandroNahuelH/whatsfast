@@ -4,6 +4,7 @@ use egui::{Align, CornerRadius, Frame, Layout, Margin, Stroke, Vec2};
 
 use crate::app::App;
 use crate::backend::LinkStatus;
+use crate::i18n::{self, Key};
 use crate::model::{Action, Dialog};
 use crate::qr::Qr;
 use crate::theme::{self, Icon};
@@ -52,7 +53,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     theme::text(ui, "WhatsFast", theme::bold(28.0), palette.text);
                     theme::text(
                         ui,
-                        "A native WhatsApp client.",
+                        i18n::t(Key::LoginTagline),
                         theme::regular(14.5),
                         palette.secondary,
                     );
@@ -72,21 +73,21 @@ fn body(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     match app.link.clone() {
         LinkStatus::Starting | LinkStatus::Connecting => {
-            busy(ui, palette.accent, "Connecting to WhatsApp…");
+            busy(ui, palette.accent, i18n::t(Key::LoginConnecting));
         }
         LinkStatus::Connected | LinkStatus::Disconnected { .. } => {
-            busy(ui, palette.accent, "Linked. Waiting for your chats…");
+            busy(ui, palette.accent, i18n::t(Key::LoginLinkedWaiting));
         }
         LinkStatus::LoggedOut => {
             theme::icon(ui, Icon::Smartphone, 28.0, palette.warning);
             theme::paragraph(
                 ui,
-                "This computer was unlinked from your phone. Requesting a new code.",
+                i18n::t(Key::LoginUnlinkedRequestingCode),
                 theme::regular(14.0),
                 palette.text,
             );
             ui.add_space(8.0);
-            busy(ui, palette.accent, "Requesting a new code…");
+            busy(ui, palette.accent, i18n::t(Key::LoginRequestingNewCode));
         }
         LinkStatus::Failed(message) => {
             theme::icon(ui, Icon::CircleAlert, 28.0, palette.danger);
@@ -99,7 +100,7 @@ fn body(app: &mut App, ui: &mut egui::Ui) {
                 .wrap(),
             );
             ui.add_space(12.0);
-            if theme::pill_button(ui, &palette, "Try again", true).clicked() {
+            if theme::pill_button(ui, &palette, i18n::t(Key::LoginTryAgain), true).clicked() {
                 app.actions.push(Action::Reconnect);
             }
         }
@@ -114,19 +115,19 @@ fn body(app: &mut App, ui: &mut egui::Ui) {
                 busy(
                     ui,
                     palette.accent,
-                    &format!("Requesting a code for +{phone}…"),
+                    &i18n::f(Key::LoginRequestingCodeFor, &[("phone", phone.as_str())]),
                 );
             } else if let Some(qr) = qr {
                 qr_view(app, ui, &qr);
             } else {
-                busy(ui, palette.accent, "Waiting for a code from WhatsApp…");
+                busy(ui, palette.accent, i18n::t(Key::LoginWaitingForCode));
             }
         }
     }
     ui.add_space(18.0);
     theme::paragraph(
         ui,
-        "Unofficial client. Using it may be against WhatsApp's terms of service.",
+        i18n::t(Key::LoginUnofficialWarning),
         theme::regular(11.5),
         palette.dim,
     );
@@ -150,7 +151,7 @@ fn qr_view(app: &mut App, ui: &mut egui::Ui, code: &str) {
     let palette = app.palette;
     theme::text(
         ui,
-        "Link this computer",
+        i18n::t(Key::LoginLinkThisComputer),
         theme::semibold(16.0),
         palette.text,
     );
@@ -165,9 +166,9 @@ fn qr_view(app: &mut App, ui: &mut egui::Ui, code: &str) {
     }
     ui.add_space(4.0);
     let steps = [
-        "Open WhatsApp on your phone",
-        "Tap Menu or Settings, then Linked devices",
-        "Tap Link a device and point the phone at this code",
+        i18n::t(Key::LoginOpenWhatsApp),
+        i18n::t(Key::LoginTapMenu),
+        i18n::t(Key::LoginTapLinkDevice),
     ];
     for (index, step) in steps.iter().enumerate() {
         ui.horizontal(|ui| {
@@ -184,7 +185,7 @@ fn qr_view(app: &mut App, ui: &mut egui::Ui, code: &str) {
     ui.add_space(10.0);
     if theme::link(
         ui,
-        "Link with phone number instead",
+        i18n::t(Key::LoginLinkWithPhone),
         theme::medium(13.0),
         palette.link,
     )
@@ -198,14 +199,14 @@ fn pair_code_view(app: &mut App, ui: &mut egui::Ui, code: &str, phone: Option<&s
     let palette = app.palette;
     theme::text(
         ui,
-        "Enter this code on your phone",
+        i18n::t(Key::LoginEnterCode),
         theme::semibold(16.0),
         palette.text,
     );
     if let Some(phone) = phone {
         theme::text(
             ui,
-            format!("for +{phone}"),
+            i18n::f(Key::LoginForPhone, &[("phone", phone)]),
             theme::regular(13.0),
             palette.secondary,
         );
@@ -225,9 +226,9 @@ fn pair_code_view(app: &mut App, ui: &mut egui::Ui, code: &str, phone: Option<&s
         });
     ui.add_space(8.0);
     let steps = [
-        "Open WhatsApp on your phone",
-        "Tap Menu or Settings, then Linked devices",
-        "Tap Link a device, then Link with phone number instead",
+        i18n::t(Key::LoginOpenWhatsApp),
+        i18n::t(Key::LoginTapMenu),
+        i18n::t(Key::LoginTapLinkPhone),
     ];
     for (index, step) in steps.iter().enumerate() {
         ui.horizontal(|ui| {
@@ -244,7 +245,15 @@ fn pair_code_view(app: &mut App, ui: &mut egui::Ui, code: &str, phone: Option<&s
     ui.add_space(10.0);
     ui.horizontal(|ui| {
         ui.add_space((ui.available_width() - 200.0).max(0.0) / 2.0);
-        if theme::soft_button(ui, &palette, Some(Icon::Copy), "Copy code", false).clicked() {
+        if theme::soft_button(
+            ui,
+            &palette,
+            Some(Icon::Copy),
+            i18n::t(Key::LoginCopyCode),
+            false,
+        )
+        .clicked()
+        {
             app.actions.push(Action::CopyText(code.to_owned()));
         }
     });

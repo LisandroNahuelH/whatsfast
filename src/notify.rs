@@ -6,6 +6,8 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use crate::i18n::{self, Key};
+
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -123,7 +125,7 @@ fn deliver(
         .summary(title)
         .body(body)
         .icon("whatsfast")
-        .action("default", "Open");
+        .action("default", i18n::t(Key::CommonOpen));
     if let Some(picture) = picture {
         notification.image_path(&picture.to_string_lossy());
     }

@@ -131,28 +131,25 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
 
 /// Shortcuts shown in the help dialog.
 pub const SHORTCUTS: &[(&str, &str)] = &[
-    ("Ctrl+F / Ctrl+K", "Search chats"),
-    ("Ctrl+G", "Search messages in the open chat"),
-    ("Ctrl+L", "Focus the message input"),
-    ("Alt+↑ / Alt+↓", "Previous / next chat"),
-    ("Enter", "Send (Shift+Enter for a new line)"),
+    ("Ctrl+F / Ctrl+K", i18n::t(Key::ShortcutSearchChats)),
+    ("Ctrl+G", i18n::t(Key::ShortcutSearchMessages)),
+    ("Ctrl+L", i18n::t(Key::ShortcutFocusComposer)),
+    ("Alt+↑ / Alt+↓", i18n::t(Key::ShortcutPreviousNextChat)),
+    ("Enter", i18n::t(Key::ShortcutSend)),
+    ("Escape", i18n::t(Key::ShortcutDismiss)),
     (
-        "Escape",
-        "Dismiss the current action, return from search, or close the chat",
+        i18n::t(Key::ShortcutPhotoViewer),
+        i18n::t(Key::ShortcutPhotoViewerKeys),
     ),
-    (
-        "Photo viewer",
-        "Wheel zooms, drag moves, ← / → previous or next photo",
-    ),
-    ("Ctrl+V", "Paste text, or send a picture from the clipboard"),
-    ("Ctrl+B", "Show or hide the chat list"),
-    ("Ctrl+End", "Jump to the newest message"),
-    ("Ctrl+,", "Settings"),
-    ("Ctrl++ / Ctrl+-", "Zoom in / out"),
-    ("Ctrl+0", "Reset zoom"),
-    ("Ctrl+/", "This list"),
-    ("Ctrl+W", "Close the window (WhatsFast remains in the tray)"),
-    ("Ctrl+Q", "Quit"),
+    ("Ctrl+V", i18n::t(Key::ShortcutPaste)),
+    ("Ctrl+B", i18n::t(Key::ShortcutChatList)),
+    ("Ctrl+End", i18n::t(Key::ShortcutNewest)),
+    ("Ctrl+,", i18n::t(Key::SettingsTitle)),
+    ("Ctrl++ / Ctrl+-", i18n::t(Key::ShortcutZoom)),
+    ("Ctrl+0", i18n::t(Key::ShortcutResetZoom)),
+    ("Ctrl+/", i18n::t(Key::ShortcutThisList)),
+    ("Ctrl+W", i18n::t(Key::ShortcutCloseWindow)),
+    ("Ctrl+Q", i18n::t(Key::CommonQuit)),
 ];
 
 /// Uses Command and Option labels on macOS.

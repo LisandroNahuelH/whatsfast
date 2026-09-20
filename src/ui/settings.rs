@@ -3,6 +3,7 @@
 use egui::{CornerRadius, Frame, Margin, Order, Sense, pos2, vec2};
 
 use crate::app::App;
+use crate::i18n::{self, Key, Language};
 use crate::model::{Action, Dialog, Page};
 use crate::privacy::{PrivacyChoice, PrivacyKind};
 use crate::settings::{
@@ -34,79 +35,146 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             20.0,
                             palette.secondary,
                             palette.text,
-                            "Back (Esc)",
+                            i18n::t(Key::CommonBack),
                         )
                         .clicked()
                         {
                             app.actions.push(Action::Open(Page::Chats));
                         }
-                        theme::text(ui, "Settings", theme::bold(24.0), palette.text);
+                        theme::text(
+                            ui,
+                            i18n::t(Key::SettingsTitle),
+                            theme::bold(24.0),
+                            palette.text,
+                        );
                     });
                     ui.add_space(18.0);
 
-                    section(ui, app, "Appearance");
-                    let detail = app.custom_themes.detail(app.settings.custom_theme.as_deref());
+                    section(ui, app, i18n::t(Key::SettingsSectionAppearance));
+                    let detail = app
+                        .custom_themes
+                        .detail(app.settings.custom_theme.as_deref());
                     let detail = if !detail.is_empty() {
                         detail
                     } else if app.custom_themes.follows_omarchy() {
-                        "Follow system uses your Omarchy colours."
+                        i18n::t(Key::SettingsThemeOmarchyHint)
                     } else {
-                        "Follow system uses your desktop's light or dark appearance."
+                        i18n::t(Key::SettingsThemeSystemHint)
                     };
-                    widgets::setting_row(ui, &palette, "Theme", detail, |ui| {
-                        ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-                            let selected = app.settings.custom_theme.as_deref()
-                                .map(theme::custom::label)
-                                .unwrap_or_else(|| app.settings.theme.label());
-                            let response = egui::ComboBox::from_id_salt("appearance_theme")
-                                .selected_text(" ")
-                                .width(200.0_f32.min(ui.available_width()))
-                                .height(320.0)
-                                .show_ui(ui, |ui| {
-                                    for choice in ThemeChoice::ALL {
-                                        if theme_option(ui, &palette, choice.label(), app.settings.custom_theme.is_none() && app.settings.theme == choice) {
-                                            app.actions.push(Action::SetTheme(choice));
-                                        }
-                                    }
-                                    if app.custom_themes.picker_themes().next().is_some() {
-                                        ui.separator();
-                                    }
-                                    for custom in app.custom_themes.picker_themes() {
-                                        if theme_option(ui, &palette, theme::custom::label(&custom.filename), app.settings.custom_theme.as_deref() == Some(custom.filename.as_str())) {
-                                            app.actions.push(Action::SetCustomTheme(custom.filename.clone()));
-                                        }
-                                    }
-                                });
-                            let rect = response.response.rect;
-                            let text = widgets::line(ui, selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
-                            text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
-                            response.response.widget_info(|| {
-                                let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Theme");
-                                info.current_text_value = Some(selected.to_owned());
-                                info
-                            });
-                            if theme::soft_button(ui, &palette, Some(Icon::ExternalLink), "Open themes folder", false).clicked() {
-                                app.actions.push(Action::OpenThemesFolder);
-                            }
-                        });
-                    });
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "Chat wallpaper",
-                        "Auto picks a doodle from the theme colours. You can force Black 1 to White 3. Right-click the open chat and choose Next wallpaper to step through the three doodles for that family.",
+                        i18n::t(Key::SettingsThemeLabel),
+                        detail,
                         |ui| {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-                                let selected = app.settings.chat_wallpaper.combo_label(app.settings.wallpaper_slot());
+                                let selected = app
+                                    .settings
+                                    .custom_theme
+                                    .as_deref()
+                                    .map(theme::custom::label)
+                                    .unwrap_or_else(|| app.settings.theme.label());
+                                let response = egui::ComboBox::from_id_salt("appearance_theme")
+                                    .selected_text(" ")
+                                    .width(200.0_f32.min(ui.available_width()))
+                                    .height(320.0)
+                                    .show_ui(ui, |ui| {
+                                        for choice in ThemeChoice::ALL {
+                                            if theme_option(
+                                                ui,
+                                                &palette,
+                                                choice.label(),
+                                                app.settings.custom_theme.is_none()
+                                                    && app.settings.theme == choice,
+                                            ) {
+                                                app.actions.push(Action::SetTheme(choice));
+                                            }
+                                        }
+                                        if app.custom_themes.picker_themes().next().is_some() {
+                                            ui.separator();
+                                        }
+                                        for custom in app.custom_themes.picker_themes() {
+                                            if theme_option(
+                                                ui,
+                                                &palette,
+                                                theme::custom::label(&custom.filename),
+                                                app.settings.custom_theme.as_deref()
+                                                    == Some(custom.filename.as_str()),
+                                            ) {
+                                                app.actions.push(Action::SetCustomTheme(
+                                                    custom.filename.clone(),
+                                                ));
+                                            }
+                                        }
+                                    });
+                                let rect = response.response.rect;
+                                let text = widgets::line(
+                                    ui,
+                                    selected,
+                                    theme::regular(14.0),
+                                    palette.text,
+                                    rect.width() - 36.0,
+                                    1,
+                                );
+                                text.paint(
+                                    ui,
+                                    egui::pos2(
+                                        rect.left() + 8.0,
+                                        rect.center().y - text.size().y / 2.0,
+                                    ),
+                                    palette.text,
+                                );
+                                response.response.widget_info(|| {
+                                    let mut info = egui::WidgetInfo::labeled(
+                                        egui::WidgetType::ComboBox,
+                                        ui.is_enabled(),
+                                        i18n::t(Key::SettingsThemeLabel),
+                                    );
+                                    info.current_text_value = Some(selected.to_owned());
+                                    info
+                                });
+                                if theme::soft_button(
+                                    ui,
+                                    &palette,
+                                    Some(Icon::ExternalLink),
+                                    i18n::t(Key::SettingsOpenThemesFolder),
+                                    false,
+                                )
+                                .clicked()
+                                {
+                                    app.actions.push(Action::OpenThemesFolder);
+                                }
+                            });
+                        },
+                    );
+                    widgets::setting_row(
+                        ui,
+                        &palette,
+                        i18n::t(Key::SettingsWallpaperLabel),
+                        i18n::t(Key::SettingsWallpaperHint),
+                        |ui| {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                                let selected = app
+                                    .settings
+                                    .chat_wallpaper
+                                    .combo_label(app.settings.wallpaper_slot());
                                 let mut preview = None;
                                 let response = egui::ComboBox::from_id_salt("chat_wallpaper")
                                     .selected_text(" ")
                                     .width(200.0_f32.min(ui.available_width()))
                                     .height(500.0)
                                     .show_ui(ui, |ui| {
-                                        let auto = wallpaper_option(ui, &palette, "Auto", app.settings.chat_wallpaper == ChatWallpaper::Auto);
+                                        let auto = wallpaper_option(
+                                            ui,
+                                            &palette,
+                                            i18n::t(Key::SettingsWallpaperAuto),
+                                            app.settings.chat_wallpaper == ChatWallpaper::Auto,
+                                        );
                                         if auto.hovered() {
-                                            preview = Some((wallpaper::family_for(&palette), app.settings.wallpaper_slot()));
+                                            preview = Some((
+                                                wallpaper::family_for(&palette),
+                                                app.settings.wallpaper_slot(),
+                                            ));
                                         }
                                         if auto.clicked() {
                                             app.actions.push(Action::SetChatWallpaper {
@@ -116,10 +184,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                         }
                                         for family in WallpaperFamily::ALL {
                                             for slot in 0..WALLPAPER_SLOTS {
-                                                let label = format!("{} {}", family.label(), slot + 1);
-                                                let chosen = app.settings.chat_wallpaper == family.as_choice()
+                                                let label =
+                                                    format!("{} {}", family.label(), slot + 1);
+                                                let chosen = app.settings.chat_wallpaper
+                                                    == family.as_choice()
                                                     && app.settings.wallpaper_slot() == slot;
-                                                let row = wallpaper_option(ui, &palette, &label, chosen);
+                                                let row =
+                                                    wallpaper_option(ui, &palette, &label, chosen);
                                                 if row.hovered() {
                                                     preview = Some((family, slot));
                                                 }
@@ -133,10 +204,28 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                         }
                                     });
                                 let rect = response.response.rect;
-                                let text = widgets::line(ui, &selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
-                                text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
+                                let text = widgets::line(
+                                    ui,
+                                    &selected,
+                                    theme::regular(14.0),
+                                    palette.text,
+                                    rect.width() - 36.0,
+                                    1,
+                                );
+                                text.paint(
+                                    ui,
+                                    egui::pos2(
+                                        rect.left() + 8.0,
+                                        rect.center().y - text.size().y / 2.0,
+                                    ),
+                                    palette.text,
+                                );
                                 response.response.widget_info(|| {
-                                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Chat wallpaper");
+                                    let mut info = egui::WidgetInfo::labeled(
+                                        egui::WidgetType::ComboBox,
+                                        ui.is_enabled(),
+                                        i18n::t(Key::SettingsWallpaperLabel),
+                                    );
                                     info.current_text_value = Some(selected.clone());
                                     info
                                 });
@@ -147,10 +236,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "Zoom",
-                        "You can also use Ctrl+plus and Ctrl+minus.",
+                        i18n::t(Key::SettingsZoomLabel),
+                        i18n::t(Key::SettingsZoomHint),
                         |ui| {
-                            if theme::icon_button(ui, Icon::Plus, 16.0, palette.secondary, palette.text, "Larger").clicked() {
+                            if theme::icon_button(
+                                ui,
+                                Icon::Plus,
+                                16.0,
+                                palette.secondary,
+                                palette.text,
+                                i18n::t(Key::SettingsZoomLarger),
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::ZoomBy(0.1));
                             }
                             theme::text(
@@ -159,27 +257,114 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                 theme::medium(13.5),
                                 palette.text,
                             );
-                            if theme::icon_button(ui, Icon::Minus, 16.0, palette.secondary, palette.text, "Smaller").clicked() {
+                            if theme::icon_button(
+                                ui,
+                                Icon::Minus,
+                                16.0,
+                                palette.secondary,
+                                palette.text,
+                                i18n::t(Key::SettingsZoomSmaller),
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::ZoomBy(-0.1));
                             }
                         },
                     );
 
-                    section(ui, app, "Chats");
-                    toggle(ui, app, "Enter sends", "When off, Enter adds a line and Ctrl+Enter sends.", |settings| &mut settings.enter_sends);
-                    let receipts_note = if app.account_receipts_off {
-                        "Read receipts are disabled for your WhatsApp account (Settings Privacy). Direct chats will not send them. When this switch is on, groups still do. Read state syncs between your devices either way."
-                    } else {
-                        "Let people see when you read messages or play voice messages on this copy. Your WhatsApp account setting in Privacy still applies. Read state syncs between your devices either way."
-                    };
-                    toggle(ui, app, "Send read receipts", receipts_note, |settings| &mut settings.send_read_receipts);
-                    toggle(ui, app, "Show when you are typing", "", |settings| &mut settings.send_typing);
-                    toggle(ui, app, "Download attachments automatically", "Download pictures, videos, voice messages, and documents up to 64 MB when they enter view. When off, click a file to download it.", |settings| &mut settings.auto_download);
+                    section(ui, app, i18n::t(Key::SettingsSectionLanguage));
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "Download older history in the background",
-                        "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Failed files are asked again with a long wait, for up to 30 days. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned.",
+                        i18n::t(Key::SettingsLanguageLabel),
+                        i18n::t(Key::SettingsLanguageHint),
+                        |ui| {
+                            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                                let selected = app.settings.language.label();
+                                let response = egui::ComboBox::from_id_salt("language")
+                                    .selected_text(" ")
+                                    .width(200.0_f32.min(ui.available_width()))
+                                    .show_ui(ui, |ui| {
+                                        for language in Language::ALL {
+                                            if wallpaper_option(
+                                                ui,
+                                                &palette,
+                                                language.label(),
+                                                app.settings.language == language,
+                                            )
+                                            .clicked()
+                                            {
+                                                app.settings.language = language;
+                                                i18n::set_language(language);
+                                                app.actions.push(Action::SettingsChanged);
+                                            }
+                                        }
+                                    });
+                                let rect = response.response.rect;
+                                let text = widgets::line(
+                                    ui,
+                                    selected,
+                                    theme::regular(14.0),
+                                    palette.text,
+                                    rect.width() - 36.0,
+                                    1,
+                                );
+                                text.paint(
+                                    ui,
+                                    egui::pos2(
+                                        rect.left() + 8.0,
+                                        rect.center().y - text.size().y / 2.0,
+                                    ),
+                                    palette.text,
+                                );
+                                response.response.widget_info(|| {
+                                    let mut info = egui::WidgetInfo::labeled(
+                                        egui::WidgetType::ComboBox,
+                                        ui.is_enabled(),
+                                        i18n::t(Key::SettingsLanguageLabel),
+                                    );
+                                    info.current_text_value = Some(selected.to_owned());
+                                    info
+                                });
+                            });
+                        },
+                    );
+
+                    section(ui, app, i18n::t(Key::SettingsSectionChats));
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsEnterSends),
+                        i18n::t(Key::SettingsEnterSendsHint),
+                        |settings| &mut settings.enter_sends,
+                    );
+                    let receipts_note = if app.account_receipts_off {
+                        i18n::t(Key::SettingsReceiptsOffNote)
+                    } else {
+                        i18n::t(Key::SettingsReceiptsOnNote)
+                    };
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsSendReceipts),
+                        receipts_note,
+                        |settings| &mut settings.send_read_receipts,
+                    );
+                    toggle(ui, app, i18n::t(Key::SettingsSendTyping), "", |settings| {
+                        &mut settings.send_typing
+                    });
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsAutoDownload),
+                        i18n::t(Key::SettingsAutoDownloadHint),
+                        |settings| &mut settings.auto_download,
+                    );
+                    widgets::setting_row(
+                        ui,
+                        &palette,
+                        i18n::t(Key::SettingsHistoryLabel),
+                        i18n::t(Key::SettingsHistoryHint),
                         |ui| {
                             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
                                 let selected = app.settings.history_prefetch.label();
@@ -199,15 +384,34 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                                                 hint = Some(choice.hint());
                                             }
                                             if row.clicked() {
-                                                app.actions.push(Action::SetHistoryPrefetch(choice));
+                                                app.actions
+                                                    .push(Action::SetHistoryPrefetch(choice));
                                             }
                                         }
                                     });
                                 let rect = response.response.rect;
-                                let text = widgets::line(ui, selected, theme::regular(14.0), palette.text, rect.width() - 36.0, 1);
-                                text.paint(ui, egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0), palette.text);
+                                let text = widgets::line(
+                                    ui,
+                                    selected,
+                                    theme::regular(14.0),
+                                    palette.text,
+                                    rect.width() - 36.0,
+                                    1,
+                                );
+                                text.paint(
+                                    ui,
+                                    egui::pos2(
+                                        rect.left() + 8.0,
+                                        rect.center().y - text.size().y / 2.0,
+                                    ),
+                                    palette.text,
+                                );
                                 response.response.widget_info(|| {
-                                    let mut info = egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, ui.is_enabled(), "Download older history in the background");
+                                    let mut info = egui::WidgetInfo::labeled(
+                                        egui::WidgetType::ComboBox,
+                                        ui.is_enabled(),
+                                        i18n::t(Key::SettingsHistoryLabel),
+                                    );
                                     info.current_text_value = Some(selected.to_owned());
                                     info
                                 });
@@ -215,18 +419,54 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             });
                         },
                     );
-                    toggle(ui, app, "Show sender pictures in every chat", "WhatsApp shows them in groups only.", |settings| &mut settings.show_sender_pictures);
-                    toggle(ui, app, "Names from your address book", "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app.", |settings| &mut settings.names_from_contacts);
-                    toggle(ui, app, "Save contacts to the phone's address book", "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way.", |settings| &mut settings.save_contacts_to_phone);
-                    toggle(ui, app, "Forward messages in order", "Send a forwarded batch one message at a time, starting each one when the message before it shows its first tick. Mixed text, pictures, and videos then arrive in their original order. When off, they send together and may arrive out of order.", |settings| &mut settings.forward_in_order);
-                    toggle(ui, app, "Show the create poll button", "Add the Create poll button beside the composer. When off, the button is hidden and the polls already in a chat keep working.", |settings| &mut settings.show_poll_button);
-                    toggle(ui, app, "Show shortcut hints", "", |settings| &mut settings.show_shortcut_hints);
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsShowSenderPictures),
+                        i18n::t(Key::SettingsShowSenderPicturesHint),
+                        |settings| &mut settings.show_sender_pictures,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsNamesFromContacts),
+                        i18n::t(Key::SettingsNamesFromContactsHint),
+                        |settings| &mut settings.names_from_contacts,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsSaveContacts),
+                        i18n::t(Key::SettingsSaveContactsHint),
+                        |settings| &mut settings.save_contacts_to_phone,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsForwardInOrder),
+                        i18n::t(Key::SettingsForwardInOrderHint),
+                        |settings| &mut settings.forward_in_order,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsShowPollButton),
+                        i18n::t(Key::SettingsShowPollButtonHint),
+                        |settings| &mut settings.show_poll_button,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsShowShortcutHints),
+                        "",
+                        |settings| &mut settings.show_shortcut_hints,
+                    );
 
-                    section(ui, app, "Privacy");
+                    section(ui, app, i18n::t(Key::SettingsSectionPrivacy));
                     if app.account_privacy.fetch_failed {
                         widgets::rich_text(
                             ui,
-                            "Could not load privacy settings. They load again when WhatsFast reconnects.",
+                            i18n::t(Key::SettingsPrivacyLoadFailed),
                             theme::regular(12.5),
                             palette.secondary,
                         );
@@ -239,19 +479,37 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         }
                     });
 
-                    section(ui, app, "Window");
-                    toggle(ui, app, "Keep running when the window closes", "Keep WhatsFast linked in the system tray. Quit from the tray menu or with Ctrl+Q.", |settings| &mut settings.keep_running_in_background);
-                    toggle(ui, app, "Notify about new messages", "Show desktop notifications when the window is hidden, in the background, or showing another chat. Muted chats do not notify you.", |settings| &mut settings.notifications);
-                    toggle(ui, app, "Hide the sidebar completely", "On: hiding the sidebar (Ctrl+B) leaves nothing behind. Off: it narrows to the chat pictures, so search, archived chats, and settings stay one click away.", |settings| &mut settings.hide_sidebar_fully);
+                    section(ui, app, i18n::t(Key::SettingsSectionWindow));
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsKeepRunning),
+                        i18n::t(Key::SettingsKeepRunningHint),
+                        |settings| &mut settings.keep_running_in_background,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsNotify),
+                        i18n::t(Key::SettingsNotifyHint),
+                        |settings| &mut settings.notifications,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsHideSidebar),
+                        i18n::t(Key::SettingsHideSidebarHint),
+                        |settings| &mut settings.hide_sidebar_fully,
+                    );
 
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "GIPHY API key",
+                        i18n::t(Key::SettingsGiphyKey),
                         if crate::settings::BUILT_IN_GIPHY_KEY.is_some() {
-                            "Used for GIF search. This build includes a key. Enter a key from developers.giphy.com to replace it."
+                            i18n::t(Key::SettingsGiphyKeyHintBuiltIn)
                         } else {
-                            "Required for GIF search. Get a free key from developers.giphy.com."
+                            i18n::t(Key::SettingsGiphyKeyHintRequired)
                         },
                         |ui| {
                             let response = ui.add(
@@ -266,7 +524,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         },
                     );
 
-                    section(ui, app, "Account");
+                    section(ui, app, i18n::t(Key::SettingsSectionAccount));
                     let name = app.me_name.clone().unwrap_or_default();
                     let me = app.me.clone().unwrap_or_default();
                     let phone = crate::model::phone_of(&me)
@@ -284,24 +542,44 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     widgets::setting_row(
                         ui,
                         &palette,
-                        if name.is_empty() { "Linked device" } else { &name },
+                        if name.is_empty() {
+                            i18n::t(Key::SettingsLinkedDevice)
+                        } else {
+                            &name
+                        },
                         &description,
                         |ui| {
-                            if theme::soft_button(ui, &palette, Some(Icon::LogOut), "Unlink this computer", false).clicked() {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::LogOut),
+                                i18n::t(Key::SettingsUnlink),
+                                false,
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::ShowDialog(Dialog::ConfirmUnlink));
                             }
                         },
                     );
 
-                    section(ui, app, "Files");
+                    section(ui, app, i18n::t(Key::SettingsSectionFiles));
                     let archive = app.dirs.archive_db();
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "Message archive",
+                        i18n::t(Key::SettingsMessageArchive),
                         &archive.display().to_string(),
                         |ui| {
-                            if theme::soft_button(ui, &palette, Some(Icon::ExternalLink), "Open folder", false).clicked() {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::ExternalLink),
+                                i18n::t(Key::SettingsOpenFolder),
+                                false,
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::OpenFile(app.dirs.state.clone()));
                             }
                         },
@@ -310,40 +588,96 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     widgets::setting_row(
                         ui,
                         &palette,
-                        "Downloaded attachments",
+                        i18n::t(Key::SettingsDownloadedAttachments),
                         &media.display().to_string(),
                         |ui| {
-                            if theme::soft_button(ui, &palette, Some(Icon::ExternalLink), "Open folder", false).clicked() {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::ExternalLink),
+                                i18n::t(Key::SettingsOpenFolder),
+                                false,
+                            )
+                            .clicked()
+                            {
                                 let _ = std::fs::create_dir_all(&media);
                                 app.actions.push(Action::OpenFile(media.clone()));
                             }
                         },
                     );
-                    toggle(ui, app, "Ask where to save each file", "Open the system save dialog for every attachment you save from the selection bar, so you choose the folder and the file name. When off, saved files go to your Downloads folder.", |settings| &mut settings.ask_where_to_save);
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsAskWhereToSave),
+                        i18n::t(Key::SettingsAskWhereToSaveHint),
+                        |settings| &mut settings.ask_where_to_save,
+                    );
                     let log = app.dirs.log_file();
-                    widgets::setting_row(ui, &palette, "Log of this run", &log.display().to_string(), |ui| {
-                        if theme::soft_button(ui, &palette, Some(Icon::FileText), "Open", false).clicked() {
-                            app.actions.push(Action::OpenFile(log.clone()));
-                        }
-                    });
+                    widgets::setting_row(
+                        ui,
+                        &palette,
+                        i18n::t(Key::SettingsLogOfRun),
+                        &log.display().to_string(),
+                        |ui| {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::FileText),
+                                i18n::t(Key::CommonOpen),
+                                false,
+                            )
+                            .clicked()
+                            {
+                                app.actions.push(Action::OpenFile(log.clone()));
+                            }
+                        },
+                    );
 
-                    section(ui, app, "About");
+                    section(ui, app, i18n::t(Key::SettingsSectionAbout));
                     widgets::setting_row(
                         ui,
                         &palette,
                         &format!("WhatsFast {}", env!("CARGO_PKG_VERSION")),
-                        "A native WhatsApp client built with Rust, egui, and whatsapp-rust.",
+                        i18n::t(Key::SettingsAboutLine),
                         |ui| {
-                            if theme::soft_button(ui, &palette, Some(Icon::Info), "About", false).clicked() {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::Info),
+                                i18n::t(Key::SettingsSectionAbout),
+                                false,
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::ShowDialog(Dialog::About));
                             }
-                            if theme::soft_button(ui, &palette, Some(Icon::Keyboard), "Shortcuts", false).clicked() {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::Keyboard),
+                                i18n::t(Key::CommonShortcuts),
+                                false,
+                            )
+                            .clicked()
+                            {
                                 app.actions.push(Action::ShowDialog(Dialog::Shortcuts));
                             }
                         },
                     );
-                    toggle(ui, app, "Check for updates", "Ask GitHub once a day whether a newer WhatsFast release exists. The request identifies only WhatsFast and its version.", |settings| &mut settings.check_for_updates);
-                    toggle(ui, app, "Download updates automatically", "Download and verify new releases in the background. A toast offers Update; one click installs and restarts. If you skip the toast, the next start of WhatsFast installs the verified file. Native packages and Flatpak update through their package manager.", |settings| &mut settings.download_updates_automatically);
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsCheckUpdates),
+                        i18n::t(Key::SettingsCheckUpdatesHint),
+                        |settings| &mut settings.check_for_updates,
+                    );
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsDownloadUpdates),
+                        i18n::t(Key::SettingsDownloadUpdatesHint),
+                        |settings| &mut settings.download_updates_automatically,
+                    );
                 });
         });
 }

@@ -2,6 +2,7 @@
 
 use super::widgets;
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::{Action, Content, Message, PollState};
 use crate::theme::{self, Icon, Palette};
 use egui::{Align, Layout, Sense, Stroke, pos2, vec2};
@@ -10,10 +11,22 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
     let palette = app.palette;
     ui.horizontal(|ui| {
         theme::icon(ui, Icon::ListChecks, 20.0, palette.accent);
-        theme::text(ui, "Create poll", theme::bold(18.0), palette.text);
+        theme::text(
+            ui,
+            i18n::t(Key::PollCreateTitle),
+            theme::bold(18.0),
+            palette.text,
+        );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if theme::icon_button(ui, Icon::X, 16.0, palette.secondary, palette.text, "Close")
-                .clicked()
+            if theme::icon_button(
+                ui,
+                Icon::X,
+                16.0,
+                palette.secondary,
+                palette.text,
+                i18n::t(Key::CommonClose),
+            )
+            .clicked()
             {
                 app.actions.push(Action::CloseDialog);
             }
@@ -21,17 +34,27 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
     });
     ui.add_space(8.0);
     ui.add_enabled_ui(!app.poll_creating, |ui| {
-        theme::text(ui, "Question", theme::medium(13.5), palette.secondary);
+        theme::text(
+            ui,
+            i18n::t(Key::PollQuestion),
+            theme::medium(13.5),
+            palette.secondary,
+        );
         ui.add(
             egui::TextEdit::singleline(&mut app.poll_draft.question)
                 .id_salt("poll-question")
-                .hint_text("Ask a question")
+                .hint_text(i18n::t(Key::PollAskQuestion))
                 .char_limit(255)
                 .font(theme::regular(14.0))
                 .desired_width(f32::INFINITY),
         );
         ui.add_space(8.0);
-        theme::text(ui, "Answers", theme::medium(13.5), palette.secondary);
+        theme::text(
+            ui,
+            i18n::t(Key::PollAnswers),
+            theme::medium(13.5),
+            palette.secondary,
+        );
         let height = (ui.ctx().content_rect().height() - 320.0).clamp(90.0, 330.0);
         let mut remove = None;
         let removable = app.poll_draft.options.len() > 2;
@@ -45,7 +68,10 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
                         ui.add(
                             egui::TextEdit::singleline(answer)
                                 .id_salt(("poll-answer", index))
-                                .hint_text(format!("Answer {}", index + 1))
+                                .hint_text(i18n::f(
+                                    Key::PollAnswerHint,
+                                    &[("number", &(index + 1).to_string())],
+                                ))
                                 .char_limit(100)
                                 .font(theme::regular(14.0))
                                 .desired_width(width),
@@ -57,7 +83,7 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
                                 14.0,
                                 palette.dim,
                                 palette.text,
-                                "Remove answer",
+                                i18n::t(Key::PollRemoveAnswer),
                             )
                             .clicked()
                         {
@@ -70,7 +96,14 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
             app.poll_draft.options.remove(index);
         }
         if app.poll_draft.options.len() < 12
-            && theme::soft_button(ui, &palette, Some(Icon::Plus), "Add answer", false).clicked()
+            && theme::soft_button(
+                ui,
+                &palette,
+                Some(Icon::Plus),
+                i18n::t(Key::PollAddAnswer),
+                false,
+            )
+            .clicked()
         {
             app.poll_draft.options.push(String::new());
         }
@@ -79,7 +112,7 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
             widgets::switch(ui, &palette, &mut app.poll_draft.multiple);
             theme::text(
                 ui,
-                "Allow multiple answers",
+                i18n::t(Key::PollAllowMultiple),
                 theme::regular(13.5),
                 palette.text,
             );
@@ -91,7 +124,7 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
         theme::text(ui, *error, theme::regular(12.0), palette.dim);
     }
     ui.horizontal(|ui| {
-        if theme::soft_button(ui, &palette, None, "Cancel", false).clicked() {
+        if theme::soft_button(ui, &palette, None, i18n::t(Key::DialogCancel), false).clicked() {
             app.actions.push(Action::CloseDialog);
         }
         ui.add_enabled_ui(
@@ -101,9 +134,9 @@ pub fn create(app: &mut App, ui: &mut egui::Ui, chat: &str) {
                     ui,
                     &palette,
                     if app.poll_creating {
-                        "Sending…"
+                        i18n::t(Key::PollSending)
                     } else {
-                        "Send poll"
+                        i18n::t(Key::PollSend)
                     },
                     true,
                 )
@@ -154,9 +187,9 @@ pub fn ballot(
             theme::text(
                 ui,
                 if state.selectable == 1 {
-                    "Select one answer"
+                    i18n::t(Key::PollSelectOne)
                 } else {
-                    "Select answers"
+                    i18n::t(Key::PollSelectMany)
                 },
                 theme::regular(11.5),
                 palette.secondary,
@@ -232,13 +265,13 @@ pub fn ballot(
                 }
             }
             let detail = if pending {
-                "Sending vote…".to_owned()
+                i18n::t(Key::PollSendingVote).to_owned()
             } else if state.refresh_failed {
-                "Waiting for your phone · earlier votes may be missing".into()
+                i18n::t(Key::PollWaitingPhone).into()
             } else if state.refreshing && !state.history_complete {
-                "Loading earlier votes from your phone…".into()
+                i18n::t(Key::PollLoadingVotes).into()
             } else if !state.history_complete {
-                "Earlier votes have not been loaded yet".into()
+                i18n::t(Key::PollVotesNotLoaded).into()
             } else {
                 format!(
                     "{} {}",
@@ -261,12 +294,17 @@ pub fn ballot(
             if !state.can_vote {
                 widgets::rich_text(
                     ui,
-                    "Voting key unavailable · use your phone",
+                    i18n::t(Key::PollVotingKeyMissing),
                     theme::regular(11.0),
                     palette.dim,
                 );
             } else if !enabled {
-                theme::text(ui, "Reconnect to vote", theme::regular(11.0), palette.dim);
+                theme::text(
+                    ui,
+                    i18n::t(Key::PollReconnectToVote),
+                    theme::regular(11.0),
+                    palette.dim,
+                );
             }
         });
     if enabled

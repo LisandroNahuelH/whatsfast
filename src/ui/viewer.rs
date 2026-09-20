@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use egui::{Align2, Color32, CursorIcon, Id, Modal, Order, Rect, Sense, Vec2, pos2, vec2};
 
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::{Action, ChatId, Content, Message};
 use crate::theme::{self, Icon};
 
@@ -134,7 +135,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     ui.painter().text(
                         full.center(),
                         Align2::CENTER_CENTER,
-                        "Could not display this picture.",
+                        i18n::t(Key::ViewerCouldNotDisplay),
                         theme::regular(14.0),
                         palette.text,
                     );
@@ -165,7 +166,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui,
                 Rect::from_center_size(close_pos, Vec2::splat(CHROME)),
                 Icon::X,
-                "Close photo",
+                i18n::t(Key::ViewerClose),
             ) {
                 close = true;
             }
@@ -177,7 +178,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         Vec2::splat(CHROME),
                     ),
                     Icon::ChevronLeft,
-                    "Previous photo",
+                    i18n::t(Key::ViewerPrevious),
                 )
             {
                 step = -1;
@@ -190,7 +191,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         Vec2::splat(CHROME),
                     ),
                     Icon::ChevronRight,
-                    "Next photo",
+                    i18n::t(Key::ViewerNext),
                 )
             {
                 step = 1;

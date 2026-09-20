@@ -9,6 +9,8 @@ use std::time::Duration;
 
 use ksni::blocking::TrayMethods;
 
+use crate::i18n::{self, Key};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
     Show,
@@ -62,14 +64,14 @@ impl ksni::Tray for FastTray {
         use ksni::menu::*;
         vec![
             StandardItem {
-                label: "Show or hide WhatsFast".into(),
+                label: i18n::t(Key::TrayShowHide).into(),
                 activate: Box::new(|tray: &mut Self| tray.send(TrayCommand::ShowHide)),
                 ..Default::default()
             }
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Quit".into(),
+                label: i18n::t(Key::CommonQuit).into(),
                 activate: Box::new(|tray: &mut Self| tray.send(TrayCommand::Quit)),
                 ..Default::default()
             }

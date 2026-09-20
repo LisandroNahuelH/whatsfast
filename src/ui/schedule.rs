@@ -9,8 +9,12 @@ use egui::{Sense, Vec2, pos2, vec2};
 use jiff::civil::Date;
 
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::Action;
-use crate::schedule::{Repeat, instant_of, next_after, weekday_from_offset, weekday_name};
+use crate::schedule::{
+    Repeat, instant_of, month_abbr, month_name, next_after, weekday_abbr, weekday_from_offset,
+    weekday_name,
+};
 use crate::theme::{self, Icon, Palette};
 
 /// Side of a day cell in the grid.
@@ -25,7 +29,7 @@ const INSET: f32 = 44.0;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui, chat: &str) {
     let palette = app.palette;
-    super::dialogs::title(ui, app, "Schedule message");
+    super::dialogs::title(ui, app, i18n::t(Key::ScheduleTitle));
     ui.add_space(10.0);
     month_header(app, ui, &palette);
     ui.add_space(6.0);
@@ -53,7 +57,7 @@ fn month_header(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             18.0,
             palette.secondary,
             palette.text,
-            "Previous month",
+            i18n::t(Key::SchedulePreviousMonth),
         )
         .clicked()
         {
@@ -68,7 +72,7 @@ fn month_header(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             18.0,
             palette.secondary,
             palette.text,
-            "Next month",
+            i18n::t(Key::ScheduleNextMonth),
         )
         .clicked()
         {
@@ -149,7 +153,12 @@ fn grid(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
 fn time_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         ui.add_space(6.0);
-        theme::text(ui, "Time", theme::medium(13.5), palette.text);
+        theme::text(
+            ui,
+            i18n::t(Key::ScheduleTimeLabel),
+            theme::medium(13.5),
+            palette.text,
+        );
         ui.add_space(12.0);
         let hour = app.schedule_hour;
         if theme::icon_button(
@@ -158,7 +167,7 @@ fn time_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             16.0,
             palette.secondary,
             palette.text,
-            "Earlier",
+            i18n::t(Key::ScheduleEarlierHour),
         )
         .clicked()
         {
@@ -176,7 +185,7 @@ fn time_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             16.0,
             palette.secondary,
             palette.text,
-            "Later",
+            i18n::t(Key::ScheduleLaterHour),
         )
         .clicked()
         {
@@ -190,7 +199,7 @@ fn time_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             16.0,
             palette.secondary,
             palette.text,
-            "Earlier minutes",
+            i18n::t(Key::ScheduleEarlierMinutes),
         )
         .clicked()
         {
@@ -208,7 +217,7 @@ fn time_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             16.0,
             palette.secondary,
             palette.text,
-            "Later minutes",
+            i18n::t(Key::ScheduleLaterMinutes),
         )
         .clicked()
         {
@@ -222,7 +231,12 @@ fn repeat_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
     let day = app.schedule_day;
     ui.horizontal(|ui| {
         ui.add_space(6.0);
-        theme::text(ui, "Repeat", theme::medium(13.5), palette.text);
+        theme::text(
+            ui,
+            i18n::t(Key::ScheduleRepeatLabel),
+            theme::medium(13.5),
+            palette.text,
+        );
         ui.add_space(8.0);
         let width = (WIDTH - INSET - 6.0 - 62.0 - 8.0).max(120.0);
         egui::ComboBox::from_id_salt("schedule-repeat")
@@ -252,10 +266,10 @@ fn buttons(app: &mut App, ui: &mut egui::Ui, palette: &Palette, chat: &str) {
         ui.add_space(6.0);
         theme::text(ui, line, theme::regular(12.0), palette.secondary);
         ui.add_space(rest);
-        if theme::pill_button(ui, palette, "Schedule", true).clicked() && ready {
+        if theme::pill_button(ui, palette, i18n::t(Key::ScheduleSend), true).clicked() && ready {
             schedule = true;
         }
-        if theme::soft_button(ui, palette, None, "Cancel", false).clicked() {
+        if theme::soft_button(ui, palette, None, i18n::t(Key::DialogCancel), false).clicked() {
             app.actions.push(Action::CloseDialog);
         }
     });
@@ -263,7 +277,7 @@ fn buttons(app: &mut App, ui: &mut egui::Ui, palette: &Palette, chat: &str) {
         ui.add_space(4.0);
         theme::text(
             ui,
-            "Write the message first; it goes out at the time you pick.",
+            i18n::t(Key::ScheduleNeedMessage),
             theme::regular(11.5),
             palette.dim,
         );
@@ -293,16 +307,32 @@ fn buttons(app: &mut App, ui: &mut egui::Ui, palette: &Palette, chat: &str) {
 
 /// "Once, Fri 18 Sep at 21:00" or the repeat rule with its first time.
 fn summary(day: Date, hour: i8, minute: i8, repeat: Repeat) -> String {
-    let when = format!("{} at {:02}:{:02}", day_label(day), hour, minute);
+    let when = i18n::f(
+        Key::DateAt,
+        &[
+            ("moment", &day_label(day)),
+            ("time", &format!("{hour:02}:{minute:02}")),
+        ],
+    );
     match repeat {
         Repeat::Once => when,
-        repeat => format!("{}, from {when}", repeat.label(day)),
+        repeat => i18n::f(
+            Key::ScheduleFrom,
+            &[("repeat", &repeat.label(day)), ("when", &when)],
+        ),
     }
 }
 
 /// "Fri 18 Sep" for the picked day.
 fn day_label(day: Date) -> String {
-    day.strftime("%a %d %b").to_string()
+    i18n::f(
+        Key::DateShortWeekday,
+        &[
+            ("weekday", weekday_abbr(day.weekday())),
+            ("day", &day.day().to_string()),
+            ("month", month_abbr(day.month())),
+        ],
+    )
 }
 
 /// Wraps a value into `0..span`, so stepping past the end starts over.
@@ -326,25 +356,13 @@ fn month_step(month: Date, direction: i32) -> Date {
 }
 
 fn month_label(month: Date) -> String {
-    const NAMES: [&str; 12] = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ];
-    let name = NAMES
-        .get(usize::try_from(month.month() - 1).unwrap_or(0))
-        .copied()
-        .unwrap_or("January");
-    format!("{name} {}", month.year())
+    i18n::f(
+        Key::MonthYear,
+        &[
+            ("month", month_name(month.month())),
+            ("year", &month.year().to_string()),
+        ],
+    )
 }
 
 #[cfg(test)]

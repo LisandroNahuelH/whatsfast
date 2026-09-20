@@ -3,6 +3,7 @@
 use egui::{Align, CornerRadius, Frame, Layout, Margin, RichText, Stroke};
 
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::Action;
 use crate::theme::{self, Icon};
 use crate::updates::DownloadState;
@@ -40,7 +41,7 @@ pub fn toast(app: &mut App, ui: &mut egui::Ui) {
                 }
                 ui.add(
                     egui::Label::new(
-                        RichText::new("There's a new version available")
+                        RichText::new(i18n::t(Key::UpdateNewVersion))
                             .font(theme::medium(13.5))
                             .color(palette.text),
                     )
@@ -51,7 +52,7 @@ pub fn toast(app: &mut App, ui: &mut egui::Ui) {
                         None => {}
                         Some(Err(_)) => {
                             ui.add(egui::Hyperlink::from_label_and_url(
-                                RichText::new("Download from GitHub")
+                                RichText::new(i18n::t(Key::UpdateDownloadFromGitHub))
                                     .font(theme::medium(13.0))
                                     .color(palette.secondary),
                                 &release.url,
@@ -59,9 +60,9 @@ pub fn toast(app: &mut App, ui: &mut egui::Ui) {
                         }
                         Some(Ok(_)) if !busy => {
                             let label = if matches!(app.update_download, DownloadState::Failed(_)) {
-                                "Retry"
+                                i18n::t(Key::CommonRetry)
                             } else {
-                                "Update"
+                                i18n::t(Key::UpdateUpdate)
                             };
                             if theme::soft_button(ui, &palette, None, label, true).clicked() {
                                 app.actions.push(Action::InstallUpdate);

@@ -472,7 +472,18 @@ pub fn setting_row(
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
             ui.set_width((ui.available_width() - 260.0).max(120.0));
-            rich_text(ui, label, theme::medium(14.0), palette.text);
+            let label = line(
+                ui,
+                label,
+                theme::medium(14.0),
+                palette.text,
+                ui.available_width(),
+                2,
+            );
+            let (rect, _) = ui.allocate_exact_size(label.size(), Sense::hover());
+            if ui.is_rect_visible(rect) {
+                label.paint(ui, rect.min, palette.text);
+            }
             if !description.is_empty() {
                 let description = line(
                     ui,

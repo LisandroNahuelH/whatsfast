@@ -1,6 +1,6 @@
 [package]
 name = "whatsfast"
-version = "0.15.226"
+version = "0.15.227"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
@@ -122,7 +122,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 windows-native-keyring-store = { version = "1.1", default-features = false }
 winrt-notification = { package = "tauri-winrt-notification", version = "0.7.3" }
 # Windows tray-thread message loop.
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Globalization", "Win32_System_Threading", "Win32_System_Registry", "Win32_UI_WindowsAndMessaging"] }
 
 # The icon and version information Windows shows for the executable.
 [target.'cfg(windows)'.build-dependencies]

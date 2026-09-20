@@ -4,6 +4,16 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::{self, Key, Language};
+
+use crate::i18n::{self, Key, Language};
+
+use crate::i18n::{self, Key, Language};
+
+use crate::i18n::{self, Key, Language};
+
+use crate::i18n::{self, Key, Language};
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeChoice {
@@ -18,9 +28,9 @@ impl ThemeChoice {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Dark => "Dark",
-            Self::Light => "Light",
-            Self::System => "Follow system",
+            Self::Dark => i18n::t(Key::SettingsThemeDark),
+            Self::Light => i18n::t(Key::SettingsThemeLight),
+            Self::System => i18n::t(Key::SettingsThemeSystem),
         }
     }
 }
@@ -39,19 +49,17 @@ impl HistoryPrefetch {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Off => "Off",
-            Self::Focused => "Current Chat",
-            Self::RecentAndPinned => "Recent and pinned",
+            Self::Off => i18n::t(Key::SettingsHistoryOff),
+            Self::Focused => i18n::t(Key::SettingsHistoryCurrent),
+            Self::RecentAndPinned => i18n::t(Key::SettingsHistoryRecent),
         }
     }
 
     pub fn hint(self) -> &'static str {
         match self {
-            Self::Off => "Do not fetch older messages in the background.",
-            Self::Focused => "Fetch older messages and files for the open chat only.",
-            Self::RecentAndPinned => {
-                "Fetch older history for pinned chats and the ten most recent chats."
-            }
+            Self::Off => i18n::t(Key::SettingsHistoryOffHint),
+            Self::Focused => i18n::t(Key::SettingsHistoryCurrentHint),
+            Self::RecentAndPinned => i18n::t(Key::SettingsHistoryRecentHint),
         }
     }
 }
@@ -72,11 +80,11 @@ impl WallpaperFamily {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Black => "Black",
-            Self::Gray => "Gray",
-            Self::Green => "Green",
-            Self::Red => "Red",
-            Self::White => "White",
+            Self::Black => i18n::t(Key::SettingsWallpaperBlack),
+            Self::Gray => i18n::t(Key::SettingsWallpaperGray),
+            Self::Green => i18n::t(Key::SettingsWallpaperGreen),
+            Self::Red => i18n::t(Key::SettingsWallpaperRed),
+            Self::White => i18n::t(Key::SettingsWallpaperWhite),
         }
     }
 
@@ -120,7 +128,7 @@ impl ChatWallpaper {
 
     pub fn combo_label(self, index: u8) -> String {
         match self.family() {
-            None => "Auto".to_owned(),
+            None => i18n::t(Key::SettingsWallpaperAuto).to_owned(),
             Some(family) => format!("{} {}", family.label(), index.min(WALLPAPER_SLOTS - 1) + 1),
         }
     }
@@ -130,6 +138,21 @@ impl ChatWallpaper {
 #[serde(default)]
 pub struct Settings {
     pub theme: ThemeChoice,
+    /// Interface language. `System` follows the operating system.
+    #[serde(default)]
+    pub language: Language,
+    /// Interface language. `System` follows the operating system.
+    #[serde(default)]
+    pub language: Language,
+    /// Interface language. `System` follows the operating system.
+    #[serde(default)]
+    pub language: Language,
+    /// Interface language. `System` follows the operating system.
+    #[serde(default)]
+    pub language: Language,
+    /// Interface language. `System` follows the operating system.
+    #[serde(default)]
+    pub language: Language,
     /// Filename of the selected local JSON palette.
     pub custom_theme: Option<String>,
     #[serde(
@@ -213,6 +236,11 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: ThemeChoice::Dark,
+            language: Language::default(),
+            language: Language::default(),
+            language: Language::default(),
+            language: Language::default(),
+            language: Language::default(),
             custom_theme: None,
             custom_theme_cache: None,
             system_theme_cache: None,

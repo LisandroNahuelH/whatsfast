@@ -8,6 +8,12 @@
 
 use jiff::Timestamp;
 use jiff::civil::{Date, Weekday};
+
+use crate::i18n::{self, Key};
+
+use crate::i18n::{self, Key};
+
+use crate::i18n::{self, Key};
 use jiff::tz::TimeZone;
 
 /// How a scheduled message repeats.
@@ -43,13 +49,22 @@ impl Recurrence {
     /// The label the picker shows, in English like the rest of the app.
     pub fn label(self) -> String {
         match self {
-            Recurrence::Once => "Once".to_owned(),
-            Recurrence::Daily => "Every day".to_owned(),
-            Recurrence::Weekly { weekday } => format!("Every {}", weekday_name(weekday)),
-            Recurrence::Monthly { day } => format!("Day {day} of every month"),
-            Recurrence::NthWeekday { nth, weekday } => {
-                format!("{} {} of every month", ordinal(nth), weekday_name(weekday))
+            Recurrence::Once => i18n::t(Key::ScheduleOnce).to_owned(),
+            Recurrence::Daily => i18n::t(Key::ScheduleEveryDay).to_owned(),
+            Recurrence::Weekly { weekday } => i18n::f(
+                Key::ScheduleEveryWeekday,
+                &[("weekday", weekday_name(weekday))],
+            ),
+            Recurrence::Monthly { day } => {
+                i18n::f(Key::ScheduleDayOfMonth, &[("day", &day.to_string())])
             }
+            Recurrence::NthWeekday { nth, weekday } => i18n::f(
+                Key::ScheduleNthWeekdayOfMonth,
+                &[
+                    ("ordinal", ordinal(nth)),
+                    ("weekday", weekday_name(weekday)),
+                ],
+            ),
         }
     }
 
@@ -80,16 +95,65 @@ impl Recurrence {
     }
 }
 
-/// The English weekday name, as WhatsApp writes it.
+/// The weekday name in the interface language.
 pub fn weekday_name(weekday: Weekday) -> &'static str {
     match weekday {
-        Weekday::Monday => "Monday",
-        Weekday::Tuesday => "Tuesday",
-        Weekday::Wednesday => "Wednesday",
-        Weekday::Thursday => "Thursday",
-        Weekday::Friday => "Friday",
-        Weekday::Saturday => "Saturday",
-        Weekday::Sunday => "Sunday",
+        Weekday::Monday => i18n::t(Key::DateWeekdayMonday),
+        Weekday::Tuesday => i18n::t(Key::DateWeekdayTuesday),
+        Weekday::Wednesday => i18n::t(Key::DateWeekdayWednesday),
+        Weekday::Thursday => i18n::t(Key::DateWeekdayThursday),
+        Weekday::Friday => i18n::t(Key::DateWeekdayFriday),
+        Weekday::Saturday => i18n::t(Key::DateWeekdaySaturday),
+        Weekday::Sunday => i18n::t(Key::DateWeekdaySunday),
+    }
+}
+
+/// The weekday abbreviation, such as "Fri" or "vie".
+pub fn weekday_abbr(weekday: Weekday) -> &'static str {
+    match weekday {
+        Weekday::Monday => i18n::t(Key::DateWeekdayAbbrMonday),
+        Weekday::Tuesday => i18n::t(Key::DateWeekdayAbbrTuesday),
+        Weekday::Wednesday => i18n::t(Key::DateWeekdayAbbrWednesday),
+        Weekday::Thursday => i18n::t(Key::DateWeekdayAbbrThursday),
+        Weekday::Friday => i18n::t(Key::DateWeekdayAbbrFriday),
+        Weekday::Saturday => i18n::t(Key::DateWeekdayAbbrSaturday),
+        Weekday::Sunday => i18n::t(Key::DateWeekdayAbbrSunday),
+    }
+}
+
+/// The month name in the interface language.
+pub fn month_name(month: i8) -> &'static str {
+    match month {
+        1 => i18n::t(Key::DateMonthJanuary),
+        2 => i18n::t(Key::DateMonthFebruary),
+        3 => i18n::t(Key::DateMonthMarch),
+        4 => i18n::t(Key::DateMonthApril),
+        5 => i18n::t(Key::DateMonthMay),
+        6 => i18n::t(Key::DateMonthJune),
+        7 => i18n::t(Key::DateMonthJuly),
+        8 => i18n::t(Key::DateMonthAugust),
+        9 => i18n::t(Key::DateMonthSeptember),
+        10 => i18n::t(Key::DateMonthOctober),
+        11 => i18n::t(Key::DateMonthNovember),
+        _ => i18n::t(Key::DateMonthDecember),
+    }
+}
+
+/// The month abbreviation, such as "Sep" or "sep".
+pub fn month_abbr(month: i8) -> &'static str {
+    match month {
+        1 => i18n::t(Key::DateMonthAbbrJanuary),
+        2 => i18n::t(Key::DateMonthAbbrFebruary),
+        3 => i18n::t(Key::DateMonthAbbrMarch),
+        4 => i18n::t(Key::DateMonthAbbrApril),
+        5 => i18n::t(Key::DateMonthAbbrMay),
+        6 => i18n::t(Key::DateMonthAbbrJune),
+        7 => i18n::t(Key::DateMonthAbbrJuly),
+        8 => i18n::t(Key::DateMonthAbbrAugust),
+        9 => i18n::t(Key::DateMonthAbbrSeptember),
+        10 => i18n::t(Key::DateMonthAbbrOctober),
+        11 => i18n::t(Key::DateMonthAbbrNovember),
+        _ => i18n::t(Key::DateMonthAbbrDecember),
     }
 }
 
@@ -106,13 +170,13 @@ pub fn weekday_from_offset(offset: i8) -> Weekday {
     }
 }
 
-/// "1st", "2nd", "3rd", "4th".
+/// "1st", "2nd", "3rd", "4th" ("primer", "segundo", ... in Spanish).
 pub fn ordinal(nth: i8) -> &'static str {
     match nth {
-        1 => "1st",
-        2 => "2nd",
-        3 => "3rd",
-        _ => "4th",
+        1 => i18n::t(Key::ScheduleOrdinal1),
+        2 => i18n::t(Key::ScheduleOrdinal2),
+        3 => i18n::t(Key::ScheduleOrdinal3),
+        _ => i18n::t(Key::ScheduleOrdinal4),
     }
 }
 
@@ -140,14 +204,19 @@ impl Repeat {
     /// month".
     pub fn label(self, day: Date) -> String {
         match self {
-            Repeat::Once => "Once".to_owned(),
-            Repeat::Daily => "Every day".to_owned(),
-            Repeat::Weekly => format!("Every {}", weekday_name(day.weekday())),
-            Repeat::Monthly => format!("Day {} of every month", day.day()),
-            Repeat::NthWeekday => format!(
-                "{} {} of every month",
-                ordinal(nth_of(day)),
-                weekday_name(day.weekday())
+            Repeat::Once => i18n::t(Key::ScheduleOnce).to_owned(),
+            Repeat::Daily => i18n::t(Key::ScheduleEveryDay).to_owned(),
+            Repeat::Weekly => i18n::f(
+                Key::ScheduleEveryWeekday,
+                &[("weekday", weekday_name(day.weekday()))],
+            ),
+            Repeat::Monthly => i18n::f(Key::ScheduleDayOfMonth, &[("day", &day.day().to_string())]),
+            Repeat::NthWeekday => i18n::f(
+                Key::ScheduleNthWeekdayOfMonth,
+                &[
+                    ("ordinal", ordinal(nth_of(day))),
+                    ("weekday", weekday_name(day.weekday())),
+                ],
             ),
         }
     }
