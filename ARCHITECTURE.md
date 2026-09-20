@@ -34,6 +34,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   history prefetch asks the phone one page at a time and downloads files
   one at a time into the archive; it does not prepend those pages into the
   open conversation. A failed file is retried with backoff for 30 days.
+  Leaving a group uses `Client::groups().leave`. The chat row stays; `read_only`
+  is set and `me` is dropped from `participants`. Archive is optional.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
