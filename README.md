@@ -170,7 +170,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Account privacy from Settings
 
-- **Technical:** Settings **Privacy** reads last seen, online, profile photo, About, who can add you to groups, account read receipts, who can call you, and who can message you from the linked WhatsApp account, then writes the same values the phone uses. **Except…** picks 1:1 chats to hide that item from. The Chats switches **Send read receipts** and **Show when you are typing** still apply only to this copy.
+- **Technical:** Settings **Privacy** reads last seen, online, profile photo, About, who can add you to groups, account read receipts, who can call you, and who can message you from the linked WhatsApp account, then writes the same values the phone uses. **Except…** picks 1:1 chats to hide that item from. **Send read receipts** and **Show when you are typing** sit in the same section and still apply only to this copy.
 - **Daily use:** Hide last seen or your photo on the account, not only in this window. The phone shows the same setting.
 
 </td>
