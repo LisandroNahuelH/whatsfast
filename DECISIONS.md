@@ -4,6 +4,8 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Channel unfollow reuses LeaveGroup; copy and newsletter().leave differ | Same three surfaces as groups; `@broadcast` lists are not channels | Channels had no leave path |
+| 2026-09-19 | A verified pending update installs on the next process start when auto-download is on | Toast click stays immediate; closing to the tray is not a restart | In-memory `Prepared` only |
 | 2026-09-19 | Leave group asks Leave or Leave and archive | One click must not drop you from a group; archive is a second, optional hide | No leave path |
 | 2026-09-19 | One-line composer letters use `Align::Center` in the tall first row | Default galley valign is bottom, so typed text sat on the floor of the taller bubble | `TextFormat::simple` default `Align::BOTTOM` in the stretched row |
 | 2026-09-19 | Composer caret fills the taller one-line band; row controls are vertically centered | Stretching the box left a short caret and bottom-aligned send/schedule | Bottom-aligned row, font-sized caret in a taller field |
