@@ -2801,11 +2801,6 @@
       "es": "Guardar adjunto"
     },
     {
-      "key": "DialogSingleFile",
-      "en": "a single file",
-      "es": "un solo archivo"
-    },
-    {
       "key": "ToastSaveCancelled",
       "en": "Save cancelled",
       "es": "Guardado cancelado"
@@ -6453,10 +6448,6 @@
         {
           "exact": "Save attachment",
           "new": "i18n::t(Key::DialogSaveAttachment)"
-        },
-        {
-          "exact": "a single file",
-          "new": "i18n::t(Key::DialogSingleFile)"
         },
         {
           "exact": "Save cancelled",

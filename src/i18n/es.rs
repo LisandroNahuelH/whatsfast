@@ -670,7 +670,6 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ToastNoDownloads => "No hay una carpeta de Descargas en este equipo",
         Key::ToastSaveDialogOpen => "Ya hay un diálogo de guardado abierto",
         Key::DialogSaveAttachment => "Guardar adjunto",
-        Key::DialogSingleFile => "un solo archivo",
         Key::ToastSaveCancelled => "Guardado cancelado",
         Key::ToastSavingProgress => "Guardando {done} de {total}",
         Key::ToastSearchFailed => "No se pudo buscar: {error}",

@@ -563,7 +563,6 @@ pub enum Key {
     ToastNoDownloads,
     ToastSaveDialogOpen,
     DialogSaveAttachment,
-    DialogSingleFile,
     ToastSaveCancelled,
     ToastSavingProgress,
     ToastSearchFailed,
@@ -778,7 +777,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, for the completeness tests.
-    pub const ALL: [Key; 771] = [
+    pub const ALL: [Key; 770] = [
         Key::SettingsThemeDark,
         Key::SettingsThemeLight,
         Key::SettingsThemeSystem,
@@ -1339,7 +1338,6 @@ impl Key {
         Key::ToastNoDownloads,
         Key::ToastSaveDialogOpen,
         Key::DialogSaveAttachment,
-        Key::DialogSingleFile,
         Key::ToastSaveCancelled,
         Key::ToastSavingProgress,
         Key::ToastSearchFailed,

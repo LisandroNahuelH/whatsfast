@@ -644,7 +644,6 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ToastNoDownloads => "No Downloads folder on this computer",
         Key::ToastSaveDialogOpen => "A save dialog is already open",
         Key::DialogSaveAttachment => "Save attachment",
-        Key::DialogSingleFile => "a single file",
         Key::ToastSaveCancelled => "Save cancelled",
         Key::ToastSavingProgress => "Saving {done} of {total}",
         Key::ToastSearchFailed => "Could not search: {error}",
