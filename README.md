@@ -261,7 +261,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Pinned messages in the chat and the sidebar
 
-- **Technical:** Pin a message for everyone in the chat (WhatsApp `PIN_FOR_ALL`, 7 days, at most three active pins per chat). The pin is sent to the phone, stored in the archive, listed like Starred on the left, shown as chips under the chat header, and marked on the bubble with the same pin icon the star uses. Unpin from the bubble menu or the media viewer.
+- **Technical:** Pin a message for everyone in the chat (WhatsApp `PIN_FOR_ALL`, 7 days, at most three active pins per chat). The pin is sent to the phone, stored in the archive, listed like Starred on the left, shown as chips under the chat header, and marked on the bubble with the same pin icon the star uses. Click the chip or the rest of that header row to jump to the message. Unpin from the bubble menu or the media viewer.
 - **Daily use:** Keep a deadline, address, or decision at the top of a busy group without starring it into a private list only you can see.
 
 </td>
