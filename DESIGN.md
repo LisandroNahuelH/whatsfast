@@ -18,7 +18,7 @@ The chat header Search (Ctrl+G) opens a right inspector for messages in the open
 
 Check for updates and Download updates automatically sit in Settings **About**, under the version row. Reason: they describe this build, not the window.
 
-Hover a name in **Download older history in the background** to show a short card to the right of Settings. The open-chat choice is **Current Chat**. Reason: the three modes look alike until you read what each one fetches.
+Hover a name in the **Download older history** list to show a short card on the right of that row. The open-chat choice is **Current Chat**. Reason: the three modes look alike until you read what each one fetches.
 
 Settings **Downloads** paints attachment weight as 6 px accent bars on a dim track. Reason: a chart crate would add weight for three fractions the painter already draws.
 
