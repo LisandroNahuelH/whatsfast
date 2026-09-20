@@ -1,47 +1,92 @@
-//! Full-window photo viewer: zoom, pan, and previous/next in the open chat.
+//! Full-window photo and video viewer with a filmstrip and action header.
 
-use std::path::PathBuf;
+use std::path::Path;
 
-use egui::{Align2, Color32, CursorIcon, Id, Modal, Order, Rect, Sense, Vec2, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, Frame, Id, Order, Rect, Sense, UiBuilder, pos2, vec2};
 
+use crate::animation;
 use crate::app::App;
+use crate::archive::ChatMedia;
 use crate::i18n::{self, Key};
-use crate::model::{Action, ChatId, Content, Message};
+use crate::model::{Action, Content, Dialog, Message};
 use crate::theme::{self, Icon};
+use crate::ui::conversation;
+use crate::ui::widgets;
+use crate::util;
 
-const MIN_ZOOM: f32 = 0.25;
+const MIN_ZOOM: f32 = 1.0;
 const MAX_ZOOM: f32 = 8.0;
-const FIT_MARGIN: f32 = 48.0;
-const CHROME: f32 = 40.0;
+const HEADER: f32 = 56.0;
+const STRIP: f32 = 76.0;
+const THUMB: f32 = 56.0;
 
-/// Open photo and the user's zoom/pan within it.
 #[derive(Clone, Debug)]
 pub struct ImageViewer {
-    pub chat: ChatId,
+    pub chat: String,
     pub message: String,
-    /// 1.0 fits the photo in the window.
     pub zoom: f32,
-    pub offset: Vec2,
-    /// Scroll captured before the chat list reads it.
+    pub offset: egui::Vec2,
+    dragging: bool,
+    scroll_to: bool,
     wheel: f32,
-    /// Pinch factor captured this frame, 1.0 when idle.
     pinch: f32,
 }
 
 impl ImageViewer {
-    pub fn open(chat: ChatId, message: String) -> Self {
+    pub fn open(chat: String, message: String) -> Self {
         Self {
             chat,
             message,
             zoom: 1.0,
-            offset: Vec2::ZERO,
+            offset: egui::Vec2::ZERO,
+            dragging: false,
+            scroll_to: true,
             wheel: 0.0,
             pinch: 1.0,
         }
     }
 }
 
-/// Stops the conversation from scrolling while the viewer is open.
+/// Path of a downloaded image or non-GIF video.
+pub fn media_path(message: &Message) -> Option<&Path> {
+    match &message.content {
+        Content::Image { media, .. } => media.path.as_deref(),
+        Content::Video {
+            gif: false, media, ..
+        } => media.path.as_deref(),
+        _ => None,
+    }
+}
+
+/// Neighbor image or video in a loaded page. Does not wrap.
+pub fn neighbor_image<'a>(messages: &'a [Message], current: &str, step: i8) -> Option<&'a str> {
+    let ids: Vec<&str> = messages
+        .iter()
+        .filter(|message| is_gallery_item(&message.content))
+        .map(|message| message.id.as_str())
+        .collect();
+    neighbor_ids(&ids, current, step)
+}
+
+fn is_gallery_item(content: &Content) -> bool {
+    matches!(
+        content,
+        Content::Image { .. } | Content::Video { gif: false, .. }
+    )
+}
+
+fn neighbor_ids<'a>(ids: &[&'a str], current: &str, step: i8) -> Option<&'a str> {
+    let index = ids.iter().position(|id| *id == current)?;
+    let next = index.checked_add_signed(step as isize)?;
+    ids.get(next).copied()
+}
+
+pub fn neighbor_media<'a>(items: &'a [ChatMedia], current: &str, step: i8) -> Option<&'a str> {
+    let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
+    neighbor_ids(&ids, current, step)
+}
+
+/// Consumes the wheel over the viewer so the chat behind it does not scroll.
 pub fn intercept_scroll(app: &mut App, ctx: &egui::Context) {
     let Some(viewer) = app.image_viewer.as_mut() else {
         return;
@@ -49,7 +94,7 @@ pub fn intercept_scroll(app: &mut App, ctx: &egui::Context) {
     ctx.input_mut(|input| {
         viewer.wheel = input.smooth_scroll_delta.y;
         viewer.pinch = input.zoom_delta();
-        input.smooth_scroll_delta = Vec2::ZERO;
+        input.smooth_scroll_delta = egui::Vec2::ZERO;
     });
 }
 
@@ -57,257 +102,567 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let Some(mut viewer) = app.image_viewer.clone() else {
         return;
     };
-    let path = app
+    let mut actions = Vec::new();
+    let mut zoom_by = 0.0_f32;
+    let palette = app.palette;
+    egui::Modal::new(Id::new("image-viewer"))
+        .frame(Frame::new().fill(Color32::from_black_alpha(220)))
+        .backdrop_color(Color32::from_black_alpha(220))
+        .area(egui::Area::new(Id::new("image-viewer-area")).order(Order::Foreground))
+        .show(ctx, |ui| {
+            let rect = ui.max_rect();
+            let header = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + HEADER));
+            let strip = Rect::from_min_max(pos2(rect.min.x, rect.max.y - STRIP), rect.max);
+            let stage = Rect::from_min_max(
+                pos2(rect.min.x, header.max.y),
+                pos2(rect.max.x, strip.min.y),
+            );
+            let response = ui.interact(stage, ui.id().with("stage"), Sense::click_and_drag());
+            paint_stage(app, ui, &mut viewer, stage, &response);
+            paint_header(app, ui, &viewer, header, &mut actions, &mut zoom_by);
+            paint_strip(app, ui, &mut viewer, strip, &mut actions);
+            paint_chevrons(ui, &palette, stage, &mut actions);
+        });
+    if zoom_by != 0.0 {
+        viewer.zoom = (viewer.zoom * zoom_by).clamp(MIN_ZOOM, MAX_ZOOM);
+        if viewer.zoom <= MIN_ZOOM {
+            viewer.offset = egui::Vec2::ZERO;
+        }
+    }
+    app.image_viewer = Some(viewer);
+    app.actions.extend(actions);
+}
+
+fn paint_header(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    viewer: &ImageViewer,
+    rect: Rect,
+    actions: &mut Vec<Action>,
+    zoom_by: &mut f32,
+) {
+    let palette = app.palette;
+    ui.painter()
+        .rect_filled(rect, 0.0, Color32::from_black_alpha(140));
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::left_to_right(egui::Align::Center)),
+    );
+    child.set_clip_rect(rect);
+    if theme::macos_chrome(child.ctx()) {
+        child.add_space(theme::traffic_light_inset(child.ctx()).max(8.0));
+    } else {
+        child.add_space(12.0);
+    }
+    let chat = app.chat(&viewer.chat).cloned();
+    let title = chat
+        .as_ref()
+        .map(|chat| app.chat_title(chat))
+        .unwrap_or_else(|| app.display_name_or(&viewer.chat, None));
+    let picture = app.avatar(&viewer.chat);
+    let (subtitle, color) = chat
+        .as_ref()
+        .map(|chat| conversation::subtitle(app, chat))
+        .unwrap_or((String::new(), Color32::from_white_alpha(180)));
+    widgets::avatar(
+        &mut child,
+        &palette,
+        &title,
+        &viewer.chat,
+        36.0,
+        picture.as_deref(),
+    );
+    child.add_space(8.0);
+    child.vertical(|ui| {
+        ui.add_space(8.0);
+        widgets::rich_text(ui, &title, theme::semibold(15.0), Color32::WHITE);
+        if !subtitle.is_empty() {
+            widgets::rich_text(ui, &subtitle, theme::regular(12.0), color);
+        }
+    });
+    child.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.add_space(8.0);
+        ui.spacing_mut().item_spacing.x = 2.0;
+        let hover = Color32::WHITE;
+        let idle = Color32::from_white_alpha(200);
+        if theme::icon_button(ui, Icon::X, 18.0, idle, hover, i18n::t(Key::ViewerClose)).clicked() {
+            actions.push(Action::CloseImageViewer);
+        }
+        if theme::icon_button(
+            ui,
+            Icon::Download,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::CommonDownload),
+        )
+        .clicked()
+        {
+            actions.push(Action::DownloadSelected {
+                chat: viewer.chat.clone(),
+                messages: vec![viewer.message.clone()],
+            });
+        }
+        if theme::icon_button(
+            ui,
+            Icon::Forward,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::CommonForward),
+        )
+        .clicked()
+        {
+            actions.push(Action::ShowDialog(Dialog::Forward {
+                chat: viewer.chat.clone(),
+                messages: vec![viewer.message.clone()],
+            }));
+        }
+        if theme::icon_button(
+            ui,
+            Icon::Smile,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::ViewerReact),
+        )
+        .clicked()
+        {
+            actions.push(Action::OpenReactionPicker {
+                chat: viewer.chat.clone(),
+                message: viewer.message.clone(),
+            });
+        }
+        let pinned = app
+            .pins
+            .get(&viewer.chat)
+            .is_some_and(|ids| ids.contains(&viewer.message));
+        if theme::icon_button(
+            ui,
+            Icon::Pin,
+            18.0,
+            if pinned { palette.accent } else { idle },
+            hover,
+            if pinned {
+                i18n::t(Key::ChatUnpinMessage)
+            } else {
+                i18n::t(Key::ChatPinMessage)
+            },
+        )
+        .clicked()
+        {
+            actions.push(Action::SetMessagePinned {
+                chat: viewer.chat.clone(),
+                message: viewer.message.clone(),
+                pinned: !pinned,
+            });
+        }
+        let starred = app
+            .stars
+            .get(&viewer.chat)
+            .is_some_and(|ids| ids.contains(&viewer.message));
+        if theme::icon_button(
+            ui,
+            Icon::Star,
+            18.0,
+            if starred { palette.accent } else { idle },
+            hover,
+            if starred {
+                i18n::t(Key::ChatUnstar)
+            } else {
+                i18n::t(Key::ChatStar)
+            },
+        )
+        .clicked()
+        {
+            actions.push(Action::StarSelected {
+                chat: viewer.chat.clone(),
+                messages: vec![viewer.message.clone()],
+                starred: !starred,
+            });
+        }
+        if theme::icon_button(ui, Icon::Reply, 18.0, idle, hover, i18n::t(Key::ChatReply)).clicked()
+        {
+            actions.push(Action::ReplyFromViewer {
+                chat: viewer.chat.clone(),
+                message: viewer.message.clone(),
+            });
+        }
+        if theme::icon_button(
+            ui,
+            Icon::MessageCircle,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::ViewerGoToMessage),
+        )
+        .clicked()
+        {
+            actions.push(Action::CloseImageViewer);
+            actions.push(Action::OpenMessage {
+                chat: viewer.chat.clone(),
+                message: viewer.message.clone(),
+            });
+        }
+        if theme::icon_button(
+            ui,
+            Icon::Minus,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::ViewerZoomOut),
+        )
+        .clicked()
+        {
+            *zoom_by = 1.0 / 1.25;
+        }
+        if theme::icon_button(
+            ui,
+            Icon::Plus,
+            18.0,
+            idle,
+            hover,
+            i18n::t(Key::ViewerZoomIn),
+        )
+        .clicked()
+        {
+            *zoom_by = 1.25;
+        }
+    });
+}
+
+fn paint_stage(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    viewer: &mut ImageViewer,
+    stage: Rect,
+    response: &egui::Response,
+) {
+    let item = app
+        .viewer_media
+        .iter()
+        .find(|item| item.id == viewer.message)
+        .cloned();
+    let message = app
         .conversations
         .get(&viewer.chat)
         .and_then(|conversation| conversation.message(&viewer.message))
-        .and_then(image_path)
         .cloned();
-    let Some(path) = path else {
-        app.actions.push(Action::CloseImageViewer);
-        return;
-    };
-    let prev = app
-        .conversations
-        .get(&viewer.chat)
-        .and_then(|conversation| neighbor_image(&conversation.messages, &viewer.message, -1))
-        .map(str::to_owned);
-    let next = app
-        .conversations
-        .get(&viewer.chat)
-        .and_then(|conversation| neighbor_image(&conversation.messages, &viewer.message, 1))
-        .map(str::to_owned);
-    let palette = app.palette;
-    let wheel = viewer.wheel;
-    let pinch = viewer.pinch;
-    viewer.wheel = 0.0;
-    viewer.pinch = 1.0;
-
-    let id = Id::new("image-viewer");
-    let modal = Modal::new(id)
-        .frame(egui::Frame::NONE)
-        .backdrop_color(Color32::from_black_alpha(230))
-        .area(
-            Modal::default_area(id)
-                .order(Order::Foreground)
-                .anchor(Align2::LEFT_TOP, Vec2::ZERO),
-        )
-        .show(ctx, |ui| {
-            let mut close = false;
-            let mut step = 0i8;
-            let view = ui.ctx().content_rect();
-            ui.set_min_size(view.size());
-            ui.set_max_size(view.size());
-            let (full, background) = ui.allocate_exact_size(view.size(), Sense::click());
-            let image = egui::Image::new(crate::util::image_uri(&path));
-            let photo = match image.load_for_size(ui.ctx(), vec2(8192.0, 8192.0)) {
-                Ok(egui::load::TexturePoll::Ready { texture }) => {
-                    let native = texture.size;
-                    let fit = fit_scale(native, full.size());
-                    let factor = zoom_factor(wheel, pinch);
-                    if (factor - 1.0).abs() > f32::EPSILON {
-                        let cursor = ui
-                            .input(|input| input.pointer.hover_pos())
-                            .unwrap_or(full.center())
-                            .to_vec2();
-                        let (zoom, offset) = zoom_at(
-                            viewer.zoom,
-                            viewer.offset,
-                            fit,
-                            cursor,
-                            full.center().to_vec2(),
-                            factor,
-                        );
-                        viewer.zoom = zoom;
-                        viewer.offset = offset;
-                    }
-                    let drawn = native * (fit * viewer.zoom);
-                    viewer.offset = clamp_offset(viewer.offset, drawn, full.size());
-                    let rect = Rect::from_center_size(full.center() + viewer.offset, drawn);
-                    image.fit_to_exact_size(drawn).paint_at(ui, rect);
-                    Some(ui.interact(rect, ui.id().with("photo"), Sense::click_and_drag()))
-                }
-                Ok(egui::load::TexturePoll::Pending { .. }) => {
-                    theme::paint_spinner(ui, full, 28.0, palette.accent);
-                    None
-                }
-                Err(_) => {
-                    ui.painter().text(
-                        full.center(),
-                        Align2::CENTER_CENTER,
-                        i18n::t(Key::ViewerCouldNotDisplay),
-                        theme::regular(14.0),
-                        palette.text,
-                    );
-                    None
-                }
-            };
-            let mut on_photo = false;
-            if let Some(photo) = photo {
-                if photo.dragged() {
-                    viewer.offset += photo.drag_delta();
-                    viewer.offset = clamp_offset(viewer.offset, photo.rect.size(), full.size());
-                }
-                if photo.double_clicked() {
-                    viewer.zoom = 1.0;
-                    viewer.offset = Vec2::ZERO;
-                }
-                on_photo = photo.clicked() || photo.dragged() || photo.drag_started();
-                let cursor = if photo.dragged() {
-                    CursorIcon::Grabbing
-                } else {
-                    CursorIcon::Grab
-                };
-                photo.on_hover_cursor(cursor);
-            }
-            let inset = theme::traffic_light_inset(ui.ctx());
-            let close_pos = pos2(full.right() - 28.0, full.top() + 28.0);
-            if chrome_button(
-                ui,
-                Rect::from_center_size(close_pos, Vec2::splat(CHROME)),
-                Icon::X,
-                i18n::t(Key::ViewerClose),
-            ) {
-                close = true;
-            }
-            if prev.is_some()
-                && chrome_button(
-                    ui,
-                    Rect::from_center_size(
-                        pos2(full.left() + 28.0 + inset, full.center().y),
-                        Vec2::splat(CHROME),
-                    ),
-                    Icon::ChevronLeft,
-                    i18n::t(Key::ViewerPrevious),
-                )
-            {
-                step = -1;
-            }
-            if next.is_some()
-                && chrome_button(
-                    ui,
-                    Rect::from_center_size(
-                        pos2(full.right() - 28.0, full.center().y),
-                        Vec2::splat(CHROME),
-                    ),
-                    Icon::ChevronRight,
-                    i18n::t(Key::ViewerNext),
-                )
-            {
-                step = 1;
-            }
-            if background.clicked() && !on_photo && step == 0 && !close {
-                close = true;
-            }
-            (viewer, close, step)
+    let video = item.as_ref().is_some_and(|item| item.video)
+        || message
+            .as_ref()
+            .is_some_and(|message| matches!(message.content, Content::Video { gif: false, .. }));
+    let path = item
+        .as_ref()
+        .and_then(|item| item.path.clone())
+        .or_else(|| message.as_ref().and_then(media_path).map(Path::to_path_buf));
+    let thumbnail = item
+        .as_ref()
+        .and_then(|item| item.thumbnail.as_deref())
+        .or_else(|| {
+            message
+                .as_ref()
+                .and_then(|message| message.thumbnail.as_deref())
         });
-    let should_close = modal.should_close();
-    let (viewer, close, step) = modal.inner;
-    if close || should_close {
-        app.actions.push(Action::CloseImageViewer);
-    } else if step != 0 {
-        app.actions.push(Action::StepImage(step));
+
+    let pointer = response.hover_pos();
+    if !video {
+        let wheel = viewer.wheel;
+        let pinch = viewer.pinch;
+        viewer.wheel = 0.0;
+        viewer.pinch = 1.0;
+        let factor = if (pinch - 1.0).abs() > f32::EPSILON {
+            pinch
+        } else if wheel.abs() > f32::EPSILON {
+            1.1_f32.powf(wheel / 40.0)
+        } else {
+            1.0
+        };
+        if (factor - 1.0).abs() > f32::EPSILON
+            && let Some(pointer) = pointer
+            && stage.contains(pointer)
+        {
+            let next = (viewer.zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
+            let origin = stage.center() + viewer.offset;
+            viewer.offset += (pointer - origin) * (1.0 - next / viewer.zoom);
+            viewer.zoom = next;
+            if viewer.zoom <= MIN_ZOOM {
+                viewer.offset = egui::Vec2::ZERO;
+            }
+        }
+        if response.dragged() && viewer.zoom > MIN_ZOOM {
+            viewer.dragging = true;
+            viewer.offset += response.drag_delta();
+        } else if response.drag_stopped() {
+            viewer.dragging = false;
+        }
     }
-    if app.image_viewer.is_some() {
-        app.image_viewer = Some(viewer);
+
+    let inner = stage.shrink(12.0);
+    if !ui.is_rect_visible(inner) {
+        return;
     }
-}
-
-pub(crate) fn image_path(message: &Message) -> Option<&PathBuf> {
-    match &message.content {
-        Content::Image { media, .. } => media.path.as_ref(),
-        _ => None,
+    if video {
+        paint_video(
+            ui,
+            path.as_deref(),
+            thumbnail,
+            &viewer.chat,
+            &viewer.message,
+            inner,
+        );
+        return;
     }
-}
-
-/// Next or previous downloaded photo in `messages`. Does not wrap.
-pub(crate) fn neighbor_image<'a>(
-    messages: &'a [Message],
-    current: &str,
-    step: i8,
-) -> Option<&'a str> {
-    if step == 0 {
-        return None;
+    if let Some(path) = path.as_deref() {
+        let image = egui::Image::new(util::image_uri(path));
+        match image.load_for_size(ui.ctx(), inner.size()) {
+            Ok(egui::load::TexturePoll::Ready { texture }) => {
+                let fitted = fit(texture.size, inner.size());
+                let size = fitted * viewer.zoom;
+                let rect = Rect::from_center_size(inner.center() + viewer.offset, size);
+                image.fit_to_exact_size(size).paint_at(ui, rect);
+            }
+            Ok(egui::load::TexturePoll::Pending { .. }) => {
+                theme::paint_spinner(ui, inner, 28.0, Color32::WHITE);
+            }
+            Err(_) => {
+                paint_placeholder(ui, thumbnail, &viewer.chat, &viewer.message, inner, false);
+            }
+        }
+        return;
     }
-    let ids: Vec<&str> = messages.iter().filter_map(downloaded_image_id).collect();
-    let index = ids.iter().position(|id| *id == current)?;
-    let next = index as i64 + i64::from(step);
-    if next < 0 || next >= ids.len() as i64 {
-        return None;
+    paint_placeholder(ui, thumbnail, &viewer.chat, &viewer.message, inner, false);
+}
+
+fn paint_video(
+    ui: &mut egui::Ui,
+    path: Option<&Path>,
+    thumbnail: Option<&[u8]>,
+    chat: &str,
+    id: &str,
+    rect: Rect,
+) {
+    if let Some(path) = path {
+        match animation::frame(ui, path, rect) {
+            animation::Frame::Ready(texture) => {
+                ui.painter().image(
+                    texture.id(),
+                    rect,
+                    Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+                return;
+            }
+            animation::Frame::Pending => {
+                paint_placeholder(ui, thumbnail, chat, id, rect, true);
+                let disc = Rect::from_center_size(rect.center(), vec2(48.0, 48.0));
+                theme::paint_spinner(ui, disc, 24.0, Color32::WHITE);
+                return;
+            }
+            animation::Frame::Unavailable => {}
+        }
     }
-    Some(ids[next as usize])
-}
-
-fn downloaded_image_id(message: &Message) -> Option<&str> {
-    image_path(message).map(|_| message.id.as_str())
-}
-
-fn fit_scale(image: Vec2, view: Vec2) -> f32 {
-    let view = (view - Vec2::splat(FIT_MARGIN * 2.0)).max(Vec2::splat(1.0));
-    let width = image.x.max(1.0);
-    let height = image.y.max(1.0);
-    (view.x / width).min(view.y / height)
-}
-
-fn zoom_factor(wheel: f32, pinch: f32) -> f32 {
-    if (pinch - 1.0).abs() > f32::EPSILON {
-        pinch
-    } else if wheel.abs() > f32::EPSILON {
-        1.1_f32.powf(wheel / 40.0)
-    } else {
-        1.0
-    }
-}
-
-fn zoom_at(
-    zoom: f32,
-    offset: Vec2,
-    fit: f32,
-    cursor: Vec2,
-    center: Vec2,
-    factor: f32,
-) -> (f32, Vec2) {
-    let old_scale = (fit * zoom).max(f32::EPSILON);
-    let new_zoom = (zoom * factor).clamp(MIN_ZOOM, MAX_ZOOM);
-    let new_scale = fit * new_zoom;
-    let local = (cursor - center - offset) / old_scale;
-    (new_zoom, cursor - center - local * new_scale)
-}
-
-fn clamp_offset(offset: Vec2, drawn: Vec2, view: Vec2) -> Vec2 {
-    let extra = ((drawn - view) * 0.5).max(Vec2::ZERO);
-    vec2(
-        offset.x.clamp(-extra.x, extra.x),
-        offset.y.clamp(-extra.y, extra.y),
-    )
-}
-
-fn chrome_button(ui: &mut egui::Ui, rect: Rect, icon: Icon, tooltip: &str) -> bool {
-    let response = ui
-        .interact(rect, ui.id().with(tooltip), Sense::click())
-        .on_hover_cursor(CursorIcon::PointingHand)
-        .on_hover_text(tooltip);
+    paint_placeholder(ui, thumbnail, chat, id, rect, true);
+    let disc = Rect::from_center_size(rect.center(), vec2(56.0, 56.0));
     ui.painter()
-        .circle_filled(rect.center(), 16.0, Color32::from_black_alpha(140));
-    let tint = if response.hovered() {
-        Color32::WHITE
+        .circle_filled(disc.center(), 28.0, Color32::from_black_alpha(140));
+    theme::paint_icon(ui, Icon::Play, disc, 28.0, Color32::WHITE);
+}
+
+fn paint_placeholder(
+    ui: &mut egui::Ui,
+    thumbnail: Option<&[u8]>,
+    chat: &str,
+    id: &str,
+    rect: Rect,
+    video: bool,
+) {
+    if let Some(bytes) = thumbnail {
+        let uri = conversation::thumbnail_uri(ui.ctx(), chat, id, bytes);
+        egui::Image::new(uri)
+            .fit_to_exact_size(rect.size())
+            .paint_at(ui, rect);
+        return;
+    }
+    ui.painter()
+        .rect_filled(rect, 8.0, Color32::from_white_alpha(12));
+    theme::paint_icon(
+        ui,
+        if video { Icon::Video } else { Icon::Image },
+        rect,
+        42.0,
+        Color32::from_white_alpha(180),
+    );
+    ui.painter().text(
+        rect.center() + vec2(0.0, 40.0),
+        Align2::CENTER_CENTER,
+        i18n::t(Key::ViewerCouldNotDisplay),
+        theme::regular(13.0),
+        Color32::from_white_alpha(180),
+    );
+}
+
+fn paint_strip(
+    app: &mut App,
+    ui: &mut egui::Ui,
+    viewer: &mut ImageViewer,
+    rect: Rect,
+    actions: &mut Vec<Action>,
+) {
+    let palette = app.palette;
+    ui.painter()
+        .rect_filled(rect, 0.0, Color32::from_black_alpha(160));
+    let items = app.viewer_media.clone();
+    if items.is_empty() {
+        return;
+    }
+    let mut child = ui.new_child(UiBuilder::new().max_rect(rect.shrink2(vec2(8.0, 8.0))));
+    egui::ScrollArea::horizontal()
+        .id_salt("viewer-strip")
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.set_min_height(THUMB);
+                for item in &items {
+                    let (thumb, response) =
+                        ui.allocate_exact_size(vec2(THUMB, THUMB), Sense::click());
+                    if viewer.scroll_to && item.id == viewer.message {
+                        ui.scroll_to_rect(thumb, Some(egui::Align::Center));
+                    }
+                    if ui.is_rect_visible(thumb) {
+                        paint_thumb(ui, &palette, item, thumb, item.id == viewer.message);
+                    }
+                    if response
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        actions.push(Action::ViewImage {
+                            chat: viewer.chat.clone(),
+                            message: item.id.clone(),
+                        });
+                    }
+                }
+            });
+        });
+    viewer.scroll_to = false;
+}
+
+fn paint_thumb(
+    ui: &egui::Ui,
+    palette: &crate::theme::Palette,
+    item: &ChatMedia,
+    rect: Rect,
+    current: bool,
+) {
+    ui.painter()
+        .rect_filled(rect, 6.0, Color32::from_white_alpha(16));
+    if let Some(path) = item.path.as_deref() {
+        egui::Image::new(util::image_uri(path))
+            .fit_to_exact_size(rect.size())
+            .corner_radius(6.0)
+            .paint_at(ui, rect);
+    } else if let Some(bytes) = item.thumbnail.as_deref() {
+        let uri = conversation::thumbnail_uri(ui.ctx(), "thumb", &item.id, bytes);
+        egui::Image::new(uri)
+            .fit_to_exact_size(rect.size())
+            .corner_radius(6.0)
+            .paint_at(ui, rect);
     } else {
-        Color32::from_white_alpha(200)
-    };
-    theme::paint_icon(ui, icon, rect, 18.0, tint);
-    response.clicked()
+        theme::paint_icon(
+            ui,
+            if item.video { Icon::Video } else { Icon::Image },
+            rect,
+            22.0,
+            Color32::from_white_alpha(180),
+        );
+    }
+    if item.video {
+        let disc = Rect::from_center_size(rect.center(), vec2(18.0, 18.0));
+        ui.painter()
+            .circle_filled(disc.center(), 9.0, Color32::from_black_alpha(140));
+        theme::paint_icon(ui, Icon::Play, disc, 12.0, Color32::WHITE);
+    }
+    if current {
+        ui.painter().rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            egui::Stroke::new(2.0, palette.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
+fn paint_chevrons(
+    ui: &mut egui::Ui,
+    palette: &crate::theme::Palette,
+    stage: Rect,
+    actions: &mut Vec<Action>,
+) {
+    let mut left = ui.new_child(
+        UiBuilder::new()
+            .max_rect(Rect::from_center_size(
+                pos2(stage.left() + 28.0, stage.center().y),
+                vec2(40.0, 40.0),
+            ))
+            .layout(egui::Layout::centered_and_justified(
+                egui::Direction::LeftToRight,
+            )),
+    );
+    if theme::circle_button(
+        &mut left,
+        Icon::ChevronLeft,
+        36.0,
+        Color32::from_black_alpha(120),
+        palette.surface_hover,
+        Color32::WHITE,
+        i18n::t(Key::ViewerPrevious),
+    )
+    .clicked()
+    {
+        actions.push(Action::StepImage(-1));
+    }
+    let mut right = ui.new_child(
+        UiBuilder::new()
+            .max_rect(Rect::from_center_size(
+                pos2(stage.right() - 28.0, stage.center().y),
+                vec2(40.0, 40.0),
+            ))
+            .layout(egui::Layout::centered_and_justified(
+                egui::Direction::LeftToRight,
+            )),
+    );
+    if theme::circle_button(
+        &mut right,
+        Icon::ChevronRight,
+        36.0,
+        Color32::from_black_alpha(120),
+        palette.surface_hover,
+        Color32::WHITE,
+        i18n::t(Key::ViewerNext),
+    )
+    .clicked()
+    {
+        actions.push(Action::StepImage(1));
+    }
+}
+
+fn fit(size: egui::Vec2, max: egui::Vec2) -> egui::Vec2 {
+    let scale = (max.x / size.x).min(max.y / size.y).min(1.0);
+    size * scale
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Delivery, Media};
+    use crate::model::{Media, Message};
 
     fn photo(id: &str, path: Option<&str>) -> Message {
         Message {
             id: id.into(),
-            chat: "a@s.whatsapp.net".into(),
-            sender: "a@s.whatsapp.net".into(),
+            chat: "c".into(),
+            sender: "c".into(),
             sender_name: None,
             from_me: false,
             timestamp: 0,
@@ -316,13 +671,11 @@ mod tests {
                 media: Media {
                     mime: "image/jpeg".into(),
                     size: 1,
-                    width: Some(800),
-                    height: Some(600),
-                    path: path.map(PathBuf::from),
+                    path: path.map(std::path::PathBuf::from),
                     ..Default::default()
                 },
             },
-            status: Delivery::None,
+            status: crate::model::Delivery::None,
             delivered_at: None,
             read_at: None,
             quoted: None,
@@ -334,43 +687,57 @@ mod tests {
         }
     }
 
-    fn text(id: &str) -> Message {
-        let mut message = photo(id, None);
-        message.content = Content::text("hi");
-        message
+    fn video(id: &str, gif: bool) -> Message {
+        Message {
+            content: Content::Video {
+                caption: None,
+                media: Media {
+                    mime: "video/mp4".into(),
+                    size: 1,
+                    ..Default::default()
+                },
+                seconds: Some(1),
+                gif,
+            },
+            ..photo(id, None)
+        }
     }
 
     #[test]
-    fn neighbor_image_walks_downloaded_photos_and_stops_at_the_ends() {
+    fn neighbor_walks_photos_and_videos_and_skips_gifs() {
         let messages = vec![
-            photo("first", Some("a.jpg")),
-            text("skip"),
-            photo("waiting", None),
-            photo("middle", Some("b.jpg")),
-            photo("last", Some("c.jpg")),
+            photo("a", Some("a.jpg")),
+            video("clip", false),
+            video("loop", true),
+            photo("b", None),
         ];
-        assert_eq!(neighbor_image(&messages, "first", 1), Some("middle"));
-        assert_eq!(neighbor_image(&messages, "middle", 1), Some("last"));
-        assert_eq!(neighbor_image(&messages, "last", 1), None);
-        assert_eq!(neighbor_image(&messages, "last", -1), Some("middle"));
-        assert_eq!(neighbor_image(&messages, "first", -1), None);
-        assert_eq!(neighbor_image(&messages, "missing", 1), None);
-        assert_eq!(neighbor_image(&messages, "middle", 0), None);
+        assert_eq!(neighbor_image(&messages, "a", 1), Some("clip"));
+        assert_eq!(neighbor_image(&messages, "clip", 1), Some("b"));
+        assert_eq!(neighbor_image(&messages, "b", 1), None);
+        assert_eq!(neighbor_image(&messages, "clip", -1), Some("a"));
     }
 
     #[test]
-    fn zoom_keeps_the_point_under_the_cursor() {
-        let (zoom, offset) = zoom_at(1.0, Vec2::ZERO, 1.0, vec2(10.0, 0.0), Vec2::ZERO, 2.0);
-        assert!((zoom - 2.0).abs() < 1e-5);
-        assert!((offset.x + 10.0).abs() < 1e-3);
-        assert!(offset.y.abs() < 1e-3);
-    }
-
-    #[test]
-    fn fitted_photos_cannot_be_panned_off_the_window() {
-        let offset = clamp_offset(vec2(80.0, -40.0), vec2(200.0, 100.0), vec2(400.0, 300.0));
-        assert_eq!(offset, Vec2::ZERO);
-        let zoomed = clamp_offset(vec2(500.0, 0.0), vec2(800.0, 400.0), vec2(400.0, 300.0));
-        assert!((zoomed.x - 200.0).abs() < 1e-3);
+    fn neighbor_media_walks_archive_rows_without_wrapping() {
+        let items = vec![
+            ChatMedia {
+                id: "a".into(),
+                timestamp: 1,
+                video: false,
+                path: None,
+                thumbnail: None,
+            },
+            ChatMedia {
+                id: "clip".into(),
+                timestamp: 2,
+                video: true,
+                path: None,
+                thumbnail: None,
+            },
+        ];
+        assert_eq!(neighbor_media(&items, "a", 1), Some("clip"));
+        assert_eq!(neighbor_media(&items, "clip", 1), None);
+        assert_eq!(neighbor_media(&items, "clip", -1), Some("a"));
+        assert_eq!(neighbor_media(&items, "missing", 1), None);
     }
 }

@@ -25,3 +25,7 @@ Settings **Downloads** paints attachment weight as 6 px accent bars on a dim tra
 **Settings → Language** is its own section with the same row family as Theme; the combo lists **System language**, **English**, and **Español** as endonyms. Reason: a picker that translates its own options strands the reader who chose the wrong one, and the system option must stay findable in either language.
 
 **Send read receipts** and **Show when you are typing** sit in Settings **Privacy**, above the account rows. Reason: they control what others see of you, not chat chrome.
+
+The media viewer is a full-window overlay: a 56 px header (avatar, name, last seen, zoom, go-to-message, reply, star, pin, react, forward, download, close), the photo or video in the centre, and a full-width filmstrip of that chat's images and videos. Reason: WhatsApp Web keeps actions and the rest of the album in reach; the gallery is the archive, not the loaded page.
+
+A message pin is not a chat pin. Pin for everyone for 7 days, at most three per chat, with a left-list copy of Starred and chips under the chat header. Reason: WhatsApp Web's pin-in-chat is a protocol act, and both surfaces are needed to find the pin later.

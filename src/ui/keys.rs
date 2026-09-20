@@ -43,7 +43,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         key(Modifiers::COMMAND, Key::Minus, Action::ZoomBy(-0.1));
         key(Modifiers::COMMAND, Key::Num0, Action::ResetZoom);
         key(Modifiers::COMMAND, Key::End, Action::ScrollToBottom);
-        if app.image_viewer.is_some() {
+        if app.image_viewer.is_some() && app.dialog.is_none() && app.picker.is_none() {
             key(Modifiers::NONE, Key::ArrowLeft, Action::StepImage(-1));
             key(Modifiers::NONE, Key::ArrowRight, Action::StepImage(1));
         }
@@ -54,20 +54,22 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
     let escape =
         !menu_open && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape));
     if escape {
-        if app.image_viewer.is_some() {
-            actions.push(Action::CloseImageViewer);
-        } else if app.dialog.is_some() {
+        if app.dialog.is_some() {
             actions.push(Action::CloseDialog);
+        } else if app.picker.is_some() || app.reaction_target.is_some() {
+            actions.push(Action::ClosePicker);
+        } else if app.image_viewer.is_some() {
+            actions.push(Action::CloseImageViewer);
         } else if app.selecting.is_some() {
             actions.push(Action::ClearSelection);
         } else if app.show_scheduled {
             actions.push(Action::ToggleScheduled);
         } else if app.show_starred {
             actions.push(Action::ToggleStarred);
+        } else if app.show_pinned {
+            actions.push(Action::TogglePinned);
         } else if app.recording.is_some() {
             actions.push(Action::CancelRecording);
-        } else if app.picker.is_some() || app.reaction_target.is_some() {
-            actions.push(Action::ClosePicker);
         } else if app.emoji_start.is_some() {
             actions.push(Action::CloseEmojiSuggestions);
         } else if app.mention_start.is_some() {

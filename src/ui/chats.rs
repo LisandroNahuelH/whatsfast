@@ -273,6 +273,25 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                         theme::bold(20.0),
                         palette.text,
                     );
+                } else if app.show_pinned {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        i18n::t(Key::ChatListBack),
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::TogglePinned);
+                    }
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListPinned),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else {
                     let me = app.me.clone().unwrap_or_default();
                     let name = app
@@ -332,6 +351,22 @@ fn header(app: &mut App, ui: &mut egui::Ui) {
                     .clicked()
                     {
                         app.actions.push(Action::ToggleStarred);
+                    }
+                    if theme::icon_button(
+                        ui,
+                        Icon::Pin,
+                        18.0,
+                        if app.show_pinned {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        i18n::t(Key::ChatListPinnedMessages),
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::TogglePinned);
                     }
                     if theme::icon_button(
                         ui,
@@ -469,6 +504,25 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                         theme::bold(20.0),
                         palette.text,
                     );
+                } else if app.show_pinned {
+                    if theme::icon_button(
+                        ui,
+                        Icon::ArrowLeft,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        i18n::t(Key::ChatListBack),
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::TogglePinned);
+                    }
+                    theme::text(
+                        ui,
+                        i18n::t(Key::ChatListPinned),
+                        theme::bold(20.0),
+                        palette.text,
+                    );
                 } else {
                     theme::text(
                         ui,
@@ -493,6 +547,22 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
                     .clicked()
                     {
                         app.actions.push(Action::ToggleStarred);
+                    }
+                    if theme::icon_button(
+                        ui,
+                        Icon::Pin,
+                        18.0,
+                        if app.show_pinned {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                        palette.text,
+                        i18n::t(Key::ChatListPinnedMessages),
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::TogglePinned);
                     }
                     if theme::icon_button(
                         ui,
@@ -542,7 +612,7 @@ fn macos_header(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn list_chips(app: &mut App, ui: &mut egui::Ui) {
-    if app.show_archived || app.show_starred || app.show_scheduled {
+    if app.show_archived || app.show_starred || app.show_scheduled || app.show_pinned {
         return;
     }
     let palette = app.palette;
@@ -969,6 +1039,39 @@ fn starred_row(
     }
 }
 
+fn pinned_list(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let entries: Vec<crate::archive::Starred> = app
+        .pinned
+        .iter()
+        .map(|entry| crate::archive::Starred {
+            chat: entry.chat.clone(),
+            id: entry.id.clone(),
+            starred_at: entry.pinned_at,
+            text: entry.text.clone(),
+            from_me: entry.from_me,
+            sent_at: entry.sent_at,
+        })
+        .collect();
+    if entries.is_empty() {
+        widgets::empty_state(
+            ui,
+            &palette,
+            Icon::Pin,
+            i18n::t(Key::ChatListNoPinned),
+            i18n::t(Key::ChatListNoPinnedHint),
+        );
+        return;
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for entry in &entries {
+                starred_row(app, ui, &palette, entry);
+            }
+        });
+}
+
 fn list(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     if app.show_scheduled {
@@ -977,6 +1080,10 @@ fn list(app: &mut App, ui: &mut egui::Ui) {
     }
     if app.show_starred {
         starred_list(app, ui);
+        return;
+    }
+    if app.show_pinned {
+        pinned_list(app, ui);
         return;
     }
     if !app.search.trim().is_empty() {

@@ -4,6 +4,8 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | In-chat pins use `Client::pin_message` for 7 days, cap 3 per chat | WhatsApp Web default; no duration menu in this cut | Dropping `pin_in_chat_message` (`return None`) |
+| 2026-09-20 | Viewer gallery lists Image and non-GIF Video from SQLite | The loaded page is not the whole album | `neighbor_image` on in-memory photos with a path |
 | 2026-09-20 | Local send-receipts and typing switches live in Settings Privacy | They describe what this copy discloses, not chat chrome | The same two switches in Settings Chats |
 | 2026-09-20 | Prefetch hover card sits to the right of the hovered list row | A card at the top of Settings did not point at the mode under the pointer | Card in the empty Settings margin (`settings_hover_slot`) |
 | 2026-09-19 | Interface text lives in `src/i18n` key tables, never in a paint call | The compiler then forces a value for every locale, and the residual scan can name a string left in English | A runtime string map or gettext |

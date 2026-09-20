@@ -31,8 +31,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     titlebar_strip(app, ui);
     if !app.is_linked() {
         login::show(app, ui);
-        dialogs::show(app, ctx);
         viewer::show(app, ctx);
+        dialogs::show(app, ctx);
         toasts(app, ctx);
         return;
     }
@@ -64,9 +64,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 chats::paint_split(ui, &palette);
             }
         });
+    viewer::show(app, ctx);
     picker::show(app, ctx);
     dialogs::show(app, ctx);
-    viewer::show(app, ctx);
     drop_target(app, ctx);
     toasts(app, ctx);
 }

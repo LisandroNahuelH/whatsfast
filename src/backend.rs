@@ -190,6 +190,26 @@ pub enum Command {
     },
     /// Asks for the starred messages.
     LoadStarred,
+    /// Pins or unpins one message for everyone in the chat.
+    SetMessagePinned {
+        chat: ChatId,
+        message: String,
+        pinned: bool,
+    },
+    /// Asks for the pinned messages.
+    LoadPinned,
+    /// Images and videos of one chat, for the media viewer.
+    LoadChatMedia {
+        chat: ChatId,
+    },
+    /// Result of a pin or unpin request.
+    MessagePinned {
+        chat: ChatId,
+        message: String,
+        pinned: bool,
+        expires_at: i64,
+        result: Result<(), String>,
+    },
     /// Writes the new order of the pinned chats, top first.
     ReorderPinned(Vec<ChatId>),
     /// Result of a star or unstar request.
@@ -686,6 +706,24 @@ pub enum Event {
     },
     /// The starred messages, newest star first.
     StarredList(Vec<crate::archive::Starred>),
+    /// Active pins of one chat, for the chips in the conversation.
+    Pins {
+        chat: ChatId,
+        items: Vec<crate::archive::Pinned>,
+    },
+    /// A pin the server accepted, or refused, for one message.
+    PinChanged {
+        chat: ChatId,
+        message: String,
+        pinned: bool,
+    },
+    /// The pinned messages, newest pin first.
+    PinnedList(Vec<crate::archive::Pinned>),
+    /// Images and videos of one chat, oldest first.
+    ChatMedia {
+        chat: ChatId,
+        items: Vec<crate::archive::ChatMedia>,
+    },
     /// Custom chat lists and pins that are not the All/WhatsApp pin.
     ChatLists {
         lists: Vec<ChatList>,

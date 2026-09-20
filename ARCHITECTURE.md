@@ -21,10 +21,11 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   to cover the panel. Each family has three PNGs; Settings names them
   `Black 1` and so on, and the chat menu **Next wallpaper** steps the slot.
   Settings keeps a plain `palette.chat` fill.
-  Clicking a downloaded chat photo opens `ui/viewer.rs`, a full-window overlay
-  with wheel zoom, click-and-drag pan, and previous/next among downloaded
-  photos in that chat. Stickers and GIFs keep the click on the message
-  row. Videos and **Open file** still use the system handler.
+  Clicking a chat photo or video opens `ui/viewer.rs`, a full-window overlay
+  with a header, the file in the centre, and a chronological filmstrip of
+  that chat's images and videos from the archive. Wheel zoom, Plus/Minus,
+  and pan still apply to photos. Stickers and GIFs keep the click on the
+  message row. Overlay order is viewer, then picker, then dialogs.
   `ui/pane.rs` is the right inspector (`RightPane`). Search is the first use:
   one pane at a time, width persisted as `settings.inspector_width`. Header
   Search and Ctrl+G open it; Ctrl+F stays on the left list. The day filter is
@@ -46,6 +47,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   history prefetch asks the phone one page at a time and downloads files
   one at a time into the archive; it does not prepend those pages into the
   open conversation. A failed file is retried with backoff for 30 days.
+  `Client::pin_message` / `unpin_message` (`PinDuration::Days7`) write the
+  archive only after the server accepts. Incoming `pin_in_chat_message` is
+  filed the same way.
   `Command::StorageStats` runs one `json_extract` aggregate on the archive;
   `Event::StorageStats` caches counts and `media.size` sums for Settings.
   Weight is the persisted WhatsApp size of rows with a local path, not a
@@ -70,6 +74,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   in All stay on `chats.pinned` and still sync with the phone. Pins on any
   other chip live only in `chat_list_pins`. `storage_stats()` sums downloaded
   attachment sizes by JSON `kind` without loading message bodies.
+  `message_pins` stores in-chat pins (`PIN_FOR_ALL` / `UNPIN_FOR_ALL`) with
+  `expires_at`; at most three active pins per chat. `chat_media()` lists
+  Image and non-GIF Video rows for the viewer strip.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 - **`src/i18n/`** — Every interface string is a `Key` in an enum with an
   English and a Spanish table (`key.rs`, `en.rs`, `es.rs`); `t`, `f`, and
