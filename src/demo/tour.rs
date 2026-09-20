@@ -1214,6 +1214,64 @@ mod tests {
     }
 
     #[test]
+    fn clicking_outside_closes_the_search_calendar() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        app.right_pane = Some(crate::model::RightPane::Search);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let button = ctx
+            .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("chat-search-calendar-button")))
+            .expect("the calendar button is drawn");
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(button.center(), PointerButton::Primary),
+            0.1,
+            true,
+        );
+        assert!(app.chat_search_calendar, "the icon opens the calendar");
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(pos2(80.0, 400.0), PointerButton::Primary),
+            0.2,
+            true,
+        );
+        assert!(
+            !app.chat_search_calendar,
+            "a click outside the popup closes it"
+        );
+    }
+
+    #[test]
+    fn search_calendar_sits_below_and_centers_on_the_icon() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        app.right_pane = Some(crate::model::RightPane::Search);
+        app.chat_search_calendar = true;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        step_output(&mut app, &ctx, Vec::new(), 0.05, true);
+        let button = ctx
+            .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("chat-search-calendar-button")))
+            .expect("the calendar button is drawn");
+        let popup = ctx
+            .data(|data| data.get_temp::<egui::Rect>(egui::Id::new("chat-search-calendar")))
+            .expect("the calendar popup is drawn");
+        assert!(
+            popup.top() >= button.bottom(),
+            "the popup sits below the icon"
+        );
+        assert!(
+            (popup.center().x - button.center().x).abs() < 2.0,
+            "the popup is centered on the icon"
+        );
+    }
+
+    #[test]
     fn clicking_a_chat_search_hit_pulses_the_row() {
         let mut app = super::super::tests::app();
         prepare(&mut app);

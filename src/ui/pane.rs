@@ -1,6 +1,6 @@
 //! Right inspector pane. Search is the first use; later panes reuse this shell.
 
-use egui::{Align, Align2, CornerRadius, Frame, Layout, Margin, Sense, Vec2, pos2, vec2};
+use egui::{Align, Align2, Frame, Layout, Margin, Rect, Sense, Vec2, pos2, vec2};
 use jiff::civil::Date;
 
 use crate::app::App;
@@ -44,6 +44,7 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
         .current_chat()
         .map(|chat| app.chat_title(chat))
         .unwrap_or_default();
+    let mut calendar_btn = Rect::NOTHING;
     Frame::new()
         .inner_margin(Margin::symmetric(14, 10))
         .show(ui, |ui| {
@@ -72,6 +73,10 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
                     palette.text,
                     "Filter by date",
                 );
+                calendar_btn = calendar.rect;
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(egui::Id::new("chat-search-calendar-button"), calendar.rect);
+                });
                 if calendar.clicked() {
                     app.chat_search_calendar = !app.chat_search_calendar;
                 }
@@ -96,8 +101,7 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
             });
         });
     if app.chat_search_calendar {
-        calendar(app, ui, &palette);
-        return;
+        calendar_popup(app, ui, &palette, calendar_btn);
     }
     let empty = app.chat_search.trim().is_empty() && app.chat_search_day.is_none();
     if empty {
@@ -134,16 +138,42 @@ fn search(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
-fn calendar(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
-    Frame::new()
-        .inner_margin(Margin::same(12))
-        .fill(palette.surface)
-        .corner_radius(CornerRadius::same(theme::RADIUS + 4))
-        .show(ui, |ui| {
-            month_header(app, ui, palette);
-            ui.add_space(6.0);
-            month_grid(app, ui, palette);
+fn calendar_popup(app: &mut App, ui: &mut egui::Ui, palette: &Palette, button: Rect) {
+    let id = egui::Id::new("chat-search-calendar");
+    let width = ui
+        .ctx()
+        .data(|data| data.get_temp::<Rect>(id).map(|rect| rect.width()))
+        .unwrap_or(CELL * 7.0 + 24.0);
+    let pos = pos2(button.center().x - width / 2.0, button.bottom() + 4.0);
+    let area = egui::Area::new(id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(pos)
+        .show(ui.ctx(), |ui| {
+            widgets::menu_frame(palette)
+                .fill(palette.surface)
+                .inner_margin(Margin::same(12))
+                .show(ui, |ui| {
+                    ui.set_width(CELL * 7.0);
+                    month_header(app, ui, palette);
+                    ui.add_space(6.0);
+                    month_grid(app, ui, palette);
+                });
         });
+    let popup = area.response.rect;
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(id, popup);
+    });
+    let clicked_outside = ui.ctx().input(|input| {
+        input.pointer.button_clicked(egui::PointerButton::Primary)
+            && input
+                .pointer
+                .interact_pos()
+                .or(input.pointer.latest_pos())
+                .is_some_and(|pos| !popup.contains(pos) && !button.contains(pos))
+    });
+    if clicked_outside {
+        app.chat_search_calendar = false;
+    }
 }
 
 fn month_header(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
