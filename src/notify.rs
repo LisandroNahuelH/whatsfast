@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+#[cfg(target_os = "linux")]
 use crate::i18n::{self, Key};
 
 #[cfg(target_os = "windows")]

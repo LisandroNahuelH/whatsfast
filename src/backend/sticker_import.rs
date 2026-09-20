@@ -55,7 +55,7 @@ pub fn decrypt_blob(payload: &[u8], pack_key: &[u8; 32]) -> Result<Vec<u8>, Stri
     }
     let mut keys = [0u8; 64];
     hkdf::Hkdf::<Sha256>::new(Some(&[0u8; 32]), pack_key)
-        .expand(bi18n::t(Key::KindStickerPackTitle), &mut keys)
+        .expand(b"Sticker Pack", &mut keys)
         .map_err(|_| i18n::t(Key::StickerErrKeyDerive).to_owned())?;
     let (aes_key, mac_key) = keys.split_at(32);
     let (iv, rest) = payload.split_at(16);
@@ -457,7 +457,7 @@ mod tests {
         let pack_key = [7u8; 32];
         let mut keys = [0u8; 64];
         hkdf::Hkdf::<Sha256>::new(Some(&[0u8; 32]), &pack_key)
-            .expand(bi18n::t(Key::KindStickerPackTitle), &mut keys)
+            .expand(b"Sticker Pack", &mut keys)
             .expect("expands");
         let (aes_key, mac_key) = keys.split_at(32);
         let aes_key: [u8; 32] = aes_key.try_into().expect("32");

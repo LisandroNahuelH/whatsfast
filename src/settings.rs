@@ -217,10 +217,6 @@ impl Default for Settings {
         Self {
             theme: ThemeChoice::Dark,
             language: Language::default(),
-            language: Language::default(),
-            language: Language::default(),
-            language: Language::default(),
-            language: Language::default(),
             custom_theme: None,
             custom_theme_cache: None,
             system_theme_cache: None,

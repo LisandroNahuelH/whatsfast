@@ -514,7 +514,8 @@ fn shortcuts(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     title(ui, app, i18n::t(Key::DialogShortcutsTitle));
     // Reserve enough width for the longest shortcut before laying out the grid.
-    let keys_width = super::keys::SHORTCUTS
+    let shortcuts = super::keys::shortcuts();
+    let keys_width = shortcuts
         .iter()
         .map(|(keys, _)| {
             ui.painter()
@@ -532,14 +533,14 @@ fn shortcuts(app: &mut App, ui: &mut egui::Ui) {
         .min_col_width(keys_width)
         .spacing([18.0, 8.0])
         .show(ui, |ui| {
-            for (keys, what) in super::keys::SHORTCUTS {
+            for (keys, what) in shortcuts {
                 theme::text(
                     ui,
                     super::keys::label(keys),
                     theme::semibold(13.0),
                     palette.text,
                 );
-                theme::text(ui, *what, theme::regular(13.0), palette.secondary);
+                theme::text(ui, what, theme::regular(13.0), palette.secondary);
                 ui.end_row();
             }
         });
@@ -782,7 +783,7 @@ fn new_contact(app: &mut App, ui: &mut egui::Ui) {
                 .inner
         };
     macro_rules! edit {
-        ($buffer:expr, $salt:literal, $hint:literal, $width:expr) => {
+        ($buffer:expr, $salt:literal, $hint:expr, $width:expr) => {
             egui::TextEdit::singleline($buffer)
                 .id(egui::Id::new($salt))
                 .hint_text(

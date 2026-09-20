@@ -3,6 +3,7 @@
 use egui::{Key, Modifiers};
 
 use crate::app::App;
+use crate::i18n::{self, Key as I18nKey};
 use crate::model::{Action, Dialog, Page, RightPane};
 
 pub fn handle(app: &mut App, ctx: &egui::Context) {
@@ -130,27 +131,29 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
 }
 
 /// Shortcuts shown in the help dialog.
-pub const SHORTCUTS: &[(&str, &str)] = &[
-    ("Ctrl+F / Ctrl+K", i18n::t(Key::ShortcutSearchChats)),
-    ("Ctrl+G", i18n::t(Key::ShortcutSearchMessages)),
-    ("Ctrl+L", i18n::t(Key::ShortcutFocusComposer)),
-    ("Alt+↑ / Alt+↓", i18n::t(Key::ShortcutPreviousNextChat)),
-    ("Enter", i18n::t(Key::ShortcutSend)),
-    ("Escape", i18n::t(Key::ShortcutDismiss)),
-    (
-        i18n::t(Key::ShortcutPhotoViewer),
-        i18n::t(Key::ShortcutPhotoViewerKeys),
-    ),
-    ("Ctrl+V", i18n::t(Key::ShortcutPaste)),
-    ("Ctrl+B", i18n::t(Key::ShortcutChatList)),
-    ("Ctrl+End", i18n::t(Key::ShortcutNewest)),
-    ("Ctrl+,", i18n::t(Key::SettingsTitle)),
-    ("Ctrl++ / Ctrl+-", i18n::t(Key::ShortcutZoom)),
-    ("Ctrl+0", i18n::t(Key::ShortcutResetZoom)),
-    ("Ctrl+/", i18n::t(Key::ShortcutThisList)),
-    ("Ctrl+W", i18n::t(Key::ShortcutCloseWindow)),
-    ("Ctrl+Q", i18n::t(Key::CommonQuit)),
-];
+pub fn shortcuts() -> [(&'static str, &'static str); 16] {
+    [
+        ("Ctrl+F / Ctrl+K", i18n::t(I18nKey::ShortcutSearchChats)),
+        ("Ctrl+G", i18n::t(I18nKey::ShortcutSearchMessages)),
+        ("Ctrl+L", i18n::t(I18nKey::ShortcutFocusComposer)),
+        ("Alt+↑ / Alt+↓", i18n::t(I18nKey::ShortcutPreviousNextChat)),
+        ("Enter", i18n::t(I18nKey::ShortcutSend)),
+        ("Escape", i18n::t(I18nKey::ShortcutDismiss)),
+        (
+            i18n::t(I18nKey::ShortcutPhotoViewer),
+            i18n::t(I18nKey::ShortcutPhotoViewerKeys),
+        ),
+        ("Ctrl+V", i18n::t(I18nKey::ShortcutPaste)),
+        ("Ctrl+B", i18n::t(I18nKey::ShortcutChatList)),
+        ("Ctrl+End", i18n::t(I18nKey::ShortcutNewest)),
+        ("Ctrl+,", i18n::t(I18nKey::SettingsTitle)),
+        ("Ctrl++ / Ctrl+-", i18n::t(I18nKey::ShortcutZoom)),
+        ("Ctrl+0", i18n::t(I18nKey::ShortcutResetZoom)),
+        ("Ctrl+/", i18n::t(I18nKey::ShortcutThisList)),
+        ("Ctrl+W", i18n::t(I18nKey::ShortcutCloseWindow)),
+        ("Ctrl+Q", i18n::t(I18nKey::CommonQuit)),
+    ]
+}
 
 /// Uses Command and Option labels on macOS.
 pub fn label(keys: &str) -> String {

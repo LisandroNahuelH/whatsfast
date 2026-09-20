@@ -587,7 +587,7 @@ pub fn run_helper(job: &Path) -> Result<()> {
     }
     fs::write(
         prepared.directory.join("result.txt"),
-        i18n::f(Key::UpdUpdatedTo, &[("version", &version.to_string())]),
+        i18n::f(Key::UpdUpdatedTo, &[("version", &prepared.version)]),
     )?;
     Ok(())
 }

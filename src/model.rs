@@ -8,6 +8,8 @@ use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::{self, Key};
+
 /// Chat JID string: `<phone>@s.whatsapp.net`, `<id>@g.us`, or `<id>@lid`.
 pub type ChatId = String;
 
@@ -363,18 +365,18 @@ impl PollDraft {
             .map(|option| option.trim().to_owned())
             .collect();
         if question.is_empty() || question.chars().count() > 255 {
-            return Err("Enter a question of up to 255 characters.");
+            return Err(i18n::t(Key::PollErrorQuestion));
         }
         if !(2..=12).contains(&options.len())
             || options
                 .iter()
                 .any(|option| option.is_empty() || option.chars().count() > 100)
         {
-            return Err("Add 2–12 answers, each with 1–100 characters.");
+            return Err(i18n::t(Key::PollErrorAnswers));
         }
         let mut unique = std::collections::HashSet::new();
         if options.iter().any(|option| !unique.insert(option)) {
-            return Err("Each answer must be different.");
+            return Err(i18n::t(Key::PollErrorDuplicates));
         }
         Ok(Self {
             question,
@@ -399,35 +401,44 @@ impl Content {
     pub fn summary(&self) -> String {
         match self {
             Self::Text { text, .. } => text.lines().next().unwrap_or_default().to_owned(),
-            Self::Image { caption, .. } => with_caption("Photo", caption),
-            Self::Video { caption, gif, .. } => {
-                with_caption(if *gif { "GIF" } else { "Video" }, caption)
-            }
+            Self::Image { caption, .. } => with_caption(i18n::t(Key::KindPhoto), caption),
+            Self::Video { caption, gif, .. } => with_caption(
+                if *gif {
+                    i18n::t(Key::KindGif)
+                } else {
+                    i18n::t(Key::KindVideo)
+                },
+                caption,
+            ),
             Self::Audio {
                 voice_note,
                 seconds,
                 ..
             } => {
                 let label = if *voice_note {
-                    "Voice message"
+                    i18n::t(Key::KindVoice)
                 } else {
-                    "Audio"
+                    i18n::t(Key::KindAudio)
                 };
                 match seconds {
                     Some(seconds) => format!("{label} ({})", crate::util::duration(*seconds)),
                     None => label.to_owned(),
                 }
             }
-            Self::Document { file_name, .. } => format!("Document: {file_name}"),
-            Self::Sticker { .. } => "Sticker".to_owned(),
+            Self::Document { file_name, .. } => {
+                i18n::f(Key::KindDocumentWith, &[("name", file_name)])
+            }
+            Self::Sticker { .. } => i18n::t(Key::KindSticker).to_owned(),
             Self::Location { name, .. } => match name {
-                Some(name) => format!("Location: {name}"),
-                None => "Location".to_owned(),
+                Some(name) => i18n::f(Key::KindLocationWith, &[("name", name)]),
+                None => i18n::t(Key::KindLocation).to_owned(),
             },
-            Self::Contact { display_name, .. } => format!("Contact: {display_name}"),
-            Self::Poll { question, .. } => format!("Poll: {question}"),
-            Self::Revoked => "This message was deleted".to_owned(),
-            Self::Unsupported { what } => format!("Unsupported message ({what})"),
+            Self::Contact { display_name, .. } => {
+                i18n::f(Key::KindContactWith, &[("name", display_name)])
+            }
+            Self::Poll { question, .. } => i18n::f(Key::KindPollWith, &[("question", question)]),
+            Self::Revoked => i18n::t(Key::ChatMessageDeleted).to_owned(),
+            Self::Unsupported { what } => i18n::f(Key::ChatUnsupportedMessage, &[("what", what)]),
         }
     }
 
@@ -436,10 +447,15 @@ impl Content {
     pub fn body(&self) -> String {
         match self {
             Self::Text { text, .. } => text.clone(),
-            Self::Image { caption, .. } => with_whole_caption("Photo", caption),
-            Self::Video { caption, gif, .. } => {
-                with_whole_caption(if *gif { "GIF" } else { "Video" }, caption)
-            }
+            Self::Image { caption, .. } => with_whole_caption(i18n::t(Key::KindPhoto), caption),
+            Self::Video { caption, gif, .. } => with_whole_caption(
+                if *gif {
+                    i18n::t(Key::KindGif)
+                } else {
+                    i18n::t(Key::KindVideo)
+                },
+                caption,
+            ),
             other => other.summary(),
         }
     }
@@ -511,6 +527,38 @@ pub struct Media {
 
 fn u32_is_zero(value: &u32) -> bool {
     *value == 0
+}
+
+/// Downloaded-attachment counts and sizes from the archive, for Settings.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StorageStats {
+    pub messages: u64,
+    pub images: u64,
+    pub image_bytes: u64,
+    pub videos: u64,
+    pub video_bytes: u64,
+    pub stickers_gifs: u64,
+    pub sticker_gif_bytes: u64,
+    pub other: u64,
+    pub other_bytes: u64,
+}
+
+impl StorageStats {
+    pub fn bytes_total(self) -> u64 {
+        self.image_bytes
+            .saturating_add(self.video_bytes)
+            .saturating_add(self.sticker_gif_bytes)
+            .saturating_add(self.other_bytes)
+    }
+
+    /// Filled bar width. Empty when `total` is 0.
+    pub fn bar_width(bytes: u64, total: u64, track: f32) -> f32 {
+        if total == 0 || track <= 0.0 {
+            0.0
+        } else {
+            track * (bytes as f32 / total as f32)
+        }
+    }
 }
 
 /// Prefetch gives up this many seconds after the first failed download.
@@ -1119,7 +1167,7 @@ mod tests {
                 media: media()
             }
             .summary(),
-            "Photo"
+            i18n::t(Key::KindPhoto)
         );
         assert_eq!(
             Content::Audio {
@@ -1204,5 +1252,12 @@ mod tests {
         media.clear_retry();
         assert!(media.retry_from.is_none());
         assert_eq!(media.retry_fails, 0);
+    }
+
+    #[test]
+    fn storage_bar_is_empty_when_total_is_zero() {
+        assert_eq!(StorageStats::bar_width(0, 0, 100.0), 0.0);
+        assert_eq!(StorageStats::bar_width(50, 0, 100.0), 0.0);
+        assert_eq!(StorageStats::bar_width(50, 100, 200.0), 100.0);
     }
 }
