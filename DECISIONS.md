@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Open-chat header Search runs FocusSearch | Same field as Ctrl+F; a second in-chat finder would split results | Header had More only |
 | 2026-09-19 | Channel unfollow reuses LeaveGroup; copy and newsletter().leave differ | Same three surfaces as groups; `@broadcast` lists are not channels | Channels had no leave path |
 | 2026-09-19 | A verified pending update installs on the next process start when auto-download is on | Toast click stays immediate; closing to the tray is not a restart | In-memory `Prepared` only |
 | 2026-09-19 | Leave group asks Leave or Leave and archive | One click must not drop you from a group; archive is a second, optional hide | No leave path |
