@@ -78,7 +78,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   other chip live only in `chat_list_pins`. `storage_stats()` sums downloaded
   attachment sizes by JSON `kind` without loading message bodies.
   `message_pins` stores in-chat pins (`PIN_FOR_ALL` / `UNPIN_FOR_ALL`) with
-  `expires_at`; at most three active pins per chat. `chat_media()` lists
+  `expires_at`; at most three active pins per chat. `App::pins` feeds the
+  bubble menu, the media viewer, and the same footer mark as a star. `chat_media()` lists
   Image and non-GIF Video rows for the viewer strip.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 - **`src/i18n/`** — Every interface string is a `Key` in an enum with an
