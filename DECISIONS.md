@@ -4,6 +4,9 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Live `cargo watch` uses `-d 30` | Agents edit many files; 15 s still restarted compile mid-turn | `-d 15` after last crate-input change |
+| 2026-09-20 | Ctrl+V image paste uses Ctrl chord memory and skips a duplicate pending picture | egui-winit drops V-press; Windows often reports V-up after Ctrl-up; a time debounce still cloned the same clip | Retries, `CF_DIB`, and a 0.7 s paste timer |
+| 2026-09-20 | `names_from_contacts` on prefers `push_name` | The switch showed public profile names when on and saved labels when off | On preferred `full_name`, off preferred `push_name` |
 | 2026-09-20 | Pin-banner `OpenMessage` uses the whole header row | The chip was a 24 px pill inside a 36 px bar; padding and empty strip did not open the pin | Click only on the chip rect |
 | 2026-09-20 | Voice duration paints on the footer at the waveform's left edge | A vertical under the bars stretched the player row and Label padding sat the time off the first bar | Duration under the waveform in `ui.vertical` |
 | 2026-09-20 | UI face is Montserrat Variable (`wght` 100–900), including Monospace | Match the PutMeInThatState product face; official Montserrat has no `wdth` | Inter Variable on Proportional, Hack on Monospace |
