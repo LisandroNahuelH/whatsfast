@@ -437,6 +437,7 @@ impl Worker {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         };
         if let Err(error) =
             self.archive

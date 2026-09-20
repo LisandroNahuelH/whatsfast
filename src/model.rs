@@ -101,6 +101,7 @@ pub struct LastMessage {
     pub sender_name: Option<String>,
     pub summary: String,
     pub status: Delivery,
+    pub revoked_at: Option<i64>,
 }
 
 impl Chat {
@@ -222,6 +223,9 @@ pub struct Message {
     /// JPEG preview sent with an attachment or link.
     #[serde(default)]
     pub thumbnail: Option<Vec<u8>>,
+    /// When the sender revoked the message for everyone. The body stays stored.
+    #[serde(default)]
+    pub revoked_at: Option<i64>,
 }
 
 /// Raw WhatsApp mention token and its canonical id.

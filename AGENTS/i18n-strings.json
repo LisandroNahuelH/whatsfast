@@ -606,6 +606,16 @@
       "es": "Prefiere los nombres guardados en tu agenda. Si está desactivado, prefiere los nombres públicos del perfil de WhatsApp. Se aplica en toda la app."
     },
     {
+      "key": "SettingsKeepRevoked",
+      "en": "Keep messages deleted for everyone",
+      "es": "Conservar mensajes eliminados para todos"
+    },
+    {
+      "key": "SettingsKeepRevokedHint",
+      "en": "When someone deletes a message for everyone, keep the original body here and mark it with a trash icon. Turn this off to show the usual deleted placeholder. Messages already stored as deleted cannot be restored.",
+      "es": "Si alguien elimina un mensaje para todos, conserva el cuerpo original aquí y márcalo con un basurero. Apaga esto para mostrar el aviso habitual de mensaje eliminado. Los mensajes que ya se guardaron como eliminados no se pueden recuperar."
+    },
+    {
       "key": "SettingsSaveContacts",
       "en": "Save contacts to the phone's address book",
       "es": "Guardar contactos en la agenda del teléfono"
@@ -2329,6 +2339,11 @@
       "key": "ChatMessageDeleted",
       "en": "This message was deleted",
       "es": "Se eliminó este mensaje"
+    },
+    {
+      "key": "ChatRevokedAt",
+      "en": "Deleted {when}",
+      "es": "Eliminado {when}"
     },
     {
       "key": "ChatUnsupported",

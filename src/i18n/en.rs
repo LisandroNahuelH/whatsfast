@@ -143,6 +143,10 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsNamesFromContactsHint => {
             "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app."
         }
+        Key::SettingsKeepRevoked => "Keep messages deleted for everyone",
+        Key::SettingsKeepRevokedHint => {
+            "When someone deletes a message for everyone, keep the original body here and mark it with a trash icon. Turn this off to show the usual deleted placeholder. Messages already stored as deleted cannot be restored."
+        }
         Key::SettingsSaveContacts => "Save contacts to the phone's address book",
         Key::SettingsSaveContactsHint => {
             "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way."
@@ -546,6 +550,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::KindVideo => "Video",
         Key::ChatOpenInMap => "Open in a map",
         Key::ChatMessageDeleted => "This message was deleted",
+        Key::ChatRevokedAt => "Deleted {when}",
         Key::ChatUnsupported => "Unsupported: {what}",
         Key::ChatPictureFailed => "Could not display this picture. Click to open it.",
         Key::ChatPause => "Pause",

@@ -193,6 +193,9 @@ pub struct Settings {
     /// Prefer address-book names over public profile names.
     #[serde(default = "default_true")]
     pub names_from_contacts: bool,
+    /// Keep the original body when the sender deletes for everyone.
+    #[serde(default = "default_true")]
+    pub keep_revoked: bool,
     /// Voice and audio playback speed multiplier.
     pub voice_speed: f32,
     /// Send a forwarded batch one at a time, waiting for each first tick.
@@ -248,6 +251,7 @@ impl Default for Settings {
             check_for_updates: true,
             download_updates_automatically: true,
             names_from_contacts: true,
+            keep_revoked: true,
             save_contacts_to_phone: true,
             forward_in_order: true,
             show_poll_button: true,
@@ -358,6 +362,7 @@ mod tests {
         assert!(parsed.check_for_updates);
         assert!(parsed.download_updates_automatically);
         assert!(parsed.names_from_contacts);
+        assert!(parsed.keep_revoked);
         assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
         assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Auto);
         assert_eq!(parsed.chat_wallpaper_index, 0);

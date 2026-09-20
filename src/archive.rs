@@ -122,7 +122,7 @@ END;
 const CHAT_COLUMNS: &str =
     "c.id, c.name, c.kind, c.last_activity, c.unread, c.archived, c.pinned, c.muted_until,
                     m.from_me, m.sender_name, m.content, m.status, m.sender, c.participants, c.read_only,
-                    c.pinned_at, c.ephemeral_expiration, c.marked_unread, c.favorite";
+                    c.pinned_at, c.ephemeral_expiration, c.marked_unread, c.favorite, m.revoked_at";
 
 /// Adds columns introduced after the initial schema when missing.
 const MIGRATIONS: &[(&str, &str, &str)] = &[
@@ -142,6 +142,7 @@ const MIGRATIONS: &[(&str, &str, &str)] = &[
     ("chats", "mute_updated_at", "INTEGER"),
     ("chats", "marked_unread", "INTEGER NOT NULL DEFAULT 0"),
     ("chats", "favorite", "INTEGER NOT NULL DEFAULT 0"),
+    ("messages", "revoked_at", "INTEGER"),
 ];
 const CHAT_JOIN: &str = "FROM chats c
              LEFT JOIN messages m ON m.chat = c.id AND m.rowid = (
@@ -161,6 +162,7 @@ fn chat_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Chat> {
                 sender_name: row.get(9)?,
                 summary: content.summary(),
                 status: status_from_rank(row.get(11)?),
+                revoked_at: row.get(19)?,
             })
         }
         None => None,
@@ -748,8 +750,8 @@ impl Archive {
         };
         let reactions = self.merged_reactions(message)?;
         self.connection.execute(
-            "INSERT INTO messages (chat, id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, raw, thumbnail, mentions, forwarded, delivered_at, read_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            "INSERT INTO messages (chat, id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, raw, thumbnail, mentions, forwarded, delivered_at, read_at, revoked_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
              ON CONFLICT(chat, id) DO UPDATE SET
                 sender_name = COALESCE(excluded.sender_name, sender_name),
                 content = excluded.content,
@@ -762,7 +764,8 @@ impl Archive {
                 mentions = excluded.mentions,
                 forwarded = excluded.forwarded,
                 delivered_at = COALESCE(delivered_at, excluded.delivered_at),
-                read_at = COALESCE(read_at, excluded.read_at)",
+                read_at = COALESCE(read_at, excluded.read_at),
+                revoked_at = COALESCE(messages.revoked_at, excluded.revoked_at)",
             params![
                 message.chat,
                 message.id,
@@ -784,6 +787,7 @@ impl Archive {
                 message.forwarded,
                 message.delivered_at,
                 message.read_at,
+                message.revoked_at,
             ],
         )?;
         self.connection.execute(
@@ -815,7 +819,7 @@ impl Archive {
         limit: usize,
     ) -> Result<Vec<Message>> {
         let mut statement = self.connection.prepare(
-            "SELECT id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
+            "SELECT id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at, revoked_at
              FROM messages
              WHERE chat = ?1 AND (timestamp < ?2 OR (timestamp = ?2 AND rowid <
                  (SELECT rowid FROM messages WHERE chat = ?1 AND id = ?3)))
@@ -848,6 +852,7 @@ impl Archive {
                     mentions: serde_json::from_str(&mentions).unwrap_or_default(),
                     forwarded: row.get(12)?,
                     thumbnail: row.get(10)?,
+                    revoked_at: row.get(15)?,
                 })
             })?;
         let mut messages: Vec<Message> = rows.collect::<Result<_>>()?;
@@ -922,7 +927,7 @@ impl Archive {
             ))
         };
         let mut statement = self.connection.prepare(
-            "SELECT chat, id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
+            "SELECT chat, id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at, revoked_at
              FROM messages
              WHERE json_valid(content)
              AND (?1 IS NULL OR chat = ?1)
@@ -965,6 +970,7 @@ impl Archive {
                     mentions: serde_json::from_str(&mentions).unwrap_or_default(),
                     forwarded: row.get(13)?,
                     thumbnail: row.get(11)?,
+                    revoked_at: row.get(16)?,
                 })
             })?;
         let messages: Vec<Message> = rows.collect::<Result<_>>()?;
@@ -980,7 +986,7 @@ impl Archive {
         limit: usize,
     ) -> Result<Vec<Message>> {
         let mut statement = self.connection.prepare(
-            "SELECT id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
+            "SELECT id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at, revoked_at
              FROM messages
              WHERE chat = ?1 AND timestamp >= ?2 AND (timestamp < ?3 OR (timestamp = ?3 AND rowid <
                  (SELECT rowid FROM messages WHERE chat = ?1 AND id = ?4)))
@@ -1013,6 +1019,7 @@ impl Archive {
                     mentions: serde_json::from_str(&mentions).unwrap_or_default(),
                     forwarded: row.get(12)?,
                     thumbnail: row.get(10)?,
+                    revoked_at: row.get(15)?,
                 })
             },
         )?;
@@ -1153,7 +1160,7 @@ impl Archive {
 
     pub fn message(&self, chat: &str, id: &str) -> Result<Option<Message>> {
         let mut statement = self.connection.prepare(
-            "SELECT sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
+            "SELECT sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at, revoked_at
              FROM messages WHERE chat = ?1 AND id = ?2",
         )?;
         statement
@@ -1181,6 +1188,7 @@ impl Archive {
                     mentions: serde_json::from_str(&mentions).unwrap_or_default(),
                     forwarded: row.get(11)?,
                     thumbnail: row.get(9)?,
+                    revoked_at: row.get(14)?,
                 })
             })
             .optional()
@@ -1287,6 +1295,15 @@ impl Archive {
                 serde_json::to_string(content).unwrap_or_default(),
                 edited
             ],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Marks a sender revoke without replacing the stored body.
+    pub fn set_revoked_at(&self, chat: &str, id: &str, at: i64) -> Result<bool> {
+        let changed = self.connection.execute(
+            "UPDATE messages SET revoked_at = COALESCE(revoked_at, ?3) WHERE chat = ?1 AND id = ?2",
+            params![chat, id, at],
         )?;
         Ok(changed > 0)
     }
@@ -1454,6 +1471,7 @@ pub(crate) mod tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 
@@ -1767,6 +1785,33 @@ pub(crate) mod tests {
             archive.chat(chat).expect("chat").expect("exists").name,
             "Rust Berlin"
         );
+    }
+
+    #[test]
+    fn set_revoked_at_keeps_the_body() {
+        let archive = Archive::in_memory().expect("opens");
+        let chat = "1@s.whatsapp.net";
+        archive.ensure_chat(chat, "Ada").unwrap();
+        archive
+            .insert_message(&message(chat, "m1", 100, false), None)
+            .unwrap();
+        assert!(archive.set_revoked_at(chat, "m1", 200).unwrap());
+        let stored = archive.message(chat, "m1").unwrap().expect("row");
+        assert_eq!(stored.revoked_at, Some(200));
+        assert_eq!(stored.content, Content::text("message m1"));
+        assert!(
+            archive.set_revoked_at(chat, "m1", 300).unwrap(),
+            "a later revoke keeps the first time"
+        );
+        assert_eq!(
+            archive
+                .message(chat, "m1")
+                .unwrap()
+                .expect("row")
+                .revoked_at,
+            Some(200)
+        );
+        assert!(!archive.set_revoked_at(chat, "missing", 1).unwrap());
     }
 
     #[test]
@@ -2534,6 +2579,7 @@ mod sticker_tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 
@@ -2617,6 +2663,7 @@ mod media_path_tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 

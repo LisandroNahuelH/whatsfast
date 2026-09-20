@@ -162,6 +162,7 @@ fn append(app: &mut App, row: Message) {
             sender_name: row.sender_name.clone(),
             summary: row.summary(),
             status: row.status,
+            revoked_at: None,
         });
     }
     app.conversations

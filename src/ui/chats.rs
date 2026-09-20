@@ -1821,9 +1821,14 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
                 sender.paint(ui, pos2(x, line_y), preview_color);
                 x += width;
             }
+            let preview = if !app.settings.keep_revoked && last.revoked_at.is_some() {
+                i18n::t(Key::ChatMessageDeleted).to_owned()
+            } else {
+                last.summary.clone()
+            };
             widgets::line(
                 ui,
-                &crate::markup::plain(&app.resolve_mention_tokens(&last.summary), &[]),
+                &crate::markup::plain(&app.resolve_mention_tokens(&preview), &[]),
                 theme::regular(13.0),
                 preview_color,
                 (badge_right - x).max(0.0),

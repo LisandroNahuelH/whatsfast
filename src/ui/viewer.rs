@@ -19,6 +19,28 @@ const MAX_ZOOM: f32 = 8.0;
 const HEADER: f32 = 56.0;
 const STRIP: f32 = 76.0;
 const THUMB: f32 = 56.0;
+const STRIP_GAP: f32 = 8.0;
+
+// #region agent log
+fn agent_dbg(hypothesis_id: &str, location: &str, message: &str, data: &str) {
+    use std::io::Write;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(r"C:\OfiSync\0. Lisandro\0. Programacion\WhatsFast\debug-138664.log")
+    else {
+        return;
+    };
+    let _ = writeln!(
+        file,
+        "{{\"sessionId\":\"138664\",\"runId\":\"post-fix\",\"hypothesisId\":\"{hypothesis_id}\",\"location\":\"{location}\",\"message\":\"{message}\",\"data\":{data},\"timestamp\":{ts}}}"
+    );
+}
+// #endregion
 
 #[derive(Clone, Debug)]
 pub struct ImageViewer {
@@ -27,7 +49,6 @@ pub struct ImageViewer {
     pub zoom: f32,
     pub offset: egui::Vec2,
     dragging: bool,
-    scroll_to: bool,
     wheel: f32,
     pinch: f32,
 }
@@ -40,7 +61,6 @@ impl ImageViewer {
             zoom: 1.0,
             offset: egui::Vec2::ZERO,
             dragging: false,
-            scroll_to: true,
             wheel: 0.0,
             pinch: 1.0,
         }
@@ -92,6 +112,23 @@ fn panes(window: Rect) -> (Rect, Rect, Rect) {
     (header, stage, strip)
 }
 
+fn strip_side_pad(viewport_w: f32) -> f32 {
+    ((viewport_w - THUMB) * 0.5).max(0.0)
+}
+
+fn chevron_hit(stage: Rect, left: bool) -> Rect {
+    let x = if left {
+        stage.left() + 28.0
+    } else {
+        stage.right() - 28.0
+    };
+    Rect::from_center_size(pos2(x, stage.center().y), vec2(40.0, 40.0))
+}
+
+fn click_closes_viewer(pos: egui::Pos2, stage: Rect, media: Rect, left: Rect, right: Rect) -> bool {
+    stage.contains(pos) && !media.contains(pos) && !left.contains(pos) && !right.contains(pos)
+}
+
 pub fn neighbor_media<'a>(items: &'a [ChatMedia], current: &str, step: i8) -> Option<&'a str> {
     let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
     neighbor_ids(&ids, current, step)
@@ -125,10 +162,32 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             ui.expand_to_include_rect(screen);
             let (header, stage, strip) = panes(screen);
             let response = ui.interact(stage, ui.id().with("stage"), Sense::click_and_drag());
-            paint_stage(app, ui, &mut viewer, stage, &response);
+            let media = paint_stage(app, ui, &mut viewer, stage, &response);
             paint_header(app, ui, &viewer, header, &mut actions, &mut zoom_by);
-            paint_strip(app, ui, &mut viewer, strip, &mut actions);
+            paint_strip(app, ui, &viewer, strip, &mut actions);
             paint_chevrons(ui, &palette, stage, &mut actions);
+            if response.clicked()
+                && let Some(pos) = response.interact_pointer_pos()
+            {
+                let left = chevron_hit(stage, true);
+                let right = chevron_hit(stage, false);
+                let close = click_closes_viewer(pos, stage, media, left, right);
+                // #region agent log
+                agent_dbg(
+                    "C",
+                    "viewer.rs:show",
+                    "stage click",
+                    &format!(
+                        "{{\"close\":{close},\"in_media\":{},\"in_chevron\":{}}}",
+                        media.contains(pos),
+                        left.contains(pos) || right.contains(pos)
+                    ),
+                );
+                // #endregion
+                if close {
+                    actions.push(Action::CloseImageViewer);
+                }
+            }
         });
     if zoom_by != 0.0 {
         viewer.zoom = (viewer.zoom * zoom_by).clamp(MIN_ZOOM, MAX_ZOOM);
@@ -345,7 +404,7 @@ fn paint_stage(
     viewer: &mut ImageViewer,
     stage: Rect,
     response: &egui::Response,
-) {
+) -> Rect {
     let item = app
         .viewer_media
         .iter()
@@ -408,7 +467,7 @@ fn paint_stage(
 
     let inner = stage.shrink(12.0);
     if !ui.is_rect_visible(inner) {
-        return;
+        return inner;
     }
     if video {
         paint_video(
@@ -419,7 +478,7 @@ fn paint_stage(
             &viewer.message,
             inner,
         );
-        return;
+        return inner;
     }
     if let Some(path) = path.as_deref() {
         let image = egui::Image::new(util::image_uri(path));
@@ -429,6 +488,7 @@ fn paint_stage(
                 let size = fitted * viewer.zoom;
                 let rect = Rect::from_center_size(inner.center() + viewer.offset, size);
                 image.fit_to_exact_size(size).paint_at(ui, rect);
+                return rect;
             }
             Ok(egui::load::TexturePoll::Pending { .. }) => {
                 theme::paint_spinner(ui, inner, 28.0, Color32::WHITE);
@@ -437,9 +497,10 @@ fn paint_stage(
                 paint_placeholder(ui, thumbnail, &viewer.chat, &viewer.message, inner, false);
             }
         }
-        return;
+        return inner;
     }
     paint_placeholder(ui, thumbnail, &viewer.chat, &viewer.message, inner, false);
+    inner
 }
 
 fn paint_video(
@@ -513,7 +574,7 @@ fn paint_placeholder(
 fn paint_strip(
     app: &mut App,
     ui: &mut egui::Ui,
-    viewer: &mut ImageViewer,
+    viewer: &ImageViewer,
     rect: Rect,
     actions: &mut Vec<Action>,
 ) {
@@ -524,19 +585,50 @@ fn paint_strip(
     if items.is_empty() {
         return;
     }
-    let mut child = ui.new_child(UiBuilder::new().max_rect(rect.shrink2(vec2(8.0, 8.0))));
+    let inner = rect.shrink2(vec2(8.0, 8.0));
+    let pad = strip_side_pad(inner.width());
+    let mut child = ui.new_child(UiBuilder::new().max_rect(inner));
     egui::ScrollArea::horizontal()
         .id_salt("viewer-strip")
         .auto_shrink([false, false])
         .show(&mut child, |ui| {
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.spacing_mut().item_spacing.x = 0.0;
                 ui.set_min_height(THUMB);
-                for item in &items {
+                ui.add_space(pad);
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        ui.add_space(STRIP_GAP);
+                    }
                     let (thumb, response) =
                         ui.allocate_exact_size(vec2(THUMB, THUMB), Sense::click());
-                    if viewer.scroll_to && item.id == viewer.message {
-                        ui.scroll_to_rect(thumb, Some(egui::Align::Center));
+                    if item.id == viewer.message {
+                        ui.scroll_to_rect_animation(
+                            thumb,
+                            Some(egui::Align::Center),
+                            egui::style::ScrollAnimation::none(),
+                        );
+                        // #region agent log
+                        {
+                            use std::sync::atomic::{AtomicU32, Ordering};
+                            static FRAMES: AtomicU32 = AtomicU32::new(0);
+                            let n = FRAMES.fetch_add(1, Ordering::Relaxed);
+                            if n < 8 || n.is_multiple_of(30) {
+                                let cx = inner.center().x;
+                                agent_dbg(
+                                    "A",
+                                    "viewer.rs:paint_strip",
+                                    "thumb centre",
+                                    &format!(
+                                        "{{\"n\":{n},\"dx\":{:.1},\"index\":{index},\"count\":{},\"last\":{}}}",
+                                        thumb.center().x - cx,
+                                        items.len(),
+                                        index + 1 == items.len()
+                                    ),
+                                );
+                            }
+                        }
+                        // #endregion
                     }
                     if ui.is_rect_visible(thumb) {
                         paint_thumb(ui, &palette, item, thumb, item.id == viewer.message);
@@ -551,9 +643,9 @@ fn paint_strip(
                         });
                     }
                 }
+                ui.add_space(pad);
             });
         });
-    viewer.scroll_to = false;
 }
 
 fn paint_thumb(
@@ -607,16 +699,9 @@ fn paint_chevrons(
     stage: Rect,
     actions: &mut Vec<Action>,
 ) {
-    let mut left = ui.new_child(
-        UiBuilder::new()
-            .max_rect(Rect::from_center_size(
-                pos2(stage.left() + 28.0, stage.center().y),
-                vec2(40.0, 40.0),
-            ))
-            .layout(egui::Layout::centered_and_justified(
-                egui::Direction::LeftToRight,
-            )),
-    );
+    let mut left = ui.new_child(UiBuilder::new().max_rect(chevron_hit(stage, true)).layout(
+        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+    ));
     if theme::circle_button(
         &mut left,
         Icon::ChevronLeft,
@@ -630,16 +715,9 @@ fn paint_chevrons(
     {
         actions.push(Action::StepImage(-1));
     }
-    let mut right = ui.new_child(
-        UiBuilder::new()
-            .max_rect(Rect::from_center_size(
-                pos2(stage.right() - 28.0, stage.center().y),
-                vec2(40.0, 40.0),
-            ))
-            .layout(egui::Layout::centered_and_justified(
-                egui::Direction::LeftToRight,
-            )),
-    );
+    let mut right = ui.new_child(UiBuilder::new().max_rect(chevron_hit(stage, false)).layout(
+        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+    ));
     if theme::circle_button(
         &mut right,
         Icon::ChevronRight,
@@ -680,6 +758,55 @@ mod tests {
         assert!(stage.max.y <= strip.min.y + f32::EPSILON);
     }
 
+    #[test]
+    fn strip_padding_lets_the_last_thumb_sit_on_the_viewport_centre() {
+        let viewport = 1600.0;
+        let count = 50_usize;
+        let pad = strip_side_pad(viewport);
+        let first_center = pad + THUMB * 0.5;
+        assert!((first_center - viewport * 0.5).abs() < 0.01);
+        let last_center = pad + (count as f32 - 1.0) * (THUMB + STRIP_GAP) + THUMB * 0.5;
+        let content = pad * 2.0 + count as f32 * THUMB + (count as f32 - 1.0) * STRIP_GAP;
+        let needed = last_center - viewport * 0.5;
+        assert!((needed - (content - viewport)).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_click_on_the_dimmed_stage_closes_and_a_click_on_the_photo_does_not() {
+        let stage = Rect::from_min_size(pos2(0.0, 56.0), vec2(1600.0, 748.0));
+        let media = Rect::from_center_size(stage.center(), vec2(400.0, 300.0));
+        let left = chevron_hit(stage, true);
+        let right = chevron_hit(stage, false);
+        assert!(click_closes_viewer(
+            pos2(800.0, stage.min.y + 20.0),
+            stage,
+            media,
+            left,
+            right
+        ));
+        assert!(!click_closes_viewer(
+            media.center(),
+            stage,
+            media,
+            left,
+            right
+        ));
+        assert!(!click_closes_viewer(
+            left.center(),
+            stage,
+            media,
+            left,
+            right
+        ));
+        assert!(!click_closes_viewer(
+            pos2(800.0, 20.0),
+            stage,
+            media,
+            left,
+            right
+        ));
+    }
+
     fn photo(id: &str, path: Option<&str>) -> Message {
         Message {
             id: id.into(),
@@ -706,6 +833,7 @@ mod tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 

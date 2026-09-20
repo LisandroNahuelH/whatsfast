@@ -124,6 +124,8 @@ pub enum Key {
     SettingsShowSenderPicturesHint,
     SettingsNamesFromContacts,
     SettingsNamesFromContactsHint,
+    SettingsKeepRevoked,
+    SettingsKeepRevokedHint,
     SettingsSaveContacts,
     SettingsSaveContactsHint,
     SettingsForwardInOrder,
@@ -469,6 +471,7 @@ pub enum Key {
     KindVideo,
     ChatOpenInMap,
     ChatMessageDeleted,
+    ChatRevokedAt,
     ChatUnsupported,
     ChatPictureFailed,
     ChatPause,
@@ -795,7 +798,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, for the completeness tests.
-    pub const ALL: [Key; 788] = [
+    pub const ALL: [Key; 791] = [
         Key::SettingsThemeDark,
         Key::SettingsThemeLight,
         Key::SettingsThemeSystem,
@@ -917,6 +920,8 @@ impl Key {
         Key::SettingsShowSenderPicturesHint,
         Key::SettingsNamesFromContacts,
         Key::SettingsNamesFromContactsHint,
+        Key::SettingsKeepRevoked,
+        Key::SettingsKeepRevokedHint,
         Key::SettingsSaveContacts,
         Key::SettingsSaveContactsHint,
         Key::SettingsForwardInOrder,
@@ -1262,6 +1267,7 @@ impl Key {
         Key::KindVideo,
         Key::ChatOpenInMap,
         Key::ChatMessageDeleted,
+        Key::ChatRevokedAt,
         Key::ChatUnsupported,
         Key::ChatPictureFailed,
         Key::ChatPause,

@@ -1142,6 +1142,7 @@ impl App {
     /// Whether an outgoing message can still be revoked for everyone.
     pub fn can_revoke(&self, message: &Message) -> bool {
         message.from_me
+            && message.revoked_at.is_none()
             && !matches!(message.content, Content::Revoked)
             && crate::util::now() - message.timestamp <= REVOKE_WINDOW.as_secs() as i64
     }
@@ -4400,6 +4401,7 @@ mod tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 
@@ -4920,6 +4922,7 @@ mod name_tests {
             }],
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         };
         assert_eq!(app.message_text(&message), "ciao @Carmine");
     }
@@ -4955,6 +4958,7 @@ mod name_tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         };
         app.conversations.insert(
             chat.clone(),

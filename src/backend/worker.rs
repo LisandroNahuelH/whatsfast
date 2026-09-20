@@ -514,7 +514,7 @@ struct ParsedChat {
     /// Whether the phone reports more available history.
     more_on_phone: Option<bool>,
     messages: Vec<ParsedMessage>,
-    revoked: Vec<String>,
+    revoked: Vec<(String, i64)>,
     poll_updates: Vec<HistoryPollUpdate>,
     reactions: Vec<HistoryReaction>,
     pins: Vec<HistoryPin>,
@@ -1893,7 +1893,7 @@ impl Worker {
                 Some(Type::REVOKE) => {
                     if let Ok(true) =
                         self.archive
-                            .set_content(&chat, &target, &Content::Revoked, false)
+                            .set_revoked_at(&chat, &target, info.timestamp.timestamp())
                     {
                         self.emit_message(&chat, &target);
                         self.emit_chat(&chat);
@@ -1969,6 +1969,7 @@ impl Worker {
             mentions,
             forwarded: forwarded_of(base),
             thumbnail: thumbnail_of(base),
+            revoked_at: None,
         };
         let is_poll = matches!(row.content, Content::Poll { .. });
         self.remember_poll(&row, message, &info.source.sender.to_non_ad_string(), None);
@@ -2170,6 +2171,7 @@ impl Worker {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         };
         self.store_message(row, None, push_name.as_deref());
     }
@@ -2565,6 +2567,7 @@ impl Worker {
                     mentions,
                     forwarded: message.forwarded,
                     thumbnail: message.thumbnail,
+                    revoked_at: None,
                 };
                 let mut poll_history_received = false;
                 let raw =
@@ -2629,10 +2632,8 @@ impl Worker {
                     &update.update,
                 );
             }
-            for revoked in chat.revoked {
-                let _ = self
-                    .archive
-                    .set_content(&id, &revoked, &Content::Revoked, false);
+            for (revoked, at) in chat.revoked {
+                let _ = self.archive.set_revoked_at(&id, &revoked, at);
             }
             if (metadata || existing.is_none())
                 && let Some(snapshot_unread) = chat.unread
@@ -4076,6 +4077,7 @@ impl Worker {
             mentions,
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         };
         self.store_message(row, Some(message.encode_to_vec()), None);
         tokio::spawn(send_outgoing(
@@ -5836,6 +5838,7 @@ fn forwarded_row(
     source.mentions = mentions;
     source.forwarded = true;
     source.thumbnail = thumbnail;
+    source.revoked_at = None;
     source
 }
 
@@ -6757,6 +6760,7 @@ async fn file_outbound(
             .collect(),
         forwarded: false,
         thumbnail: prepared.thumbnail,
+        revoked_at: None,
     };
     Ok((row, prepared.message.encode_to_vec()))
 }
@@ -6820,7 +6824,7 @@ fn parse_conversation(conversation: wa::Conversation) -> ParsedChat {
             if protocol.r#type == Some(wa::message::protocol_message::Type::REVOKE)
                 && let Some(target) = protocol.key.as_option().and_then(|key| key.id.clone())
             {
-                revoked.push(target);
+                revoked.push((target, timestamp));
             }
             continue;
         }
@@ -7362,6 +7366,7 @@ mod tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: Some(vec![1]),
+            revoked_at: None,
         };
         let mention = MentionRef {
             user: "3".into(),
@@ -7584,6 +7589,7 @@ mod receipt_tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 
@@ -7922,6 +7928,36 @@ mod receipt_tests {
         assert_eq!(stored.reactions[0].emoji, "🏆");
         assert_eq!(stored.reactions[0].sender, reactor);
         assert!(!stored.reactions[0].from_me);
+    }
+
+    #[test]
+    fn a_revoke_marks_the_time_and_keeps_the_body() {
+        let (mut worker, _events, _inbox, _wa) = worker();
+        worker.store_message(incoming("keep", 100), None, None);
+        let raw = wa::Message {
+            protocol_message: MessageField::some(wa::message::ProtocolMessage {
+                r#type: Some(wa::message::protocol_message::Type::REVOKE),
+                key: MessageField::some(wa::MessageKey {
+                    id: Some("keep".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let info = MessageInfo {
+            source: MessageSource {
+                chat: PEER.parse().unwrap(),
+                sender: PEER.parse().unwrap(),
+                ..Default::default()
+            },
+            timestamp: whatsapp_rust::wacore::time::from_secs(250).unwrap(),
+            ..Default::default()
+        };
+        worker.ingest(&Arc::new(raw), &info);
+        let stored = worker.archive.message(PEER, "keep").unwrap().expect("row");
+        assert_eq!(stored.revoked_at, Some(250));
+        assert_eq!(stored.content, Content::text("hi"));
     }
 
     #[test]

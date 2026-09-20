@@ -147,6 +147,10 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsNamesFromContactsHint => {
             "Prefiere los nombres guardados en tu agenda. Si está desactivado, prefiere los nombres públicos del perfil de WhatsApp. Se aplica en toda la app."
         }
+        Key::SettingsKeepRevoked => "Conservar mensajes eliminados para todos",
+        Key::SettingsKeepRevokedHint => {
+            "Si alguien elimina un mensaje para todos, conserva el cuerpo original aquí y márcalo con un basurero. Apaga esto para mostrar el aviso habitual de mensaje eliminado. Los mensajes que ya se guardaron como eliminados no se pueden recuperar."
+        }
         Key::SettingsSaveContacts => "Guardar contactos en la agenda del teléfono",
         Key::SettingsSaveContactsHint => {
             "También añade a la agenda del teléfono los contactos guardados aquí. Si está desactivado, quedan como contactos de WhatsApp. Los nombres se sincronizan entre dispositivos igual."
@@ -560,6 +564,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::KindVideo => "Video",
         Key::ChatOpenInMap => "Abrir en el mapa",
         Key::ChatMessageDeleted => "Se eliminó este mensaje",
+        Key::ChatRevokedAt => "Eliminado {when}",
         Key::ChatUnsupported => "No compatible: {what}",
         Key::ChatPictureFailed => "No se pudo mostrar esta imagen. Haz clic para abrirla.",
         Key::ChatPause => "Pausar",

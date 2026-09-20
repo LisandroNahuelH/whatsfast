@@ -359,6 +359,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(
                         ui,
                         app,
+                        i18n::t(Key::SettingsKeepRevoked),
+                        i18n::t(Key::SettingsKeepRevokedHint),
+                        |settings| &mut settings.keep_revoked,
+                    );
+                    toggle(
+                        ui,
+                        app,
                         i18n::t(Key::SettingsSaveContacts),
                         i18n::t(Key::SettingsSaveContactsHint),
                         |settings| &mut settings.save_contacts_to_phone,

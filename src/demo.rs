@@ -239,6 +239,7 @@ fn message(chat: &str, id: &str, from_me: bool, timestamp: i64, content: Content
         mentions: Vec::new(),
         forwarded: false,
         thumbnail: None,
+        revoked_at: None,
     }
 }
 
@@ -504,6 +505,7 @@ pub fn populate(app: &mut App) {
                 sender_name: last.sender_name.clone(),
                 summary: last.summary(),
                 status: last.status,
+                revoked_at: None,
             });
         app.conversations.insert(sample.id.to_owned(), conversation);
         app.chats.push(chat);
@@ -704,6 +706,17 @@ pub fn populate(app: &mut App) {
             },
         ),
         message(ada, "ada-deleted", false, older + 60 * 25, Content::Revoked),
+        {
+            let mut kept = message(
+                ada,
+                "ada-kept",
+                false,
+                older + 60 * 26,
+                Content::text("Ada still left this body"),
+            );
+            kept.revoked_at = Some(older + 60 * 27);
+            kept
+        },
     ];
     let conversation = app.conversations.get_mut(ada).expect("sample chat");
     conversation.messages.splice(0..0, extra);
@@ -829,6 +842,7 @@ pub fn populate(app: &mut App) {
                 sender_name: last.sender_name.clone(),
                 summary: last.summary(),
                 status: last.status,
+                revoked_at: None,
             });
         }
     }
@@ -1468,6 +1482,11 @@ mod tests {
             ada.messages
                 .iter()
                 .any(|m| matches!(m.content, Content::Revoked))
+        );
+        assert!(
+            ada.messages
+                .iter()
+                .any(|m| m.revoked_at.is_some() && !matches!(m.content, Content::Revoked))
         );
         assert!(ada.messages.iter().any(|m| m.quoted.is_some()));
     }

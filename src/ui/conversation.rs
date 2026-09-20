@@ -1686,6 +1686,8 @@ struct View<'a> {
     starred: Option<&'a HashSet<String>>,
     /// Ids of the pinned messages of this chat, for the bubble menu and footer mark.
     pins: Option<&'a HashSet<String>>,
+    /// Keep original bodies after a sender revoke.
+    keep_revoked: bool,
     /// OpenMessage pulse: message id and whether this 200 ms slice washes the row.
     highlight: Option<(String, bool)>,
     /// Resolves a name with the message's stored name as fallback.
@@ -1755,6 +1757,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             .map(|selecting| &selecting.ids),
         starred: app.stars.get(&chat.id),
         pins: app.pins.get(&chat.id),
+        keep_revoked: app.settings.keep_revoked,
         highlight,
         names_or: &names_or,
         mention_names: &mention_names,
@@ -1883,7 +1886,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             if app.dialog.is_none()
                                 && app.picker.is_none()
                                 && app.image_viewer.is_none()
-                                && !matches!(message.content, Content::Revoked)
+                                && !as_deleted(message, view.keep_revoked)
                                 && ui.input(|input| {
                                     input.pointer.button_double_clicked(PointerButton::Primary)
                                         && input
@@ -2471,6 +2474,7 @@ fn bubble_frame(
                 slot,
                 view.starred.is_some_and(|ids| ids.contains(&message.id)),
                 view.pins.is_some_and(|ids| ids.contains(&message.id)),
+                view.keep_revoked,
             );
         });
     ui.ctx()
@@ -2480,7 +2484,7 @@ fn bubble_frame(
     // Picking messages takes over the bubble's left click, and the menu stays
     // shut while the selection bar is up.
     let selecting = view.selecting.is_some();
-    if !selecting && !matches!(message.content, Content::Revoked) && bubble.double_clicked() {
+    if !selecting && !as_deleted(message, view.keep_revoked) && bubble.double_clicked() {
         actions.push(Action::Reply(message.id.clone()));
     }
     // Read right-click from input because inner widgets own their responses.
@@ -2718,7 +2722,15 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 } + FOOTER_MARK_SLOT * 2.0
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + FOOTER_MARK_SLOT * 3.0
+}
+
+const FOOTER_STAR: Color32 = Color32::from_rgb(0xEA, 0xB3, 0x08);
+const FOOTER_PIN: Color32 = Color32::from_rgb(0x16, 0x65, 0x34);
+const FOOTER_TRASH: Color32 = Color32::from_rgb(0xDC, 0x3C, 0x2A);
+
+fn as_deleted(message: &Message, keep_revoked: bool) -> bool {
+    matches!(message.content, Content::Revoked) || (!keep_revoked && message.revoked_at.is_some())
 }
 
 /// Paints the time and ticks at the bubble's right edge without widening it.
@@ -2729,6 +2741,7 @@ fn footer(
     slot: Option<Rect>,
     starred: bool,
     pinned: bool,
+    keep_revoked: bool,
 ) {
     let font = theme::regular(11.0);
     let time = ui.painter().layout_no_wrap(
@@ -2772,33 +2785,98 @@ fn footer(
         );
     }
     if starred {
-        // Left of the time. The footer already reserved the slot, so showing
-        // the mark never changes the bubble's width.
         x -= FOOTER_MARK_SLOT;
         theme::paint_icon(
             ui,
-            Icon::Star,
+            Icon::StarFill,
             Rect::from_center_size(
                 pos2(x + FOOTER_MARK / 2.0, rect.center().y),
                 Vec2::splat(FOOTER_MARK),
             ),
             FOOTER_MARK,
-            palette.secondary,
+            FOOTER_STAR,
         );
     }
     if pinned {
         x -= FOOTER_MARK_SLOT;
         theme::paint_icon(
             ui,
-            Icon::Pin,
+            Icon::PinFill,
             Rect::from_center_size(
                 pos2(x + FOOTER_MARK / 2.0, rect.center().y),
                 Vec2::splat(FOOTER_MARK),
             ),
             FOOTER_MARK,
-            palette.secondary,
+            FOOTER_PIN,
         );
     }
+    if keep_revoked && let Some(at) = message.revoked_at {
+        x -= FOOTER_MARK_SLOT;
+        let icon = Rect::from_center_size(
+            pos2(x + FOOTER_MARK / 2.0, rect.center().y),
+            Vec2::splat(FOOTER_MARK),
+        );
+        theme::paint_icon(ui, Icon::TrashFill, icon, FOOTER_MARK, FOOTER_TRASH);
+        let hover = ui.interact(icon, ui.id().with(("revoked", &message.id)), Sense::hover());
+        revoked_popup(ui, palette, &message.id, at, icon, hover.hovered());
+    }
+}
+
+fn revoked_popup(
+    ui: &mut egui::Ui,
+    palette: &Palette,
+    id: &str,
+    at: i64,
+    icon: Rect,
+    hovering_icon: bool,
+) {
+    let popup_id = egui::Id::new(("revoked-at", id));
+    let over_popup = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(popup_id).unwrap_or(false));
+    if !hovering_icon && !over_popup {
+        return;
+    }
+    let when = crate::util::copy_stamp(at);
+    let text = i18n::f(I18nKey::ChatRevokedAt, &[("when", &when)]);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.clone(), theme::regular(12.5), palette.text);
+    let pad = 12.0;
+    let size = galley.size() + vec2(pad * 2.0, pad);
+    let area_rect = ui.ctx().content_rect();
+    let mut pos = pos2(icon.center().x - size.x / 2.0, icon.bottom() + 4.0);
+    pos.x = pos.x.clamp(
+        area_rect.left(),
+        (area_rect.right() - size.x).max(area_rect.left()),
+    );
+    if pos.y + size.y > area_rect.bottom() {
+        pos.y = icon.top() - 4.0 - size.y;
+    }
+    pos.y = pos.y.clamp(
+        area_rect.top(),
+        (area_rect.bottom() - size.y).max(area_rect.top()),
+    );
+    let popup = egui::Area::new(popup_id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(pos)
+        .show(ui.ctx(), |ui| {
+            widgets::menu_frame(palette)
+                .fill(palette.surface)
+                .inner_margin(Margin::same(8))
+                .show(ui, |ui| {
+                    theme::text(ui, text, theme::regular(12.5), palette.text);
+                });
+        })
+        .response
+        .rect;
+    let over = ui.input(|input| {
+        input
+            .pointer
+            .latest_pos()
+            .is_some_and(|pos| popup.contains(pos) || icon.contains(pos))
+    });
+    ui.ctx().data_mut(|data| data.insert_temp(popup_id, over));
 }
 
 fn reactions(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: &mut Vec<Action>) {
@@ -2971,13 +3049,13 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         });
         ui.close();
     }
-    if !matches!(message.content, Content::Revoked)
+    if !as_deleted(message, view.keep_revoked)
         && widgets::menu_item(ui, &palette, Some(Icon::Reply), i18n::t(I18nKey::ChatReply))
     {
         actions.push(Action::Reply(message.id.clone()));
     }
     let starred = view.starred.is_some_and(|ids| ids.contains(&message.id));
-    if !matches!(message.content, Content::Revoked)
+    if !as_deleted(message, view.keep_revoked)
         && widgets::menu_item(
             ui,
             &palette,
@@ -2997,7 +3075,7 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         ui.close();
     }
     let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
-    if !matches!(message.content, Content::Revoked)
+    if !as_deleted(message, view.keep_revoked)
         && widgets::menu_item(
             ui,
             &palette,
@@ -3015,15 +3093,18 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
             pinned: !pinned,
         });
     }
-    if !matches!(
-        message.content,
-        Content::Revoked | Content::Unsupported { .. } | Content::Poll { .. }
-    ) && widgets::menu_item(
-        ui,
-        &palette,
-        Some(Icon::Forward),
-        i18n::t(I18nKey::CommonForward),
-    ) {
+    if !as_deleted(message, view.keep_revoked)
+        && !matches!(
+            message.content,
+            Content::Unsupported { .. } | Content::Poll { .. }
+        )
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Forward),
+            i18n::t(I18nKey::CommonForward),
+        )
+    {
         actions.push(Action::ShowDialog(Dialog::Forward {
             chat: chat.clone(),
             messages: vec![message.id.clone()],
@@ -3058,7 +3139,8 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         && matches!(message.content, Content::Text { .. })
         && age <= crate::app::EDIT_WINDOW.as_secs() as i64;
     let can_revoke = message.from_me
-        && !matches!(message.content, Content::Revoked)
+        && !as_deleted(message, view.keep_revoked)
+        && message.revoked_at.is_none()
         && age <= crate::app::REVOKE_WINDOW.as_secs() as i64;
     if can_edit
         && widgets::menu_item(
@@ -3219,6 +3301,24 @@ fn content(
 ) -> Option<Rect> {
     let palette = view.palette;
     let own = message.from_me;
+    if as_deleted(message, view.keep_revoked) {
+        mirrored_row(
+            ui,
+            own,
+            |ui| {
+                theme::icon(ui, Icon::Ban, 14.0, palette.dim);
+            },
+            |ui| {
+                theme::text(
+                    ui,
+                    i18n::t(I18nKey::ChatMessageDeleted),
+                    theme::regular(13.5),
+                    palette.secondary,
+                );
+            },
+        );
+        return None;
+    }
     // Add non-text messages to cross-message transcript copies.
     let has_body = match &message.content {
         Content::Text { .. } => true,
@@ -4609,8 +4709,8 @@ mod tests {
         );
         output.textures_delta.clear();
         assert!(
-            incoming >= FOOTER_MARK_SLOT * 2.0,
-            "the footer keeps room for the star and pin marks before they appear"
+            incoming >= FOOTER_MARK_SLOT * 3.0,
+            "the footer keeps room for the star, pin, and trash marks before they appear"
         );
         assert!(
             own > incoming,
@@ -4622,24 +4722,52 @@ mod tests {
     fn the_footer_paints_a_pin_mark_when_the_message_is_pinned() {
         let ctx = egui::Context::default();
         let palette = Palette::dark();
-        let message = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
-        let shapes = |starred: bool, pinned: bool| {
+        let shapes = |starred: bool, pinned: bool, keep_revoked: bool, revoked: bool| {
+            let mut message = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
+            if revoked {
+                message.revoked_at = Some(1);
+            }
             let mut output = ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 200.0))),
                     ..Default::default()
                 },
                 |ui| {
-                    footer(ui, &palette, &message, None, starred, pinned);
+                    footer(ui, &palette, &message, None, starred, pinned, keep_revoked);
                 },
             );
             output.textures_delta.clear();
             output.shapes.len()
         };
-        let plain = shapes(false, false);
-        assert_eq!(shapes(true, false), plain + 1, "a star paints one mark");
-        assert_eq!(shapes(false, true), plain + 1, "a pin paints one mark");
-        assert_eq!(shapes(true, true), plain + 2, "star and pin both paint");
+        let plain = shapes(false, false, false, false);
+        assert_eq!(
+            shapes(true, false, false, false),
+            plain + 1,
+            "a star paints one mark"
+        );
+        assert_eq!(
+            shapes(false, true, false, false),
+            plain + 1,
+            "a pin paints one mark"
+        );
+        assert_eq!(
+            shapes(true, true, false, false),
+            plain + 2,
+            "star and pin both paint"
+        );
+        assert_eq!(
+            shapes(false, false, true, true),
+            plain + 1,
+            "a kept revoke paints a trash mark"
+        );
+    }
+
+    #[test]
+    fn footer_mark_tints_are_not_the_secondary() {
+        let palette = Palette::dark();
+        assert_ne!(FOOTER_STAR, palette.secondary);
+        assert_ne!(FOOTER_PIN, palette.secondary);
+        assert_ne!(FOOTER_TRASH, palette.secondary);
     }
 
     #[test]
@@ -4749,6 +4877,7 @@ mod reaction_tests {
             mentions: Vec::new(),
             forwarded: false,
             thumbnail: None,
+            revoked_at: None,
         }
     }
 
