@@ -10,11 +10,13 @@ coding agents and contributors. Structural detail lives in [ARCHITECTURE.md](ARC
 
 1. **Backup** files you will edit.
 2. **Build** — full checks in *Definition of done* below.
-2.1 **Debug exe** — after the last Rust change of the turn, run
-    `cargo build --locked` (default debug profile, incremental). If
-    `target/debug/whatsfast.exe` is running, stop that process first so
-    the linker can replace the file. Leave the new exe ready to try.
-    Do not use `--release` here.
+2.1 **Debug exe** — skip when `cargo watch` is already rebuilding this
+ repo (the watcher owns `target/debug/whatsfast.exe` and a second
+ compile waits on the lock). Otherwise after the last Rust change of
+ the turn, run `cargo build --locked` (default debug profile,
+ incremental). If `target/debug/whatsfast.exe` is running, stop that
+ process first so the linker can replace the file. Leave the new exe
+ ready to try. Do not use `--release` here.
 2.5 **Jev gate** when Rust source changed (quota; skip if no key).
 2.6 **Version** — every git commit (product or docs) bumps the app patch
     by 1. Scheme: `0.15.(100 + N)` where `N` is `git rev-list --count HEAD`
@@ -251,8 +253,9 @@ Three egui pitfalls this code has already hit:
 - `ui.horizontal` inside a right-aligned bubble lays out right to left;
   see `mirrored_row`. A bubble's own click target is registered before its
   contents (from last frame's rect) so links and quotes inside win clicks.
-  The empty strip beside it is registered earlier still, before the row. A
-  double-click on either replies; the body keeps it for selecting the word.
+  A double-click whose pointer sits on the message row (bubble or empty
+  strip) replies; inner labels may still select the word under the pointer.
+  The row does not take a second click widget over the bubble.
 - `Popup::context_menu` opens on the *response's* right-click, which those
   inner widgets take for themselves; the bubble reads the right-click from
   the input over its own rect and opens `Popup::menu` itself, so the menu
@@ -308,7 +311,8 @@ A release is not finished when the tag is pushed. For WhatsFast (no CI on GitHub
 
   Do not weaken a lint, delete a test, or add an `allow` merely to make
   them pass without explaining why the rule does not apply.
-- After Rust changed this turn, run `cargo build --locked` so
+- After Rust changed this turn, skip `cargo build --locked` when
+  `cargo watch` is already rebuilding. Otherwise run it so
   `target/debug/whatsfast.exe` is current. Incremental debug only. Stop
   that debug process first if Windows has the exe locked. A second launch
   surfaces the process that already holds the instance port, so an
