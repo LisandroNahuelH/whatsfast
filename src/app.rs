@@ -223,7 +223,7 @@ pub struct App {
     pub stars: HashMap<ChatId, HashSet<String>>,
     pub pinned: Vec<crate::archive::Pinned>,
     pub show_pinned: bool,
-    /// Ids of the pinned messages of each chat, for the menu and viewer.
+    /// Ids of the pinned messages of each chat, for the menu, viewer, and footer mark.
     pub pins: HashMap<ChatId, HashSet<String>>,
     /// Active pins of each chat, for the chips under the header.
     pub chat_pins: HashMap<ChatId, Vec<crate::archive::Pinned>>,

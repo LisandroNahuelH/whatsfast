@@ -1646,7 +1646,7 @@ struct View<'a> {
     selecting: Option<&'a HashSet<String>>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
-    /// Ids of the pinned messages of this chat, for the bubble menu.
+    /// Ids of the pinned messages of this chat, for the bubble menu and footer mark.
     pins: Option<&'a HashSet<String>>,
     /// OpenMessage pulse: message id and whether this 200 ms slice washes the row.
     highlight: Option<(String, bool)>,
@@ -2432,6 +2432,7 @@ fn bubble_frame(
                 message,
                 slot,
                 view.starred.is_some_and(|ids| ids.contains(&message.id)),
+                view.pins.is_some_and(|ids| ids.contains(&message.id)),
             );
         });
     ui.ctx()
@@ -2649,6 +2650,8 @@ fn mirrored_row(
 /// Room the footer keeps for the star mark, so a starred message does not
 /// change the bubble's width when the star appears.
 const STAR_MARK: f32 = 16.0;
+/// Same reservation for the pin mark.
+const PIN_MARK: f32 = 16.0;
 
 /// Width of the message footer.
 fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
@@ -2675,7 +2678,7 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 } + STAR_MARK
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + STAR_MARK + PIN_MARK
 }
 
 /// Paints the time and ticks at the bubble's right edge without widening it.
@@ -2685,6 +2688,7 @@ fn footer(
     message: &Message,
     slot: Option<Rect>,
     starred: bool,
+    pinned: bool,
 ) {
     let font = theme::regular(11.0);
     let time = ui.painter().layout_no_wrap(
@@ -2738,6 +2742,16 @@ fn footer(
                 pos2(x + STAR_MARK / 2.0, rect.center().y),
                 Vec2::splat(13.0),
             ),
+            13.0,
+            palette.secondary,
+        );
+    }
+    if pinned {
+        x -= PIN_MARK;
+        theme::paint_icon(
+            ui,
+            Icon::Pin,
+            Rect::from_center_size(pos2(x + PIN_MARK / 2.0, rect.center().y), Vec2::splat(13.0)),
             13.0,
             palette.secondary,
         );
@@ -4517,13 +4531,37 @@ mod tests {
         );
         output.textures_delta.clear();
         assert!(
-            incoming >= STAR_MARK,
-            "the footer keeps room for the star mark before a message is starred"
+            incoming >= STAR_MARK + PIN_MARK,
+            "the footer keeps room for the star and pin marks before they appear"
         );
         assert!(
             own > incoming,
             "our own messages also keep room for the delivery ticks"
         );
+    }
+
+    #[test]
+    fn the_footer_paints_a_pin_mark_when_the_message_is_pinned() {
+        let ctx = egui::Context::default();
+        let palette = Palette::dark();
+        let message = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
+        let shapes = |starred: bool, pinned: bool| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(400.0, 200.0))),
+                    ..Default::default()
+                },
+                |ui| {
+                    footer(ui, &palette, &message, None, starred, pinned);
+                },
+            );
+            output.textures_delta.clear();
+            output.shapes.len()
+        };
+        let plain = shapes(false, false);
+        assert_eq!(shapes(true, false), plain + 1, "a star paints one mark");
+        assert_eq!(shapes(false, true), plain + 1, "a pin paints one mark");
+        assert_eq!(shapes(true, true), plain + 2, "star and pin both paint");
     }
 
     #[test]
