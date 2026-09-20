@@ -4,7 +4,11 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Interface text lives in `src/i18n` key tables, never in a paint call | The compiler then forces a value for every locale, and the residual scan can name a string left in English | A runtime string map or gettext |
+| 2026-09-19 | The interface language is read at startup and from Settings, not rebuilt live | Tray and macOS menus are handed their labels when they are created | Repainting native menus on every settings change |
+| 2026-09-19 | Only English and Spanish, behind a `Language` enum | An enum keeps both tables exhaustive and the system option is resolved once | Loading locale files at runtime |
 | 2026-09-19 | Live watch runs `cargo build` before `taskkill` | Killing first left the window closed when compile was interrupted | `taskkill` then `cargo run` |
+| 2026-09-19 | Settings Downloads stats come from one archive SQL aggregate | Walking `cache/media` on the UI thread would stall; `media.size` is already in each row | Disk walk or a chart crate |
 | 2026-09-19 | Live `cargo watch` uses `-d 15` | Instant restart froze the PC and never wrote the debug exe | Watch crate paths with the default 0.5 s delay |
 | 2026-09-19 | Live `cargo watch` only watches `src`, `Cargo.toml`, `build.rs`, and `assets` | Markdown and `AGENTS/` restarts aborted the debug link before `whatsfast.exe` existed | Watch the whole tree, then `taskkill` and `cargo run` |
 | 2026-09-19 | Search day-filter calendar is a popup under the icon; a click elsewhere closes it | An inline month stole the pane and never closed on an outside click | Calendar filled the inspector until Escape, the icon, or a day |
