@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Live watch runs `cargo build` before `taskkill` | Killing first left the window closed when compile was interrupted | `taskkill` then `cargo run` |
 | 2026-09-19 | Live `cargo watch` uses `-d 15` | Instant restart froze the PC and never wrote the debug exe | Watch crate paths with the default 0.5 s delay |
 | 2026-09-19 | Live `cargo watch` only watches `src`, `Cargo.toml`, `build.rs`, and `assets` | Markdown and `AGENTS/` restarts aborted the debug link before `whatsfast.exe` existed | Watch the whole tree, then `taskkill` and `cargo run` |
 | 2026-09-19 | Search day-filter calendar is a popup under the icon; a click elsewhere closes it | An inline month stole the pane and never closed on an outside click | Calendar filled the inspector until Escape, the icon, or a day |
