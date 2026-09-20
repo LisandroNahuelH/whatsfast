@@ -2208,7 +2208,7 @@ mod tests {
 
     #[test]
     fn a_paste_is_seen_on_the_key_release() {
-        // Platforms may deliver only the Ctrl+V key release for image paste.
+        // egui-winit drops the Ctrl+V key press when it reads clipboard text.
         let mut app = app();
         let ctx = egui::Context::default();
         app.attach(&ctx);
@@ -2231,6 +2231,41 @@ mod tests {
         };
         frame_with(&mut app, &ctx, vec![plain]);
         assert!(!ctx.input(crate::app::wants_paste), "a plain V is typing");
+        let ctrl_then_v = vec![
+            egui::Event::Key {
+                key: egui::Key::ControlLeft,
+                physical_key: None,
+                pressed: false,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            },
+            egui::Event::Key {
+                key: egui::Key::V,
+                physical_key: None,
+                pressed: false,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ];
+        frame_with(&mut app, &ctx, ctrl_then_v);
+        assert!(
+            ctx.input(crate::app::wants_paste),
+            "Ctrl lifted in the same frame as V is still paste"
+        );
+    }
+
+    #[test]
+    fn a_paste_is_seen_on_a_text_paste_event() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![egui::Event::Paste("https://example".to_owned())],
+        );
+        assert!(ctx.input(crate::app::wants_paste));
     }
 
     #[test]
@@ -2255,6 +2290,35 @@ mod tests {
         });
         render(&mut app, &ctx);
         assert!(app.pending.is_empty(), "sent with the caption");
+    }
+
+    #[test]
+    fn a_second_paste_of_the_same_picture_is_ignored() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let pixels = vec![200; 16];
+        app.actions.push(crate::model::Action::PasteImage {
+            width: 2,
+            height: 2,
+            rgba: pixels.clone(),
+        });
+        render(&mut app, &ctx);
+        app.actions.push(crate::model::Action::PasteImage {
+            width: 2,
+            height: 2,
+            rgba: pixels,
+        });
+        render(&mut app, &ctx);
+        assert_eq!(app.pending.len(), 1, "same clipboard image once");
+        app.actions.push(crate::model::Action::PasteImage {
+            width: 2,
+            height: 2,
+            rgba: vec![10; 16],
+        });
+        render(&mut app, &ctx);
+        assert_eq!(app.pending.len(), 2, "a different picture still stages");
     }
 
     #[test]

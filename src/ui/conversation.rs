@@ -399,16 +399,16 @@ fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let response = ui
         .interact(bar, ui.id().with("pin-banner"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            let rects: Vec<Rect> = chips.iter().map(|(rect, _)| *rect).collect();
-            if let Some(index) = pin_banner_index(&rects, bar, pos) {
-                let row = &chips[index].1;
-                app.actions.push(Action::OpenMessage {
-                    chat: row.chat.clone(),
-                    message: row.id.clone(),
-                });
-            }
+    if response.clicked()
+        && let Some(pos) = response.interact_pointer_pos()
+    {
+        let rects: Vec<Rect> = chips.iter().map(|(rect, _)| *rect).collect();
+        if let Some(index) = pin_banner_index(&rects, bar, pos) {
+            let row = &chips[index].1;
+            app.actions.push(Action::OpenMessage {
+                chat: row.chat.clone(),
+                message: row.id.clone(),
+            });
         }
     }
 }

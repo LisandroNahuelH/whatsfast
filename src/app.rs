@@ -2902,8 +2902,7 @@ impl App {
                 height,
                 rgba,
             } => {
-                // Stage the files so the user can add a caption.
-                if self.open_chat.is_some() {
+                if self.open_chat.is_some() && !self.already_has_picture(width, height, &rgba) {
                     self.pending.push(Pending::Picture {
                         width,
                         height,
@@ -3552,7 +3551,7 @@ impl App {
 
     /// Handles dropped files and pasted images for the open chat.
     fn take_drops_and_pastes(&mut self, ctx: &egui::Context) {
-        let (dropped, hovering, paste) = ctx.input(|input| {
+        let (dropped, hovering, paste, text_paste, now, v_rel_plain) = ctx.input(|input| {
             let dropped: Vec<PathBuf> = input
                 .raw
                 .dropped_files
@@ -3560,26 +3559,93 @@ impl App {
                 .map(|file| file.path().to_path_buf())
                 .collect();
             let hovering = !input.raw.hovered_files.is_empty();
-            (dropped, hovering, wants_paste(input))
+            let text_paste = input
+                .events
+                .iter()
+                .any(|event| matches!(event, egui::Event::Paste(_)));
+            let v_rel_plain = input.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key {
+                        key: egui::Key::V,
+                        pressed: false,
+                        modifiers,
+                        ..
+                    } if !modifiers.command
+                )
+            });
+            (
+                dropped,
+                hovering,
+                wants_paste(input),
+                text_paste,
+                input.time,
+                v_rel_plain,
+            )
         });
         self.dropping = hovering && self.open_chat.is_some();
         if !dropped.is_empty() {
             self.actions.push(Action::SendFiles(dropped));
         }
+        let cmd_held = ctx.input(|input| input.modifiers.command || input.modifiers.ctrl);
+        let chord_id = egui::Id::new("clipboard-cmd-chord");
+        if cmd_held {
+            ctx.data_mut(|data| data.insert_temp(chord_id, now));
+        }
+        let chord = ctx
+            .data(|data| data.get_temp::<f64>(chord_id))
+            .is_some_and(|at| now - at < 0.45);
+        let paste = paste || (v_rel_plain && chord);
         // Handle image paste only when the composer or no field has focus.
         let composing = ctx.memory(|memory| {
             memory.has_focus(egui::Id::new("composer-text")) || memory.focused().is_none()
         });
         if paste && composing && self.open_chat.is_some() {
-            // egui handles text paste; the app handles clipboard images.
-            if let Some(image) = clipboard_image() {
-                self.actions.push(Action::PasteImage {
-                    width: image.0,
-                    height: image.1,
-                    rgba: image.2,
-                });
+            // egui-winit reads text on Ctrl+V press and drops the key press.
+            match clipboard_image() {
+                Ok(image) => {
+                    if !self.already_has_picture(image.0, image.1, &image.2) {
+                        ctx.input_mut(|input| {
+                            input
+                                .events
+                                .retain(|event| !matches!(event, egui::Event::Paste(_)));
+                        });
+                        self.actions.push(Action::PasteImage {
+                            width: image.0,
+                            height: image.1,
+                            rgba: image.2,
+                        });
+                    }
+                }
+                Err(error) => {
+                    log::warn!("clipboard image: {error}");
+                    if !text_paste && !matches!(error, arboard::Error::ContentNotAvailable) {
+                        self.toast(i18n::t(Key::ToastClipboardInvalid));
+                    }
+                }
             }
         }
+    }
+
+    /// True when this clipboard picture is already queued or staged.
+    fn already_has_picture(&self, width: usize, height: usize, rgba: &[u8]) -> bool {
+        let same = |w: usize, h: usize, bytes: &[u8]| w == width && h == height && bytes == rgba;
+        self.pending.iter().any(|item| match item {
+            Pending::Picture {
+                width: w,
+                height: h,
+                rgba: have,
+                ..
+            } => same(*w, *h, have),
+            Pending::File(_) => false,
+        }) || self.actions.iter().any(|action| match action {
+            Action::PasteImage {
+                width: w,
+                height: h,
+                rgba: have,
+            } => same(*w, *h, have),
+            _ => false,
+        })
     }
 
     /// Locks trackpad scrolling to one axis, scales Linux deltas, and adds glide.
@@ -3685,8 +3751,6 @@ impl App {
     }
 }
 
-/// Detects paste from the key release. egui consumes the press and emits a
-/// `Paste` event only for text, so image paste has no key-press event.
 /// Builds WhatsApp's full and short contact names. A first name is required.
 fn compose_name(first: &str, last: &str) -> (Option<String>, Option<String>) {
     let first = first.trim();
@@ -3745,28 +3809,52 @@ fn mention_refs(ids: &[String]) -> Vec<crate::model::MentionRef> {
         .collect()
 }
 
+/// Ctrl+V for images: egui-winit turns a press with clipboard text into
+/// `Paste` and never emits that key press. Image-only clips arrive on V-release.
 pub fn wants_paste(input: &egui::InputState) -> bool {
-    input.events.iter().any(|event| {
-        matches!(
-            event,
+    let mut v_release = false;
+    let mut v_cmd = false;
+    let mut ctrl_release = false;
+    for event in &input.events {
+        match event {
+            egui::Event::Paste(_) => return true,
             egui::Event::Key {
                 key: egui::Key::V,
                 pressed: false,
                 modifiers,
                 ..
-            } if modifiers.command
-        )
-    })
+            } => {
+                v_release = true;
+                v_cmd |= modifiers.command || modifiers.ctrl;
+            }
+            egui::Event::Key {
+                key: egui::Key::ControlLeft | egui::Key::ControlRight,
+                pressed: false,
+                ..
+            } => ctrl_release = true,
+            _ => {}
+        }
+    }
+    v_cmd
+        || (v_release
+            && (input.modifiers.command
+                || input.modifiers.ctrl
+                || input.key_down(egui::Key::ControlLeft)
+                || input.key_down(egui::Key::ControlRight)
+                || ctrl_release))
+}
+
+fn packed_rgba(width: usize, height: usize, bytes: Vec<u8>) -> Option<(usize, usize, Vec<u8>)> {
+    let pixels = width.checked_mul(height)?.checked_mul(4)?;
+    (width > 0 && height > 0 && bytes.len() == pixels).then_some((width, height, bytes))
 }
 
 /// Clipboard image as width, height, and straight-alpha RGBA.
-fn clipboard_image() -> Option<(usize, usize, Vec<u8>)> {
-    let mut clipboard = arboard::Clipboard::new().ok()?;
-    let image = clipboard.get_image().ok()?;
-    if image.width == 0 || image.height == 0 {
-        return None;
-    }
-    Some((image.width, image.height, image.bytes.into_owned()))
+fn clipboard_image() -> Result<(usize, usize, Vec<u8>), arboard::Error> {
+    let mut clipboard = arboard::Clipboard::new()?;
+    let image = clipboard.get_image()?;
+    packed_rgba(image.width, image.height, image.bytes.into_owned())
+        .ok_or(arboard::Error::ConversionFailure)
 }
 
 impl Delivery {
@@ -3784,6 +3872,13 @@ mod tests {
     fn app() -> App {
         let root = std::env::temp_dir().join(format!("whatsfast-app-{}", std::process::id()));
         App::headless(AppDirs::under(&root), Settings::default()).0
+    }
+
+    #[test]
+    fn clipboard_rgba_rejects_a_size_mismatch() {
+        assert!(packed_rgba(1, 1, vec![0; 3]).is_none());
+        assert!(packed_rgba(1, 1, vec![0; 4]).is_some());
+        assert!(packed_rgba(0, 1, vec![0; 4]).is_none());
     }
 
     #[test]
