@@ -135,7 +135,7 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 }
                 let picture = app.avatar(&chat.id);
                 let (subtitle, color) = subtitle(app, chat);
-                let right_controls = 52.0;
+                let right_controls = 72.0;
                 // Treat the avatar, name, and subtitle as one info button.
                 let block = ui
                     .scope(|ui| {
@@ -290,6 +290,18 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 app.actions.push(Action::CloseChat);
                             }
                         });
+                    if theme::icon_button(
+                        ui,
+                        Icon::Search,
+                        18.0,
+                        palette.secondary,
+                        palette.text,
+                        "Search (Ctrl+F)",
+                    )
+                    .clicked()
+                    {
+                        app.actions.push(Action::FocusSearch);
+                    }
                 });
             });
         });

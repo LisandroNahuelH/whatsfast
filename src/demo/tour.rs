@@ -1166,6 +1166,28 @@ mod tests {
     }
 
     #[test]
+    fn the_chat_header_search_focuses_the_sidebar_field() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        assert!(!app.focus_search);
+        // More is the rightmost 30px control; Search sits one slot left.
+        let search = pos2(1280.0 - 14.0 - 30.0 - 8.0 - 15.0, 8.0 + 22.0);
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(search, PointerButton::Primary),
+            0.1,
+            true,
+        );
+        assert!(app.focus_search, "header Search runs FocusSearch");
+        assert!(app.sidebar_visible);
+        assert_eq!(app.page, Page::Chats);
+    }
+
+    #[test]
     fn holding_a_pinned_row_starts_the_gesture_and_the_release_ends_it() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
