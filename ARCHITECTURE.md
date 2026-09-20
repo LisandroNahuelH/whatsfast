@@ -37,7 +37,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 - **`src/app.rs`** — Applies actions after each frame. A verified GitHub update
   in `.whatsfast-pending` is adopted here on process start (not in demos).
   Quit while the payload is Ready starts the helper; closing to the tray does
-  not.
+  not. Ctrl+V image paste reads `Event::Paste` or V-release (egui-winit drops
+  the press). A short Ctrl chord covers V-up after Ctrl-up. A picture already
+  staged in the composer is not attached again.
 - **`src/updates/`** — GitHub latest, SHA-256, helper `--apply-update`. Staging
   is `.whatsfast-pending` beside the install, with `prepared.json`. Click
   **Update** runs the helper now. The next process start does the same when
