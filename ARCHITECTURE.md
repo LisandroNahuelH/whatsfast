@@ -25,6 +25,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   with wheel zoom, click-and-drag pan, and previous/next among downloaded
   photos in that chat. Stickers, videos, and **Open file** still use the
   system handler.
+  `ui/pane.rs` is the right inspector (`RightPane`). Search is the first use:
+  one pane at a time, width persisted as `settings.inspector_width`. Header
+  Search and Ctrl+G open it; Ctrl+F stays on the left list. Closing the chat
+  closes the pane.
 - **`src/app.rs`** — Applies actions after each frame. A verified GitHub update
   in `.whatsfast-pending` is adopted here on process start (not in demos).
   Quit while the payload is Ready starts the helper; closing to the tray does
