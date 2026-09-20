@@ -46,6 +46,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   history prefetch asks the phone one page at a time and downloads files
   one at a time into the archive; it does not prepend those pages into the
   open conversation. A failed file is retried with backoff for 30 days.
+  `Command::StorageStats` runs one `json_extract` aggregate on the archive;
+  `Event::StorageStats` caches counts and `media.size` sums for Settings.
+  Weight is the persisted WhatsApp size of rows with a local path, not a
+  disk scan. GIFs (`Content::Video { gif: true }`) share the sticker bucket.
   Leaving a group uses `Client::groups().leave`. The chat row stays; `read_only`
   is set and `me` is dropped from `participants`. Archive is optional.
   Leaving a channel (`@newsletter`) uses `Client::newsletter().leave`. Lists
@@ -62,8 +66,22 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   incoming message clears the flag. `chats.favorite` and the `chat_lists` /
   `chat_list_members` / `chat_list_pins` tables are local list filters. Pins
   in All stay on `chats.pinned` and still sync with the phone. Pins on any
-  other chip live only in `chat_list_pins`.
+  other chip live only in `chat_list_pins`. `storage_stats()` sums downloaded
+  attachment sizes by JSON `kind` without loading message bodies.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
+- **`src/i18n/`** — Every interface string is a `Key` in an enum with an
+  English and a Spanish table (`key.rs`, `en.rs`, `es.rs`); `t`, `f`, and
+  `count` read the locale from a process-wide atomic. `Language` is the
+  persisted preference (`System`, `English`, `Spanish`); `System` asks the
+  operating system once and never reaches the tables. `main` resolves the
+  language from settings before the first frame, and Settings changes it live.
+  The tray item and the macOS menus take their language when they are built,
+  so a change shows there on restart. Tables and call-site replacements come
+  from `AGENTS/i18n-strings.json` through `AGENTS/i18n-gen.py`;
+  `AGENTS/i18n-residual.py` lists English text still painted, and
+  `tests/i18n_es.rs` renders every demo page in Spanish and fails on
+  leftovers. Protocol bytes, SQL, log lines, ids, and demo sample data stay
+  in English.
 
 See root `AGENTS.md` for invariants (privacy, polls, receipts, selection, updates).
 
