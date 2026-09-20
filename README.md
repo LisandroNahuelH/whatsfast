@@ -253,7 +253,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Starred messages with sidebar list and bubble previews
 
-- **Technical:** Messages can be starred from the chat; stars are stored in the archive and shown in a dedicated sidebar list with bubble-style previews (same rendering path as the main transcript).
+- **Technical:** Right-click a message and choose **Star** (or **Unstar**) in the bubble menu. Stars are stored in the archive and shown in a dedicated sidebar list with bubble-style previews (same rendering path as the main transcript). Multi-select and the media viewer use the same command.
 - **Daily use:** Bookmark decisions, links, and client notes and find them later without scrolling the whole history. The preview shows context so you know which star is which.
 
 </td>
