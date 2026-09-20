@@ -1854,6 +1854,27 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn chat_pins_list_newest_first_with_message_body() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        archive
+            .insert_message(&message("1@s.whatsapp.net", "old", 10, false), None)
+            .unwrap();
+        archive
+            .insert_message(&message("1@s.whatsapp.net", "new", 20, true), None)
+            .unwrap();
+        archive.pin("1@s.whatsapp.net", "old", 1, 1_000).unwrap();
+        archive.pin("1@s.whatsapp.net", "new", 2, 1_000).unwrap();
+        archive.pin("1@s.whatsapp.net", "ghost", 3, 1_000).unwrap();
+        let rows = archive.chat_pins("1@s.whatsapp.net", 50).unwrap();
+        let ids: Vec<&str> = rows.iter().map(|row| row.id.as_str()).collect();
+        assert_eq!(ids, vec!["new", "old"]);
+        assert_eq!(rows[0].text, "message new");
+        assert!(rows[0].from_me);
+        assert_eq!(archive.pinned(50, 10).unwrap().len(), 2);
+    }
+
+    #[test]
     fn chat_media_keeps_photos_and_videos_and_skips_gifs() {
         let archive = Archive::in_memory().unwrap();
         archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
