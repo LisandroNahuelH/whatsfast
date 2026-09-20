@@ -84,13 +84,13 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 - **Emoji, GIF, and sticker picker.** Search emoji and GIFs, use recent emoji and stickers, and save stickers with a right-click. Emoji autocomplete and picker search select their first match; use the arrow keys and Enter to choose it. GIF search needs a free GIPHY API key unless the build includes one.
 - **Sticker packs.** Import a pack from a `signal.art` link or `.wastickers` file. Animated packs remain animated. Packs are stored as WebP files on your computer.
 - **Consistent names.** Use names from your address book or public WhatsApp profile names across chats, replies, mentions, and notifications.
-- **Groups.** See members, sender names, and sender pictures. Announcement groups are read-only for non-admins.
+- **Groups.** See members, sender names, and sender pictures. Announcement groups are read-only for non-admins. Leave a group from the chat list, the chat menu, or the group card. Confirm to leave, or leave and archive the chat. Local history stays.
 - **Presence.** See online, last-seen, and typing status, and send your typing status.
 - **Idle rendering.** History-sync progress updates when data arrives. Animated stickers and GIFs play only while their message or picker tile is visible.
 - **Sync recovery.** A conflicting app-state collection is recovered through whatsapp-rust, including requesting a fresh snapshot from the paired phone when validation fails. Private read-state updates run one at a time. Failures pause the whole queue with backoff from 30 seconds to 15 minutes; pending reads remain saved and resume automatically. New messages can still arrive.
 - **Runs in the background.** Closing the window keeps WhatsFast linked in the system tray. Reopen it from the tray or by launching it again. Quit from the tray or with `Ctrl+Q`, or disable this behavior in Settings.
 - **Desktop notifications.** Get notifications with the chat picture when you are away from the open chat. Muted chats do not notify you. Windows notifications identify WhatsFast as the sender and show chat pictures as small circular icons; installed and portable builds register this identity in the current user's registry.
-- **Update notices.** With check and download enabled (both on by default), a sticky toast offers a one-click **Update**. That installs the GitHub release, restarts WhatsFast, and reopens the last chat. See [WhatsFast extras](#whatsfast-extras).
+- **Update notices.** With check and download enabled (both on by default), a sticky toast offers a one-click **Update**. That installs the GitHub release, restarts WhatsFast, and reopens the last chat. If you skip the toast, the next start applies the verified download. Closing to the tray does not install. See [WhatsFast extras](#whatsfast-extras).
 - **Themes.** Light, dark, follow the system, or a local JSON palette. Zoom with Ctrl+plus and Ctrl+minus.
 - **Copy text.** Select part of a message or copy across messages in WhatsApp's `[time, date] Name:` format. Contact names and numbers are also selectable.
 - **Keyboard shortcuts.** `Ctrl+K` searches, `Alt+↑/↓` switches chats and keeps the active chat visible in the list, `Esc` cancels the current action, `Ctrl+L` focuses the message input, and `Ctrl+/` lists all shortcuts. The × at the left of the shortcut hints hides the bar; restore it with **Show shortcut hints** in Settings.
@@ -135,12 +135,22 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top">
+
+### Leave a group, or leave and archive
+
+- **Technical:** **Leave group** is on the chat-list menu, the open-chat **More** menu, and the group card. A confirm dialog offers **Leave group** or **Leave group and archive**. The phone is told through `groups().leave`. The chat stays in the archive as read-only. The composer says **You left this group**.
+- **Daily use:** Leave a group from the list or the group photo without hunting Settings. Archive in the same step if you do not want the leftover chat in the inbox.
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### One-click in-app updates
 
-- **Technical:** With check and download enabled (both on by default), a sticky toast says a new version is available. One click on **Update** installs the GitHub release, restarts WhatsFast, and reopens the last chat. Installer and portable builds only; package-manager installs keep their own update path.
-- **Daily use:** You do not hunt for a setup file. Click Update when the toast appears, wait a few seconds, and keep working in the same chat.
+- **Technical:** With check and download enabled (both on by default), a sticky toast says a new version is available. One click on **Update** installs the GitHub release now, restarts WhatsFast, and reopens the last chat. If you skip the toast, Quit or the next launch installs the verified file. Closing to the tray is not a restart. Installer and portable builds only; package-manager installs keep their own update path.
+- **Daily use:** Click Update now, or keep working. The next time WhatsFast starts, it installs the file it already verified.
 
 </td>
 <td width="50%" valign="top">
@@ -248,7 +258,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 Download the latest `whatsfast-v*-*-pc-windows-msvc-setup.exe` from
 [GitHub Releases](https://github.com/LisandroNahuelH/whatsfast/releases).
-That is the only published package. The installer then updates itself from GitHub: a toast, one click on **Update**, and a restart back into your last chat.
+That is the only published package. The installer then updates itself from GitHub: a toast, one click on **Update**, or the next start if you skip the toast.
 
 <p align="center">
   <a href="https://github.com/LisandroNahuelH/whatsfast/releases">
@@ -307,7 +317,7 @@ After you edit a palette, run `whatsfast reload-themes`. The command also works 
 
 ### Updating WhatsFast
 
-WhatsFast checks GitHub once a day when **Check for updates** is enabled in Settings **About**. **Download updates automatically** is on by default. A sticky toast says a new version is available. Click **Update** to install the verified GitHub release, restart, and reopen the last chat. Downloads contact GitHub's API and release-asset hosts and are checked against the release's SHA-256 checksums. The updater keeps a backup and restores it if the updated app cannot start.
+WhatsFast checks GitHub once a day when **Check for updates** is enabled in Settings **About**. **Download updates automatically** is on by default. A sticky toast says a new version is available. Click **Update** to install the verified GitHub release now, restart, and reopen the last chat. If you skip the toast, the next start of WhatsFast (Quit, Ctrl+Q, or a later launch) installs the verified file. Closing the window to the tray does not install. Downloads contact GitHub's API and release-asset hosts and are checked against the release's SHA-256 checksums. The updater keeps a backup and restores it if the updated app cannot start.
 
 The in-app updater supports marked portable downloads and the Windows installer. Keep `whatsfast-portable.txt` beside a portable executable. A package-manager install, if you built one yourself, keeps that manager's update path. No account or additional service is needed.
 
