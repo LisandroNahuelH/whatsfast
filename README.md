@@ -85,6 +85,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 - **Sticker packs.** Import a pack from a `signal.art` link or `.wastickers` file. Animated packs remain animated. Packs are stored as WebP files on your computer.
 - **Consistent names.** Use names from your address book or public WhatsApp profile names across chats, replies, mentions, and notifications.
 - **Groups.** See members, sender names, and sender pictures. Announcement groups are read-only for non-admins. Leave a group from the chat list, the chat menu, or the group card. Confirm to leave, or leave and archive the chat. Local history stays.
+- **Channels.** Leave a channel from the chat list, the chat menu, or the channel card. Confirm to leave, or leave and archive. Local history stays.
 - **Presence.** See online, last-seen, and typing status, and send your typing status.
 - **Idle rendering.** History-sync progress updates when data arrives. Animated stickers and GIFs play only while their message or picker tile is visible.
 - **Sync recovery.** A conflicting app-state collection is recovered through whatsapp-rust, including requesting a fresh snapshot from the paired phone when validation fails. Private read-state updates run one at a time. Failures pause the whole queue with backoff from 30 seconds to 15 minutes; pending reads remain saved and resume automatically. New messages can still arrive.
@@ -141,6 +142,16 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 - **Technical:** **Leave group** is on the chat-list menu, the open-chat **More** menu, and the group card. A confirm dialog offers **Leave group** or **Leave group and archive**. The phone is told through `groups().leave`. The chat stays in the archive as read-only. The composer says **You left this group**.
 - **Daily use:** Leave a group from the list or the group photo without hunting Settings. Archive in the same step if you do not want the leftover chat in the inbox.
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+### Leave a channel, or leave and archive
+
+- **Technical:** **Leave channel** is on the chat-list menu, the open-chat **More** menu, and the channel card. A confirm dialog offers **Leave channel** or **Leave channel and archive**. The phone is told through `newsletter().leave`. The chat stays in the archive as read-only. The composer says **You left this channel**. Broadcast lists are not channels.
+- **Daily use:** Unfollow a channel from the list or the channel photo. Archive in the same step if you do not want the leftover chat in the inbox.
 
 </td>
 </tr>
