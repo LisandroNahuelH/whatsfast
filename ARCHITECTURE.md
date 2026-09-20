@@ -23,11 +23,12 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   Settings keeps a plain `palette.chat` fill.
   Clicking a downloaded chat photo opens `ui/viewer.rs`, a full-window overlay
   with wheel zoom, click-and-drag pan, and previous/next among downloaded
-  photos in that chat. Stickers, videos, and **Open file** still use the
-  system handler.
+  photos in that chat. Stickers and GIFs keep the click on the message
+  row. Videos and **Open file** still use the system handler.
   `ui/pane.rs` is the right inspector (`RightPane`). Search is the first use:
   one pane at a time, width persisted as `settings.inspector_width`. Header
-  Search and Ctrl+G open it; Ctrl+F stays on the left list. Closing the chat
+  Search and Ctrl+G open it; Ctrl+F stays on the left list. The day filter is
+  an `Area` popup under the calendar icon, centered on it. Closing the chat
   closes the pane.
 - **`src/app.rs`** — Applies actions after each frame. A verified GitHub update
   in `.whatsfast-pending` is adopted here on process start (not in demos).
