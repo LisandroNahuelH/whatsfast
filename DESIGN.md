@@ -28,4 +28,4 @@ Settings **Downloads** paints attachment weight as 6 px accent bars on a dim tra
 
 The media viewer is a full-window overlay: a 56 px header (avatar, name, last seen, zoom, go-to-message, reply, star, pin, react, forward, download, close), the photo or video in the centre, and a full-width filmstrip of that chat's images and videos. Reason: WhatsApp Web keeps actions and the rest of the album in reach; the gallery is the archive, not the loaded page.
 
-A message pin is not a chat pin. Pin for everyone for 7 days, at most three per chat, with a left-list copy of Starred and chips under the chat header. Reason: WhatsApp Web's pin-in-chat is a protocol act, and both surfaces are needed to find the pin later.
+A message pin is not a chat pin. Pin for everyone for 7 days, at most three per chat, with a left-list copy of Starred, chips under the chat header, and the same footer mark a star uses. Reason: WhatsApp Web's pin-in-chat is a protocol act, and the row itself must show the pin.
