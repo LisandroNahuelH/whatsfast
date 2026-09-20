@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Prefetch hover card sits to the right of the hovered list row | A card at the top of Settings did not point at the mode under the pointer | Card in the empty Settings margin (`settings_hover_slot`) |
 | 2026-09-19 | Interface text lives in `src/i18n` key tables, never in a paint call | The compiler then forces a value for every locale, and the residual scan can name a string left in English | A runtime string map or gettext |
 | 2026-09-19 | The interface language is read at startup and from Settings, not rebuilt live | Tray and macOS menus are handed their labels when they are created | Repainting native menus on every settings change |
 | 2026-09-19 | Only English and Spanish, behind a `Language` enum | An enum keeps both tables exhaustive and the system option is resolved once | Loading locale files at runtime |
