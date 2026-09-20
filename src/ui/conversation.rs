@@ -2648,11 +2648,12 @@ fn mirrored_row(
     });
 }
 
-/// Room the footer keeps for the star mark, so a starred message does not
-/// change the bubble's width when the star appears.
-const STAR_MARK: f32 = 16.0;
-/// Same reservation for the pin mark.
-const PIN_MARK: f32 = 16.0;
+/// Painted size of the pin and star marks in the bubble footer.
+const FOOTER_MARK: f32 = 13.0;
+/// One gap: time to the nearest mark, and between pin and star.
+const FOOTER_MARK_GAP: f32 = 8.0;
+/// Room one mark keeps, so showing it does not change the bubble's width.
+const FOOTER_MARK_SLOT: f32 = FOOTER_MARK + FOOTER_MARK_GAP;
 
 /// Width of the message footer.
 fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
@@ -2679,7 +2680,7 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 } + STAR_MARK + PIN_MARK
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + FOOTER_MARK_SLOT * 2.0
 }
 
 /// Paints the time and ticks at the bubble's right edge without widening it.
@@ -2733,27 +2734,30 @@ fn footer(
         );
     }
     if starred {
-        // A passive mark, left of the time. The footer already reserved its
-        // room, so showing it never changes the bubble's width.
-        x -= STAR_MARK;
+        // Left of the time. The footer already reserved the slot, so showing
+        // the mark never changes the bubble's width.
+        x -= FOOTER_MARK_SLOT;
         theme::paint_icon(
             ui,
             Icon::Star,
             Rect::from_center_size(
-                pos2(x + STAR_MARK / 2.0, rect.center().y),
-                Vec2::splat(13.0),
+                pos2(x + FOOTER_MARK / 2.0, rect.center().y),
+                Vec2::splat(FOOTER_MARK),
             ),
-            13.0,
+            FOOTER_MARK,
             palette.secondary,
         );
     }
     if pinned {
-        x -= PIN_MARK;
+        x -= FOOTER_MARK_SLOT;
         theme::paint_icon(
             ui,
             Icon::Pin,
-            Rect::from_center_size(pos2(x + PIN_MARK / 2.0, rect.center().y), Vec2::splat(13.0)),
-            13.0,
+            Rect::from_center_size(
+                pos2(x + FOOTER_MARK / 2.0, rect.center().y),
+                Vec2::splat(FOOTER_MARK),
+            ),
+            FOOTER_MARK,
             palette.secondary,
         );
     }
@@ -4552,7 +4556,7 @@ mod tests {
         );
         output.textures_delta.clear();
         assert!(
-            incoming >= STAR_MARK + PIN_MARK,
+            incoming >= FOOTER_MARK_SLOT * 2.0,
             "the footer keeps room for the star and pin marks before they appear"
         );
         assert!(
