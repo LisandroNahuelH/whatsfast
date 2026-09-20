@@ -995,7 +995,7 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
         }
         if let Some(presence) = app.presence.get(id) {
             let status = if presence.online {
-                "online".to_owned()
+                i18n::t(Key::ChatOnline).to_owned()
             } else if let Some(seen) = presence.last_seen {
                 i18n::f(
                     Key::DialogLastSeen,

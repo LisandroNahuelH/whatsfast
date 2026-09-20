@@ -79,7 +79,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 - **Voice messages.** Play, seek, record, reply with, and send voice messages in the chat. The playback speed cycles between 1x, 1.5x, and 2x from the bubble, keeping the speaker's pitch, and the last choice applies to later messages. The app normalizes quiet recordings and handles OGG/Opus without external tools.
 - **Send messages.** Press Enter to send text and Shift+Enter for a new line. You can swap these keys in Settings. The composer is focused when you open or return to a conversation; invoking search keeps focus in search, and Escape clears search and returns to the composer; another Escape closes the chat and saves your text draft. Open menus, dialogs, and unfinished actions are dismissed first. Type `:name` to autocomplete an emoji without leaving the composer, or `@` in a group to mention a member. Reply, react with any emoji, edit, forward, delete, and check when a message was sent, delivered, or read.
 - **Disappearing-message timers.** Outgoing messages use the chat's known timer, including replies, attachments, edits, and forwards. Forwarded copies use the destination chat's timer. Received messages remain in the local archive after they expire on the phone. A clock badge on chat avatars shows enabled timers and follows changes from the phone. Changing the default timer for new chats leaves existing chats alone.
-- **View attachments.** WhatsFast downloads files up to 64 MB automatically or on click. Photos, stickers, GIFs, voice messages, audio, locations, contacts, polls, and link previews appear in the chat. Clicking a downloaded photo opens an in-app viewer with zoom and pan (see [WhatsFast extras](#whatsfast-extras)). A click on a sticker or GIF uses the same bubble actions as text (reply, menu, select). Videos and documents open in their default desktop apps. If an attachment has expired, WhatsFast asks your phone to upload it again.
+- **View attachments.** WhatsFast downloads files up to 64 MB automatically or on click. Photos, stickers, GIFs, voice messages, audio, locations, contacts, polls, and link previews appear in the chat. Clicking a photo or video opens an in-app viewer with zoom, pan, and a gallery (see [WhatsFast extras](#whatsfast-extras)). A click on a sticker or GIF uses the same bubble actions as text (reply, menu, select). Documents open in their default desktop apps. If an attachment has expired, WhatsFast asks your phone to upload it again.
 - **Polls.** Use the checklist button beside the paperclip to create a poll with 2 to 12 answers. Turn off **Allow multiple answers** for a single-choice poll. Click an answer in a poll to vote; click a selected answer again to remove it. Results and your selection are retained in the encrypted archive, including votes received through phone history. Visible polls automatically request earlier votes from your phone. If it is offline, results are labelled incomplete and the request retries with backoff; no refresh button or relinking is needed. Voting needs the original poll's key; if that key is missing, the message explains that voting is available on your phone. Creating polls in disappearing-message chats is not yet supported by the protocol library's poll API, so WhatsFast blocks it instead of ignoring the timer.
 - **Emoji, GIF, and sticker picker.** Search emoji and GIFs, use recent emoji and stickers, and save stickers with a right-click. Emoji autocomplete and picker search select their first match; use the arrow keys and Enter to choose it. GIF search needs a free GIPHY API key unless the build includes one.
 - **Sticker packs.** Import a pack from a `signal.art` link or `.wastickers` file. Animated packs remain animated. Packs are stored as WebP files on your computer.
@@ -99,7 +99,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 
 ## What it does not do yet
 
-- Play ordinary videos in the app (they open in your player), or reply to a message with an attachment.
+- Reply to a message with an attachment.
 - Calls, status posts, communities, newsletters, and group administration.
 
 ## WhatsFast extras
@@ -186,10 +186,10 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 </td>
 <td width="50%" valign="top">
 
-### In-app photo viewer with zoom and pan
+### In-app media viewer with gallery and actions
 
-- **Technical:** Clicking a downloaded photo in a chat opens a full-window viewer in the app. The mouse wheel zooms toward the pointer, click-and-hold moves the photo, and the arrow keys (or on-screen chevrons) step to the previous or next downloaded photo in that chat. Escape, the close control, or a click on the dark background closes it. Stickers and GIFs keep the click on the message row. Videos and the bubble menu **Open file** still use the system handler.
-- **Daily use:** You can read a screenshot or a document photo without leaving WhatsFast or waiting for Photos to open. Zoom in on the part you need, move around, then go back to the thread.
+- **Technical:** Clicking a photo or video in a chat opens a full-window viewer. The header shows the chat and actions (zoom, go to the message, reply, star, pin, react, forward, download, close). A filmstrip along the bottom lists every image and video in that chat from the archive, oldest first. Arrow keys and chevrons step through that list, including items still downloading. Stickers and GIFs keep the click on the message row. **Open file** in the bubble menu still uses the system handler.
+- **Daily use:** You can walk a whole album without leaving WhatsFast, zoom a screenshot, reply or pin from the photo, and jump back to the message in the thread.
 
 </td>
 </tr>
@@ -254,6 +254,14 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 - **Technical:** Messages can be starred from the chat; stars are stored in the archive and shown in a dedicated sidebar list with bubble-style previews (same rendering path as the main transcript).
 - **Daily use:** Bookmark decisions, links, and client notes and find them later without scrolling the whole history. The preview shows context so you know which star is which.
+
+</td>
+<td width="50%" valign="top">
+
+### Pinned messages in the chat and the sidebar
+
+- **Technical:** Pin a message for everyone in the chat (WhatsApp `PIN_FOR_ALL`, 7 days, at most three active pins per chat). The pin is sent to the phone, stored in the archive, listed like Starred on the left, and shown as chips under the chat header. Unpin from the bubble menu or the media viewer.
+- **Daily use:** Keep a deadline, address, or decision at the top of a busy group without starring it into a private list only you can see.
 
 </td>
 </tr>
@@ -346,7 +354,7 @@ Only `archive.db` and its SQLite journal/WAL are encrypted. Device credentials i
 
 ### Interface language
 
-**Settings → Language** offers Follow system, English, and Español. Follow system reads the operating-system language once at startup; a machine set to Spanish opens in Spanish. The choice is saved in `settings.json` and applies at once, without a restart. Interface text is translated, including dates, the chat list, dialogs, and update notices; message bodies and contact names are never translated.
+**Settings → Language** offers Follow system, English, and Español. Follow system reads the operating-system language once at startup; a machine set to Spanish opens in Spanish. The choice is saved in `settings.json` and applies to the window at once; the tray item and the macOS menus take the chosen language when the app next starts. Interface text is translated, including dates, the chat list, dialogs, and update notices; message bodies and contact names are never translated.
 
 ### Local themes
 

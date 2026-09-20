@@ -623,6 +623,7 @@ pub fn populate(app: &mut App) {
             row.thumbnail = Some(sample_thumbnail(3));
             row
         },
+        message(ada, "ada-ack", false, base + 180, Content::text("Ship it.")),
     ];
     let extra = vec![
         {
@@ -707,6 +708,24 @@ pub fn populate(app: &mut App) {
     let conversation = app.conversations.get_mut(ada).expect("sample chat");
     conversation.messages.splice(0..0, extra);
     conversation.messages.extend(latest);
+    let now = crate::util::now();
+    app.pins.insert(
+        ada.to_owned(),
+        ["ada-reply".to_owned()].into_iter().collect(),
+    );
+    app.chat_pins.insert(
+        ada.to_owned(),
+        vec![crate::archive::Pinned {
+            chat: ada.to_owned(),
+            id: "ada-reply".into(),
+            pinned_at: now,
+            expires_at: now + 7 * 24 * 60 * 60,
+            text: "Listened, agreed on *all three* points.".into(),
+            from_me: true,
+            sent_at: base + 120,
+        }],
+    );
+    app.pinned = app.chat_pins.get(ada).cloned().unwrap_or_default();
 
     // Cover a group image, mentioned reply, and poll.
     let group = SAMPLES[1].id;
@@ -984,15 +1003,15 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         version: "99.0.0".into(),
                     })),
                     "update-failed" => DownloadState::Failed(
-                        "The download could not be verified. Try downloading it again.".into(),
+                        crate::i18n::t(crate::i18n::Key::UpdCouldNotVerifyDownload).into(),
                     ),
                     _ => DownloadState::Idle,
                 };
                 if part == "update-managed" {
-                    app.update_support = Some(Err(
-                        "Update this installation through your package manager or software center."
-                            .into(),
-                    ));
+                    app.update_support = Some(Err(crate::i18n::f(
+                        crate::i18n::Key::UpdThrough,
+                        &[("instruction", "your package manager")],
+                    )));
                 }
             }
             "poll" => {
@@ -1317,6 +1336,37 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         }
                     }
                 }
+                app.viewer_media = app
+                    .conversations
+                    .get(chat)
+                    .map(|conversation| {
+                        conversation
+                            .messages
+                            .iter()
+                            .filter_map(|message| match &message.content {
+                                crate::model::Content::Image { media, .. } => {
+                                    Some(crate::archive::ChatMedia {
+                                        id: message.id.clone(),
+                                        timestamp: message.timestamp,
+                                        video: false,
+                                        path: media.path.clone(),
+                                        thumbnail: message.thumbnail.clone(),
+                                    })
+                                }
+                                crate::model::Content::Video {
+                                    gif: false, media, ..
+                                } => Some(crate::archive::ChatMedia {
+                                    id: message.id.clone(),
+                                    timestamp: message.timestamp,
+                                    video: true,
+                                    path: media.path.clone(),
+                                    thumbnail: message.thumbnail.clone(),
+                                }),
+                                _ => None,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 app.image_viewer = Some(crate::ui::viewer::ImageViewer::open(
                     chat.to_owned(),
                     "ada-photo".into(),

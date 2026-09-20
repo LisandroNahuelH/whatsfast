@@ -34,20 +34,25 @@ def unescape_rust(s: str) -> str:
 LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
+DECL = re.compile(
+    r"(?s)^(pub\([^)]*\)\s+|pub\s+)?(unsafe\s+)?(const|static)\s+[A-Za-z_][A-Za-z_0-9]*\s*:"
+)
+
+
 def safe_literal(text: str, position: int) -> bool:
     """False for byte strings, raw strings, and const/static initializers.
 
     Those carry protocol bytes or compile-time data; translating the text
-    inside them breaks the wire format or does not compile.
+    inside them breaks the wire format or does not compile. A literal belongs
+    to a const/static only when the statement holding it *starts* with that
+    declaration: a `&'static str` in a signature, or an `=>` further up the
+    line, must not hide interface text.
     """
     prefix = text[max(0, position - 3) : position]
     if prefix.endswith(("b", "r", "br", "rb")):
         return False
-    window = text[max(0, position - 4000) : position]
-    const_at = max(window.rfind("const "), window.rfind("static "))
-    if const_at >= 0 and "}" not in window[const_at:]:
-        return False
-    return True
+    start = max(text.rfind(";", 0, position), text.rfind("}", 0, position))
+    return not DECL.match(text[start + 1 : position])
 
 
 def fmt_sites(path: pathlib.Path, name: str, items: list, applied: list) -> str | None:
@@ -198,6 +203,7 @@ def main() -> int:
 
     applied = 0
     skipped = 0
+    unmarked = 0
     state_path = ROOT / "AGENTS" / "i18n-sites-state.json"
     state = read_state(state_path)
     for site in data.get("sites", []):
@@ -207,22 +213,40 @@ def main() -> int:
             continue
         path = ROOT / site["file"]
         if "fmt_items" in site:
-            error = fmt_sites(path, site.get("name", site["file"]), site["fmt_items"], [])
-            if error:
-                print(error, file=sys.stderr)
-                return 1
-            state.add(sig)
-            applied += 1
-            continue
-        if "literals" in site:
-            error = literal_sites(
-                path, site.get("name", site["file"]), site["literals"], []
+            changed = []
+            error = fmt_sites(
+                path, site.get("name", site["file"]), site["fmt_items"], changed
             )
             if error:
                 print(error, file=sys.stderr)
                 return 1
-            state.add(sig)
-            applied += 1
+            if changed:
+                state.add(sig)
+                applied += 1
+            else:
+                unmarked += 1
+                print(
+                    f"note: {site.get('name', site['file'])}: nothing replaced; "
+                    "left unmarked for the next run"
+                )
+            continue
+        if "literals" in site:
+            changed = []
+            error = literal_sites(
+                path, site.get("name", site["file"]), site["literals"], changed
+            )
+            if error:
+                print(error, file=sys.stderr)
+                return 1
+            if changed:
+                state.add(sig)
+                applied += 1
+            else:
+                unmarked += 1
+                print(
+                    f"note: {site.get('name', site['file'])}: nothing replaced; "
+                    "left unmarked for the next run"
+                )
             continue
         text = path.read_text(encoding="utf-8")
         old, new = site["old"], site["new"]
@@ -250,19 +274,26 @@ def main() -> int:
             skipped += 1
             continue
         if count == 0:
-            # rustfmt reflows inserted code, so an applied site may no longer
-            # match its own `new` text. Treat it as applied and say so.
-            print(
-                f"note: anchor gone in {site['file']}: {old[:60]!r} (assumed applied)",
-                file=sys.stderr,
-            )
-            state.add(sig)
-            skipped += 1
+            if new in text:
+                # rustfmt reflows inserted code, so an applied site may no
+                # longer match its own `old` text. The replacement is there:
+                # the site is applied.
+                state.add(sig)
+                skipped += 1
+            else:
+                unmarked += 1
+                print(
+                    f"note: anchor gone in {site['file']}: {old[:60]!r} and no "
+                    "replacement found; left unmarked for the next run",
+                    file=sys.stderr,
+                )
             continue
         print(f"ANCHOR {count}x in {site['file']}: {old[:70]!r}", file=sys.stderr)
         return 1
     state_path.write_text(json.dumps(sorted(state), indent=0) + "\n", encoding="utf-8")
-    print(f"call sites applied: {applied}, already applied: {skipped}")
+    print(
+        f"call sites applied: {applied}, already applied: {skipped}, unmarked: {unmarked}"
+    )
     return 0
 
 

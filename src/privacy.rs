@@ -39,27 +39,25 @@ impl PrivacyKind {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::LastSeen => "Last seen",
-            Self::Online => "Online",
-            Self::Profile => "Profile photo",
-            Self::About => "About",
-            Self::GroupAdd => "Who can add me to groups",
-            Self::ReadReceipts => "Read receipts",
-            Self::CallAdd => "Who can call me",
-            Self::Messages => "Who can message me",
+            Self::LastSeen => i18n::t(Key::PrivacyLastSeen),
+            Self::Online => i18n::t(Key::PrivacyOnline),
+            Self::Profile => i18n::t(Key::PrivacyProfilePhoto),
+            Self::About => i18n::t(Key::PrivacyAbout),
+            Self::GroupAdd => i18n::t(Key::PrivacyGroupsAdd),
+            Self::ReadReceipts => i18n::t(Key::PrivacyReadReceipts),
+            Self::CallAdd => i18n::t(Key::PrivacyCalls),
+            Self::Messages => i18n::t(Key::PrivacyMessages),
         }
     }
 
     pub fn hint(self) -> &'static str {
         match self {
-            Self::LastSeen => "When people can see you were last using WhatsApp.",
-            Self::Online => "When people can see you are online now.",
-            Self::Profile => "Who can see your profile photo.",
-            Self::About => "Who can see your About text. This is not the Status tab.",
-            Self::GroupAdd => "Who can add you to a group.",
-            Self::ReadReceipts => {
-                "Everyone or nobody on this WhatsApp account. The Chats switch still applies to this copy."
-            }
+            Self::LastSeen => i18n::t(Key::PrivacyLastSeenHint),
+            Self::Online => i18n::t(Key::PrivacyOnlineHint),
+            Self::Profile => i18n::t(Key::PrivacyProfilePhotoHint),
+            Self::About => i18n::t(Key::PrivacyAboutHint),
+            Self::GroupAdd => i18n::t(Key::PrivacyGroupsHint),
+            Self::ReadReceipts => i18n::t(Key::PrivacyReceiptsHint),
             Self::CallAdd => i18n::t(Key::PrivacyCallsHint),
             Self::Messages => i18n::t(Key::PrivacyMessagesHint),
         }
@@ -67,11 +65,11 @@ impl PrivacyKind {
 
     pub fn except_title(self) -> &'static str {
         match self {
-            Self::LastSeen => "Hide last seen from",
-            Self::Profile => "Hide profile photo from",
-            Self::About => "Hide About from",
-            Self::GroupAdd => "Who cannot add you to groups",
-            _ => "Except",
+            Self::LastSeen => i18n::t(Key::PrivacyHideLastSeen),
+            Self::Profile => i18n::t(Key::PrivacyHidePhoto),
+            Self::About => i18n::t(Key::PrivacyHideAbout),
+            Self::GroupAdd => i18n::t(Key::PrivacyWhoCannotAdd),
+            _ => i18n::t(Key::PrivacyExcept),
         }
     }
 
@@ -153,12 +151,12 @@ pub enum PrivacyChoice {
 impl PrivacyChoice {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Everyone => "Everyone",
-            Self::Contacts => "My contacts",
-            Self::Except => "Except…",
-            Self::Nobody => "Nobody",
-            Self::SameAsLastSeen => "Same as last seen",
-            Self::ContactsAndKnown => "My contacts and other people with my number",
+            Self::Everyone => i18n::t(Key::PrivacyEveryone),
+            Self::Contacts => i18n::t(Key::PrivacyMyContacts),
+            Self::Except => i18n::t(Key::PrivacyExceptEllipsis),
+            Self::Nobody => i18n::t(Key::PrivacyNobody),
+            Self::SameAsLastSeen => i18n::t(Key::PrivacySameAsLastSeen),
+            Self::ContactsAndKnown => i18n::t(Key::PrivacyContactsWithNumber),
         }
     }
 

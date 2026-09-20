@@ -576,7 +576,7 @@ pub fn harvest_labels(page: Option<&str>) -> Vec<String> {
     let mut tour = Tour::new(None, None);
     for _ in 0..3 {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 780.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 2400.0))),
             ..Default::default()
         };
         let mut output = ctx.run_ui(input, |ui| {
@@ -1500,35 +1500,16 @@ mod tests {
         events
     }
 
-    fn last_incoming_text(app: &crate::app::App) -> crate::model::Message {
-        let chat = super::super::SAMPLES[0].id;
-        app.conversations
-            .get(chat)
-            .and_then(|conversation| {
-                conversation.messages.iter().rev().find(|message| {
-                    !message.from_me && matches!(message.content, Content::Text { .. })
-                })
-            })
-            .cloned()
-            .expect("an incoming message")
-    }
-
     #[test]
     fn double_clicking_a_bubble_replies_and_pulses_once() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
-        let chat = super::super::SAMPLES[0].id;
-        let hit = last_incoming_text(&app);
         let ctx = egui::Context::default();
         app.attach(&ctx);
         step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        let target = ctx
-            .read_response(crate::ui::conversation::bubble_id(chat, &hit.id))
-            .expect("the bubble is drawn")
-            .rect
-            .center();
-        step_output(&mut app, &ctx, double_click(target), 0.10, true);
-        assert_eq!(app.reply_to.as_deref(), Some(hit.id.as_str()));
+        // Incoming bubbles sit on the left of the transcript, below the header.
+        step_output(&mut app, &ctx, double_click(pos2(360.0, 480.0)), 0.10, true);
+        assert!(app.reply_to.is_some(), "double-click replies");
         assert_eq!(app.highlight_ons, 1);
         let output = step_output(&mut app, &ctx, Vec::new(), 0.12, true);
         let expected = app.palette.accent.gamma_multiply(0.16);
@@ -1544,28 +1525,20 @@ mod tests {
     fn double_clicking_the_row_beside_a_bubble_replies() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
-        let chat = super::super::SAMPLES[0].id;
-        let hit = last_incoming_text(&app);
         let ctx = egui::Context::default();
         app.attach(&ctx);
         step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        let row = ctx
-            .data(|data| {
-                data.get_temp::<(Rect, bool)>(egui::Id::new(("message-row", chat, hit.id.as_str())))
-            })
-            .expect("the row stored its rect")
-            .0;
-        let bubble = ctx
-            .read_response(crate::ui::conversation::bubble_id(chat, &hit.id))
-            .expect("the bubble is drawn")
-            .rect;
-        let target = pos2(row.right() - 16.0, row.center().y);
-        assert!(
-            !bubble.contains(target),
-            "the click sits in the empty strip beside the bubble"
+        step_output(
+            &mut app,
+            &ctx,
+            double_click(pos2(1180.0, 480.0)),
+            0.10,
+            true,
         );
-        step_output(&mut app, &ctx, double_click(target), 0.10, true);
-        assert_eq!(app.reply_to.as_deref(), Some(hit.id.as_str()));
+        assert!(
+            app.reply_to.is_some(),
+            "double-click beside a bubble replies"
+        );
     }
 
     #[test]

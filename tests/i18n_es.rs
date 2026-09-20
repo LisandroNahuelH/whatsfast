@@ -24,6 +24,29 @@ const PAGES: &[Option<&str>] = &[
     Some("info"),
     Some("mention"),
     Some("light"),
+    Some("privacy-except"),
+    Some("image-viewer"),
+    Some("poll"),
+    Some("update-failed"),
+];
+
+/// Least number of labels each page must paint, measured on a green run. A
+/// page that stops painting its rows fails here instead of passing silently.
+const FLOOR: &[(Option<&str>, usize)] = &[
+    (None, 81),
+    (Some("empty"), 40),
+    (Some("settings"), 111),
+    (Some("login"), 11),
+    (Some("pair"), 13),
+    (Some("shortcuts"), 114),
+    (Some("about"), 89),
+    (Some("info"), 90),
+    (Some("mention"), 66),
+    (Some("light"), 81),
+    (Some("privacy-except"), 116),
+    (Some("image-viewer"), 78),
+    (Some("poll"), 66),
+    (Some("update-failed"), 84),
 ];
 
 /// English templates whose Spanish text differs: a label equal to one of these
@@ -53,9 +76,13 @@ fn no_english_label_is_left_on_a_spanish_page() {
     let mut failures = Vec::new();
     for page in PAGES {
         let labels = harvest_labels(*page);
+        let floor = FLOOR
+            .iter()
+            .find(|(name, _)| *name == *page)
+            .map_or(3, |(_, count)| *count);
         assert!(
-            labels.len() >= 3,
-            "page {page:?} painted {} labels; the harvest is broken",
+            labels.len() >= floor,
+            "page {page:?} painted {} labels; the floor is {floor}, so the harvest lost coverage",
             labels.len()
         );
         for label in &labels {

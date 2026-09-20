@@ -27,16 +27,39 @@ SKIP_FILES = {
 }
 
 
+DECL = re.compile(
+    r"(?s)^(pub\([^)]*\)\s+|pub\s+)?(unsafe\s+)?(const|static)\s+[A-Za-z_][A-Za-z_0-9]*\s*:"
+)
+
+
+# Text collisions that are not interface: the protocol's own wire value and a
+# TLD inside the link parser. Translating either one breaks the wire format or
+# the parser, so the scan skips them by (file, text).
+SCAN_EXCLUDE = {
+    ("src/privacy.rs", "online"),
+    ("src/markup.rs", "online"),
+    # Legacy stand-ins kept on purpose: `is_fallback_name` recognizes the
+    # localized names written by older builds. They are data, not interface.
+    ("src/model.rs", "Group"),
+    ("src/model.rs", "Grupo"),
+    ("src/model.rs", "You"),
+    ("src/model.rs", "Tú"),
+    ("src/model.rs", "Tu"),
+}
+
+
 def safe_literal(text: str, position: int) -> bool:
-    """False for byte strings, raw strings, and const/static initializers."""
+    """False for byte strings, raw strings, and const/static initializers.
+
+    A literal belongs to a const/static only when the statement holding it
+    starts with that declaration: a `&'static str` in a signature, or an `=>`
+    further up the line, must not hide interface text.
+    """
     prefix = text[max(0, position - 3) : position]
     if prefix.endswith(("b", "r", "br", "rb")):
         return False
-    window = text[max(0, position - 4000) : position]
-    const_at = max(window.rfind("const "), window.rfind("static "))
-    if const_at >= 0 and "}" not in window[const_at:]:
-        return False
-    return True
+    start = max(text.rfind(";", 0, position), text.rfind("}", 0, position))
+    return not DECL.match(text[start + 1 : position])
 
 
 def unescape(s: str) -> str:
@@ -98,6 +121,8 @@ def main() -> int:
             for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', line):
                 content = unescape(m.group(1))
                 if content not in english:
+                    continue
+                if (rel, content) in SCAN_EXCLUDE:
                     continue
                 if not safe_literal(text, line_offset + m.start()):
                     continue

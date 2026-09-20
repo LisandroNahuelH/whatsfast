@@ -563,9 +563,31 @@ impl StorageStats {
 
 /// Prefetch gives up this many seconds after the first failed download.
 pub const MEDIA_RETRY_TTL_SECS: i64 = 30 * 24 * 60 * 60;
-pub const MEDIA_STILL_TRYING: &str =
-    "We are still trying to get this file automatically. Click to retry manually.";
-pub const MEDIA_NO_LONGER: &str = "No longer available on WhatsApp's servers";
+/// Notice shown in the bubble while a failed download is retried for us.
+pub fn media_still_trying() -> &'static str {
+    crate::i18n::t(crate::i18n::Key::ChatRetryFile)
+}
+
+/// Notice shown in the bubble once the file left WhatsApp's servers.
+pub fn media_no_longer() -> &'static str {
+    crate::i18n::t(crate::i18n::Key::ChatFileGone)
+}
+
+/// Stored stand-in for a chat whose real name is still unknown. Never
+/// translated: the archive persists it, and the views paint the localized
+/// name (`KindGroup` or `DisplayYou`) while it stands for the real one.
+pub const FALLBACK_NAME: &str = "\u{1}fallback";
+
+/// True when a stored chat name is a stand-in instead of a real name. Files
+/// written before the marker existed kept the localized text, so those count
+/// as well.
+pub fn is_fallback_name(name: &str, group: bool) -> bool {
+    name == FALLBACK_NAME
+        || matches!(
+            (name, group),
+            ("Group" | "Grupo", true) | ("You" | "Tú" | "Tu", false)
+        )
+}
 
 /// Backoff after `fails` attempts: 30 s doubling to 15 min, then 1 h.
 pub fn media_retry_delay_secs(fails: u32) -> i64 {
@@ -582,9 +604,9 @@ pub fn media_retry_delay_secs(fails: u32) -> i64 {
 
 pub fn media_retry_notice(retry_from: i64, now: i64) -> &'static str {
     if now.saturating_sub(retry_from) >= MEDIA_RETRY_TTL_SECS {
-        MEDIA_NO_LONGER
+        media_no_longer()
     } else {
-        MEDIA_STILL_TRYING
+        media_still_trying()
     }
 }
 
@@ -839,18 +861,23 @@ pub enum Action {
     CancelRecording,
     SendRecording,
     OpenFile(PathBuf),
-    /// Opens a downloaded chat photo in the in-app viewer.
+    /// Opens a chat photo or video in the in-app viewer.
     ViewImage {
         chat: ChatId,
         message: String,
     },
     CloseImageViewer,
-    /// Steps to another downloaded photo in the same chat. Does not wrap.
+    /// Steps to another image or video in the same chat. Does not wrap.
     StepImage(i8),
     OpenUrl(String),
     CopyText(String),
     /// Starts a reply to a message in the open chat.
     Reply(String),
+    /// Closes the viewer, jumps to the message, and replies with three pulses.
+    ReplyFromViewer {
+        chat: ChatId,
+        message: String,
+    },
     CancelReply,
     /// Forwards archived messages to another chat.
     Forward {
@@ -878,6 +905,8 @@ pub enum Action {
     ToggleScheduled,
     /// Shows or hides the starred messages in the left panel.
     ToggleStarred,
+    /// Shows or hides the pinned messages in the left panel.
+    TogglePinned,
     /// Writes the new order of the pinned chats, top first.
     ReorderPinned(Vec<ChatId>),
     /// Removes a scheduled message.
@@ -902,6 +931,12 @@ pub enum Action {
         chat: ChatId,
         messages: Vec<String>,
         starred: bool,
+    },
+    /// Pins or unpins one message for everyone in the chat.
+    SetMessagePinned {
+        chat: ChatId,
+        message: String,
+        pinned: bool,
     },
     /// Loads an outgoing message into the composer for editing.
     Edit(String),
@@ -1232,10 +1267,10 @@ mod tests {
         assert_eq!(media_retry_delay_secs(1), 30);
         assert_eq!(media_retry_delay_secs(6), 900);
         assert_eq!(media_retry_delay_secs(7), 3600);
-        assert_eq!(media_retry_notice(10, 10), MEDIA_STILL_TRYING);
+        assert_eq!(media_retry_notice(10, 10), media_still_trying());
         assert_eq!(
             media_retry_notice(10, 10 + MEDIA_RETRY_TTL_SECS),
-            MEDIA_NO_LONGER
+            media_no_longer()
         );
         let mut media = media();
         media.schedule_retry(1_000, false);

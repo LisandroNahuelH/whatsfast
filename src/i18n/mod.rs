@@ -223,6 +223,8 @@ pub(crate) const ALLOWED_IDENTICAL: &[Key] = &[
     // The interface word for "chats" and the "Zoom" label stay as they are.
     Key::SettingsSectionChats,
     Key::SettingsZoomLabel,
+    // "Video" and "Videos" are the same word in both languages.
+    Key::SettingsStorageVideos,
     Key::DateShort,
     Key::DateShortWeekday,
     Key::DateStampShort,
@@ -327,15 +329,7 @@ mod tests {
         assert_eq!(locale_from_tag(""), Locale::En);
     }
 
-    #[test]
-    fn a_startup_language_is_read_back() {
-        let previous = language();
-        set_language(Language::Spanish);
-        assert_eq!(language(), Locale::Es);
-        assert_eq!(t(Key::SettingsThemeDark), "Oscuro");
-        set_language(Language::English);
-        assert_eq!(language(), Locale::En);
-        assert_eq!(t(Key::SettingsThemeDark), "Dark");
-        assert_eq!(previous, Locale::En);
-    }
+    // `a_startup_language_is_read_back` lives in tests/i18n_language.rs: it
+    // flips the process-wide language, which would race the tests that paint
+    // English labels in this same binary.
 }

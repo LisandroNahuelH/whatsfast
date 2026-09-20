@@ -3,7 +3,7 @@
 //! Each message keeps its raw protobuf because attachment download keys may be
 //! needed long after history sync.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -13,13 +13,25 @@ use crate::model::{
 
 mod encryption;
 mod lists;
+mod pins;
 mod polls;
 mod receipts;
 mod scheduled;
 mod stars;
+pub use pins::Pinned;
 pub use polls::PollVote;
 pub use scheduled::{Outcome as ScheduledOutcome, Scheduled};
 pub use stars::Starred;
+
+/// One image or video in a chat, for the media viewer strip.
+#[derive(Clone, Debug)]
+pub struct ChatMedia {
+    pub id: String,
+    pub timestamp: i64,
+    pub video: bool,
+    pub path: Option<PathBuf>,
+    pub thumbnail: Option<Vec<u8>>,
+}
 
 /// Recent phone sticker metadata, last-used time, and optional local file.
 #[derive(Clone, Debug)]
@@ -247,6 +259,7 @@ impl Archive {
         connection.execute_batch(polls::SCHEMA)?;
         connection.execute_batch(scheduled::SCHEMA)?;
         connection.execute_batch(stars::SCHEMA)?;
+        connection.execute_batch(pins::SCHEMA)?;
         connection.execute_batch(lists::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
@@ -672,7 +685,7 @@ impl Archive {
             return Ok(None);
         };
         if !reset && media.retry_given_up(now) {
-            return Ok(Some(crate::model::MEDIA_NO_LONGER.to_owned()));
+            return Ok(Some(crate::model::media_no_longer().to_owned()));
         }
         media.schedule_retry(now, reset);
         let from = media.retry_from.unwrap_or(now);
@@ -840,6 +853,45 @@ impl Archive {
         let mut messages: Vec<Message> = rows.collect::<Result<_>>()?;
         messages.reverse();
         Ok(messages)
+    }
+
+    /// Images and non-GIF videos of one chat, oldest first, for the viewer strip.
+    pub fn chat_media(&self, chat: &str) -> Result<Vec<ChatMedia>> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, timestamp, content, thumbnail FROM messages
+             WHERE chat = ?1 AND json_valid(content)
+             AND json_extract(content, '$.kind') IN ('image', 'video')
+             ORDER BY timestamp ASC, rowid ASC",
+        )?;
+        let rows = statement.query_map(params![chat], |row| {
+            let id: String = row.get(0)?;
+            let timestamp: i64 = row.get(1)?;
+            let raw: String = row.get(2)?;
+            let thumbnail: Option<Vec<u8>> = row.get(3)?;
+            Ok((id, timestamp, raw, thumbnail))
+        })?;
+        let mut list = Vec::new();
+        for row in rows {
+            let (id, timestamp, raw, thumbnail) = row?;
+            let content: Content = serde_json::from_str(&raw).unwrap_or(Content::Unsupported {
+                what: "unreadable".into(),
+            });
+            let (video, path) = match content {
+                Content::Image { media, .. } => (false, media.path),
+                Content::Video {
+                    gif: false, media, ..
+                } => (true, media.path),
+                _ => continue,
+            };
+            list.push(ChatMedia {
+                id,
+                timestamp,
+                video,
+                path,
+                thumbnail,
+            });
+        }
+        Ok(list)
     }
 
     /// Searches visible message text, filenames, polls, contacts, and places.
@@ -1370,7 +1422,7 @@ impl Archive {
     /// Clears all archived data during unlinking.
     pub fn clear(&self) -> Result<()> {
         self.connection.execute_batch(
-            "DELETE FROM stars; DELETE FROM scheduled; DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids;",
+            "DELETE FROM message_pins; DELETE FROM stars; DELETE FROM scheduled; DELETE FROM poll_history; DELETE FROM poll_votes; DELETE FROM polls; DELETE FROM group_receipts; DELETE FROM messages; DELETE FROM chats; DELETE FROM contacts; DELETE FROM meta; DELETE FROM lids;",
         )
     }
 }
@@ -1774,6 +1826,89 @@ pub(crate) mod tests {
         let list = archive.starred(50).unwrap();
         let ids: Vec<&str> = list.iter().map(|entry| entry.id.as_str()).collect();
         assert_eq!(ids, vec!["new", "old"]);
+    }
+
+    #[test]
+    fn pinning_caps_at_three_active_and_drops_expired() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        for id in ["a", "b", "c", "d"] {
+            archive
+                .insert_message(&message("1@s.whatsapp.net", id, 100, false), None)
+                .unwrap();
+        }
+        archive.pin("1@s.whatsapp.net", "a", 10, 1_000).unwrap();
+        archive.pin("1@s.whatsapp.net", "b", 20, 1_000).unwrap();
+        archive.pin("1@s.whatsapp.net", "c", 30, 1_000).unwrap();
+        assert!(archive.pin_full("1@s.whatsapp.net", "d", 50).unwrap());
+        assert!(!archive.pin_full("1@s.whatsapp.net", "a", 50).unwrap());
+        archive.unpin("1@s.whatsapp.net", "b").unwrap();
+        assert!(!archive.pin_full("1@s.whatsapp.net", "d", 50).unwrap());
+        archive.pin("1@s.whatsapp.net", "d", 40, 1_000).unwrap();
+        let ids = archive.pinned_ids("1@s.whatsapp.net", 50).unwrap();
+        assert!(ids.contains("a") && ids.contains("c") && ids.contains("d"));
+        assert!(!ids.contains("b"));
+        archive.pin("1@s.whatsapp.net", "a", 10, 40).unwrap();
+        let ids = archive.pinned_ids("1@s.whatsapp.net", 50).unwrap();
+        assert!(!ids.contains("a"), "expired pins leave the active set");
+    }
+
+    #[test]
+    fn chat_media_keeps_photos_and_videos_and_skips_gifs() {
+        let archive = Archive::in_memory().unwrap();
+        archive.ensure_chat("1@s.whatsapp.net", "Fixture").unwrap();
+        let photo = {
+            let mut row = message("1@s.whatsapp.net", "photo", 10, false);
+            row.content = Content::Image {
+                caption: None,
+                media: crate::model::Media {
+                    mime: "image/jpeg".into(),
+                    size: 1,
+                    path: Some(PathBuf::from("a.jpg")),
+                    ..Default::default()
+                },
+            };
+            row
+        };
+        let video = {
+            let mut row = message("1@s.whatsapp.net", "video", 20, false);
+            row.content = Content::Video {
+                caption: None,
+                media: crate::model::Media {
+                    mime: "video/mp4".into(),
+                    size: 2,
+                    ..Default::default()
+                },
+                seconds: Some(3),
+                gif: false,
+            };
+            row
+        };
+        let gif = {
+            let mut row = message("1@s.whatsapp.net", "gif", 30, false);
+            row.content = Content::Video {
+                caption: None,
+                media: crate::model::Media {
+                    mime: "video/mp4".into(),
+                    size: 3,
+                    ..Default::default()
+                },
+                seconds: Some(1),
+                gif: true,
+            };
+            row
+        };
+        archive.insert_message(&photo, None).unwrap();
+        archive.insert_message(&video, None).unwrap();
+        archive.insert_message(&gif, None).unwrap();
+        archive
+            .insert_message(&message("1@s.whatsapp.net", "text", 40, false), None)
+            .unwrap();
+        let media = archive.chat_media("1@s.whatsapp.net").unwrap();
+        let ids: Vec<&str> = media.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, vec!["photo", "video"]);
+        assert!(!media[0].video && media[0].path.is_some());
+        assert!(media[1].video && media[1].path.is_none());
     }
 
     #[test]
@@ -2522,7 +2657,7 @@ mod media_path_tests {
             .set_media_retry("a@s.whatsapp.net", "p1", 1_000, false)
             .expect("retry")
             .expect("row");
-        assert_eq!(notice, crate::model::MEDIA_STILL_TRYING);
+        assert_eq!(notice, crate::model::media_still_trying());
         assert!(
             archive
                 .undownloaded_media("a@s.whatsapp.net", 64 * 1024 * 1024, 1_010, 8)
@@ -2546,7 +2681,7 @@ mod media_path_tests {
             .set_media_retry("a@s.whatsapp.net", "p1", late, true)
             .expect("reset")
             .expect("row");
-        assert_eq!(notice, crate::model::MEDIA_STILL_TRYING);
+        assert_eq!(notice, crate::model::media_still_trying());
         archive
             .set_media_path("a@s.whatsapp.net", "p1", Path::new("/tmp/p1.jpg"))
             .expect("filed");

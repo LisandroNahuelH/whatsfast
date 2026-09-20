@@ -273,11 +273,7 @@ pub fn ballot(
             } else if !state.history_complete {
                 i18n::t(Key::PollVotesNotLoaded).into()
             } else {
-                format!(
-                    "{} {}",
-                    state.voters,
-                    if state.voters == 1 { "voter" } else { "voters" }
-                )
+                i18n::count(Key::PollVoterOne, Key::PollVoterMany, state.voters)
             };
             let line = widgets::line(
                 ui,

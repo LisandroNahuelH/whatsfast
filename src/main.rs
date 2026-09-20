@@ -80,6 +80,12 @@ enum Control {
 fn main() -> eframe::Result<()> {
     let arguments: Vec<_> = std::env::args_os().collect();
     if arguments.len() == 3 && arguments[1] == "--apply-update" {
+        // The helper paints its own messages (and passes the failure text
+        // back through --update-error): resolve the language first, exactly
+        // like the window path does.
+        let dirs = whatsfast::paths::AppDirs::discover();
+        let settings = whatsfast::settings::Settings::load(&dirs.settings_file());
+        whatsfast::i18n::set_language(settings.language);
         return whatsfast::updates::install::run_helper(std::path::Path::new(&arguments[2]))
             .map_err(|error| eframe::Error::AppCreation(error.into()));
     }
@@ -175,6 +181,9 @@ fn main() -> eframe::Result<()> {
         whatsfast::demo::populate(&mut app);
         whatsfast::demo::apply_flags(&mut app, cli.demo_page.as_deref());
         if cli.demo_tour {
+            // The tour walks an English script and clicks labels by name, so
+            // the recording always runs on an English interface.
+            whatsfast::i18n::set_language(whatsfast::i18n::Language::English);
             whatsfast::demo::tour::prepare(&mut app);
         }
     }

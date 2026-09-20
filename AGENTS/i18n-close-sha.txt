@@ -1,0 +1,56 @@
+d52e50b
+ M AGENTS/i18n-gen.py
+ M AGENTS/i18n-residual.py
+ M AGENTS/i18n-strings.json
+ M ARCHITECTURE.md
+ M DECISIONS.md
+ M DESIGN.md
+ M README.md
+ M src/app.rs
+ M src/archive.rs
+ M src/backend.rs
+ M src/backend/worker.rs
+ M src/demo.rs
+ M src/demo/tour.rs
+ M src/i18n/en.rs
+ M src/i18n/es.rs
+ M src/i18n/key.rs
+ M src/i18n/mod.rs
+ M src/main.rs
+ M src/model.rs
+ M src/privacy.rs
+ M src/settings.rs
+ M src/ui/chats.rs
+ M src/ui/conversation.rs
+ M src/ui/dialogs.rs
+ M src/ui/keys.rs
+ M src/ui/mod.rs
+ M src/ui/polls.rs
+ M src/ui/viewer.rs
+ M src/ui/widgets.rs
+ M tests/i18n_es.rs
+?? AGENTS/Backups/
+?? AGENTS/__pycache__/
+?? AGENTS/bump-lock.py
+?? AGENTS/double-click-reply-20260919.md
+?? AGENTS/header-search-plan.md
+?? AGENTS/i18n-close-sha.txt
+?? AGENTS/i18n-final-commit.py
+?? AGENTS/i18n-fix-a.py
+?? AGENTS/i18n-inventory-20260919.txt
+?? AGENTS/i18n-inventory.py
+?? AGENTS/i18n-package-I18N-1.txt
+?? AGENTS/i18n-package-I18N-2.txt
+?? AGENTS/i18n-package-I18N-3.txt
+?? AGENTS/i18n-package-I18N-4.txt
+?? AGENTS/i18n-sites-state.json
+?? AGENTS/i18n-verify-package-1.txt
+?? AGENTS/i18n-verify-package-2.txt
+?? AGENTS/leave-channel-plan.md
+?? AGENTS/release-notes-v0.15.183.md
+?? AGENTS/release-notes-v0.15.207.md
+?? AGENTS/search-calendar-popup-20260919.md
+?? AGENTS/sticker-gif-click-plan.md
+?? AGENTS/version-per-commit-20260919.md
+?? src/archive/pins.rs
+?? tests/i18n_language.rs

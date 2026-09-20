@@ -53,6 +53,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         Sense::click(),
     );
     header(app, ui, &chat);
+    pin_banner(app, ui, &chat);
     if theme::macos_chrome(ui.ctx()) {
         super::banner(app, ui);
     }
@@ -335,8 +336,55 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         });
 }
 
+fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
+    let rows: Vec<crate::archive::Pinned> =
+        app.chat_pins.get(&chat.id).cloned().unwrap_or_default();
+    if rows.is_empty() {
+        return;
+    }
+    let palette = app.palette;
+    let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
+    ui.painter().rect_filled(bar, 0.0, palette.panel);
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(bar.shrink2(vec2(12.0, 6.0)))
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    child.set_clip_rect(bar);
+    let (icon, _) = child.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
+    theme::paint_icon(&child, Icon::Pin, icon, 14.0, palette.accent);
+    child.spacing_mut().item_spacing.x = 6.0;
+    for row in rows {
+        let label = widgets::line(
+            &child,
+            &row.text,
+            theme::regular(12.0),
+            palette.text,
+            160.0,
+            1,
+        );
+        let size = vec2(label.size().x + 16.0, 24.0);
+        let (rect, response) = child.allocate_exact_size(size, Sense::click());
+        child.painter().rect_filled(rect, 12.0, palette.surface);
+        label.paint(
+            &child,
+            pos2(rect.left() + 8.0, rect.center().y - label.size().y / 2.0),
+            palette.text,
+        );
+        if response
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .clicked()
+        {
+            app.actions.push(Action::OpenMessage {
+                chat: row.chat.clone(),
+                message: row.id.clone(),
+            });
+        }
+    }
+}
+
 /// Chat-header subtitle.
-fn subtitle(app: &App, chat: &Chat) -> (String, Color32) {
+pub(crate) fn subtitle(app: &App, chat: &Chat) -> (String, Color32) {
     let palette = app.palette;
     let typing = app.typing_in(&chat.id);
     if !typing.is_empty() {
@@ -368,7 +416,7 @@ fn subtitle(app: &App, chat: &Chat) -> (String, Color32) {
     }
     if let Some(presence) = app.presence.get(&chat.id) {
         if presence.online {
-            return ("online".to_owned(), palette.accent);
+            return (i18n::t(I18nKey::ChatOnline).to_owned(), palette.accent);
         }
         if let Some(seen) = presence.last_seen {
             return (
@@ -1598,6 +1646,8 @@ struct View<'a> {
     selecting: Option<&'a HashSet<String>>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
+    /// Ids of the pinned messages of this chat, for the bubble menu.
+    pins: Option<&'a HashSet<String>>,
     /// OpenMessage pulse: message id and whether this 200 ms slice washes the row.
     highlight: Option<(String, bool)>,
     /// Resolves a name with the message's stored name as fallback.
@@ -1666,6 +1716,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             .filter(|selecting| selecting.chat == chat.id)
             .map(|selecting| &selecting.ids),
         starred: app.stars.get(&chat.id),
+        pins: app.pins.get(&chat.id),
         highlight,
         names_or: &names_or,
         mention_names: &mention_names,
@@ -2613,7 +2664,11 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
         .x;
     let edited = if message.edited {
         ui.painter()
-            .layout_no_wrap("edited".to_owned(), font, Color32::WHITE)
+            .layout_no_wrap(
+                i18n::t(I18nKey::ChatEdited).to_owned(),
+                font,
+                Color32::WHITE,
+            )
             .size()
             .x
             + 4.0
@@ -2639,7 +2694,7 @@ fn footer(
     );
     let edited = message.edited.then(|| {
         ui.painter()
-            .layout_no_wrap("edited".to_owned(), font, palette.dim)
+            .layout_no_wrap(i18n::t(I18nKey::ChatEdited).to_owned(), font, palette.dim)
     });
     let tick_width = if message.from_me { 19.0 } else { 0.0 };
     let width =
@@ -2863,6 +2918,25 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         && widgets::menu_item(ui, &palette, Some(Icon::Reply), i18n::t(I18nKey::ChatReply))
     {
         actions.push(Action::Reply(message.id.clone()));
+    }
+    let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
+    if !matches!(message.content, Content::Revoked)
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Pin),
+            if pinned {
+                i18n::t(I18nKey::ChatUnpinMessage)
+            } else {
+                i18n::t(I18nKey::ChatPinMessage)
+            },
+        )
+    {
+        actions.push(Action::SetMessagePinned {
+            chat: chat.clone(),
+            message: message.id.clone(),
+            pinned: !pinned,
+        });
     }
     if !matches!(
         message.content,
@@ -3467,7 +3541,7 @@ fn preview_card(
 #[derive(Clone, Default)]
 struct Thumbnails(Arc<Mutex<HashSet<String>>>);
 
-fn thumbnail_uri(ctx: &egui::Context, chat: &str, id: &str, bytes: &[u8]) -> String {
+pub(crate) fn thumbnail_uri(ctx: &egui::Context, chat: &str, id: &str, bytes: &[u8]) -> String {
     let uri = format!(
         "bytes://thumb-{}-{}",
         chat.chars()
@@ -3556,10 +3630,10 @@ fn downloaded_picture_action(
     }
 }
 
-/// Click on a downloaded video or GIF. Videos open in the system player.
+/// Click on a downloaded video or GIF. Videos open the in-app viewer.
 /// GIFs play in the bubble and have no extra click.
-fn downloaded_clip_action(gif: bool, path: PathBuf) -> Option<Action> {
-    (!gif).then_some(Action::OpenFile(path))
+fn downloaded_clip_action(gif: bool, chat: ChatId, message: String) -> Option<Action> {
+    (!gif).then_some(Action::ViewImage { chat, message })
 }
 
 /// Draws an image or sticker, using its preview until downloaded. Returns its width.
@@ -3893,12 +3967,19 @@ fn video(
             .clicked()
     {
         match &media.path {
-            Some(path) => {
-                if let Some(action) = downloaded_clip_action(gif, path.clone()) {
+            Some(_) => {
+                if let Some(action) =
+                    downloaded_clip_action(gif, view.chat.id.clone(), message.id.clone())
+                {
                     actions.push(action);
                 }
             }
             None if !matches!(media.state, MediaState::Downloading) => {
+                if let Some(action) =
+                    downloaded_clip_action(gif, view.chat.id.clone(), message.id.clone())
+                {
+                    actions.push(action);
+                }
                 actions.push(Action::Download {
                     chat: view.chat.id.clone(),
                     message: message.id.clone(),
@@ -4516,13 +4597,16 @@ mod tests {
     }
 
     #[test]
-    fn a_downloaded_video_opens_the_file_and_a_gif_does_not() {
-        let path = PathBuf::from("clip.mp4");
+    fn a_downloaded_video_opens_the_viewer_and_a_gif_does_not() {
+        let chat = "a@s.whatsapp.net".to_owned();
         assert_eq!(
-            downloaded_clip_action(false, path.clone()),
-            Some(Action::OpenFile(path.clone()))
+            downloaded_clip_action(false, chat.clone(), "clip".into()),
+            Some(Action::ViewImage {
+                chat: chat.clone(),
+                message: "clip".into()
+            })
         );
-        assert_eq!(downloaded_clip_action(true, path), None);
+        assert_eq!(downloaded_clip_action(true, chat, "gif".into()), None);
     }
 }
 

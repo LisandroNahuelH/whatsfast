@@ -658,7 +658,7 @@
     {
       "key": "SettingsStorageVideos",
       "en": "Videos",
-      "es": "Vídeos"
+      "es": "Videos"
     },
     {
       "key": "SettingsStorageStickersGifs",
@@ -857,13 +857,13 @@
     },
     {
       "key": "ShortcutPhotoViewer",
-      "en": "Photo viewer",
-      "es": "Visor de fotos"
+      "en": "Media viewer",
+      "es": "Visor de multimedia"
     },
     {
       "key": "ShortcutPhotoViewerKeys",
-      "en": "Wheel zooms, drag moves, ← / → previous or next photo",
-      "es": "La rueda acerca, el arrastre mueve, ← / → foto anterior o siguiente"
+      "en": "Wheel zooms, drag moves, ← / → previous or next photo or video",
+      "es": "La rueda acerca, el arrastre mueve, ← / → foto o video anterior o siguiente"
     },
     {
       "key": "ShortcutPaste",
@@ -928,7 +928,7 @@
     {
       "key": "LoginTryAgain",
       "en": "Try again",
-      "es": "Volver a intentar"
+      "es": "Reintentar"
     },
     {
       "key": "LoginRequestingCodeFor",
@@ -1137,23 +1137,93 @@
     },
     {
       "key": "ViewerCouldNotDisplay",
-      "en": "Could not display this picture.",
-      "es": "No se pudo mostrar esta imagen."
+      "en": "Could not display this file.",
+      "es": "No se pudo mostrar este archivo."
     },
     {
       "key": "ViewerClose",
-      "en": "Close photo",
-      "es": "Cerrar foto"
+      "en": "Close",
+      "es": "Cerrar"
     },
     {
       "key": "ViewerPrevious",
-      "en": "Previous photo",
-      "es": "Foto anterior"
+      "en": "Previous",
+      "es": "Anterior"
     },
     {
       "key": "ViewerNext",
-      "en": "Next photo",
-      "es": "Foto siguiente"
+      "en": "Next",
+      "es": "Siguiente"
+    },
+    {
+      "key": "ViewerZoomIn",
+      "en": "Zoom in",
+      "es": "Acercar"
+    },
+    {
+      "key": "ViewerZoomOut",
+      "en": "Zoom out",
+      "es": "Alejar"
+    },
+    {
+      "key": "ViewerGoToMessage",
+      "en": "Go to message",
+      "es": "Ir al mensaje"
+    },
+    {
+      "key": "ViewerReact",
+      "en": "React",
+      "es": "Reaccionar"
+    },
+    {
+      "key": "ChatPinMessage",
+      "en": "Pin",
+      "es": "Fijar"
+    },
+    {
+      "key": "ChatUnpinMessage",
+      "en": "Unpin",
+      "es": "Dejar de fijar"
+    },
+    {
+      "key": "ChatListPinned",
+      "en": "Pinned",
+      "es": "Fijados"
+    },
+    {
+      "key": "ChatListPinnedMessages",
+      "en": "Pinned messages",
+      "es": "Mensajes fijados"
+    },
+    {
+      "key": "ChatListNoPinned",
+      "en": "No pinned messages",
+      "es": "No hay mensajes fijados"
+    },
+    {
+      "key": "ChatListNoPinnedHint",
+      "en": "Pin a message from the chat or the media viewer.",
+      "es": "Fija un mensaje desde el chat o el visor."
+    },
+    {
+      "key": "ToastPinned",
+      "en": "Pinned for 7 days",
+      "es": "Fijado por 7 días"
+    },
+    {
+      "key": "ToastUnpinned",
+      "en": "Pin removed",
+      "es": "Se dejó de fijar el mensaje"
+    },
+    {
+      "key": "ToastPinLimit",
+      "en": "This chat already has 3 pinned messages.",
+      "es": "Este chat ya tiene 3 mensajes fijados."
+    },
+    {
+      "key": "ChatOnline",
+      "en": "online",
+      "es": "en línea"
     },
     {
       "key": "PaneSearchTitle",
@@ -2616,6 +2686,16 @@
       "es": "Tu voto se envió, pero no se pudo guardar en este equipo."
     },
     {
+      "key": "PollVoterOne",
+      "en": "1 voter",
+      "es": "1 voto"
+    },
+    {
+      "key": "PollVoterMany",
+      "en": "{count} voters",
+      "es": "{count} votos"
+    },
+    {
       "key": "ChatWaitingMessage",
       "en": "Waiting for this message. Open WhatsApp on your phone",
       "es": "Esperando este mensaje. Abre WhatsApp en tu teléfono"
@@ -2656,6 +2736,11 @@
       "es": "Enviar a WhatsApp"
     },
     {
+      "key": "ChatEdited",
+      "en": "edited",
+      "es": "editado"
+    },
+    {
       "key": "ToastStickerSaveFailed",
       "en": "Could not save sticker: {error}",
       "es": "No se pudo guardar el sticker: {error}"
@@ -2663,12 +2748,12 @@
     {
       "key": "DialogAddPack",
       "en": "Add a sticker pack",
-      "es": "Añadir un pack de stickers"
+      "es": "Añadir un paquete de stickers"
     },
     {
       "key": "DialogStickerPacks",
       "en": "Sticker packs",
-      "es": "Packs de stickers"
+      "es": "Paquetes de stickers"
     },
     {
       "key": "ToastContactSaveFailed",
@@ -2688,12 +2773,12 @@
     {
       "key": "ToastPackAdded",
       "en": "Added sticker pack \"{name}\"",
-      "es": "Se añadió el pack de stickers \"{name}\""
+      "es": "Se añadió el paquete de stickers \"{name}\""
     },
     {
       "key": "ToastPackFailed",
       "en": "Could not add sticker pack: {error}",
-      "es": "No se pudo añadir el pack de stickers: {error}"
+      "es": "No se pudo añadir el paquete de stickers: {error}"
     },
     {
       "key": "ToastPrivacyFailed",
@@ -2938,7 +3023,7 @@
     {
       "key": "KindStickerPack",
       "en": "sticker pack",
-      "es": "pack de stickers"
+      "es": "paquete de stickers"
     },
     {
       "key": "KindInteractive",
@@ -3053,12 +3138,12 @@
     {
       "key": "StickerErrKeyMismatch",
       "en": "The key does not match this pack",
-      "es": "La clave no coincide con este pack"
+      "es": "La clave no coincide con este paquete"
     },
     {
       "key": "StickerErrDecrypt",
       "en": "Could not decrypt the sticker pack",
-      "es": "No se pudo descifrar el pack de stickers"
+      "es": "No se pudo descifrar el paquete de stickers"
     },
     {
       "key": "StickerManifestIncomplete",
@@ -3093,7 +3178,7 @@
     {
       "key": "StickerErrNoStickers",
       "en": "This pack contains no stickers",
-      "es": "Este pack no tiene stickers"
+      "es": "Este paquete no tiene stickers"
     },
     {
       "key": "StickerErrOpenFile",
@@ -3108,27 +3193,27 @@
     {
       "key": "StickerErrNoneRead",
       "en": "No stickers could be read from this pack",
-      "es": "No se pudo leer ningún sticker de este pack"
+      "es": "No se pudo leer ningún sticker de este paquete"
     },
     {
       "key": "StickerErrWrite",
       "en": "Could not write the sticker pack: {error}",
-      "es": "No se pudo escribir el pack de stickers: {error}"
+      "es": "No se pudo escribir el paquete de stickers: {error}"
     },
     {
       "key": "StickerErrCreateFolder",
       "en": "Could not create the pack folder: {error}",
-      "es": "No se pudo crear la carpeta del pack: {error}"
+      "es": "No se pudo crear la carpeta del paquete: {error}"
     },
     {
       "key": "StickerErrTooMany",
       "en": "Too many sticker packs have this name",
-      "es": "Hay demasiados packs de stickers con este nombre"
+      "es": "Hay demasiados paquetes de stickers con este nombre"
     },
     {
       "key": "KindStickerPackTitle",
       "en": "Sticker Pack",
-      "es": "Pack de stickers"
+      "es": "Paquete de stickers"
     },
     {
       "key": "KindStickers",
@@ -3213,7 +3298,7 @@
     {
       "key": "MenuView",
       "en": "View",
-      "es": "Visualización"
+      "es": "Ver"
     },
     {
       "key": "MenuToggleSidebar",
@@ -3698,7 +3783,7 @@
     {
       "key": "ThemeErrFolderUnreadable",
       "en": "The themes folder could not be read. See the log for details.",
-      "es": "No se pudo leer la carpeta de temas. Mira el registro para más detalles."
+      "es": "No se pudo leer la carpeta de temas. Consulta el registro para más detalles."
     },
     {
       "key": "ThemeErrTooManyEntries",
@@ -3713,12 +3798,12 @@
     {
       "key": "ThemeErrOmarchyLoad",
       "en": "The Omarchy palette could not be loaded. Keeping the last usable appearance. See the log for details.",
-      "es": "No se pudo cargar la paleta de Omarchy. Se mantiene el último aspecto que funcionó. Mira el registro para más detalles."
+      "es": "No se pudo cargar la paleta de Omarchy. Se mantiene la última apariencia válida. Consulta el registro para más detalles."
     },
     {
       "key": "ThemeErrReload",
       "en": "Custom themes could not be loaded. Run whatsfast reload-themes to try again.",
-      "es": "No se pudieron cargar los temas personalizados. Ejecuta whatsfast reload-themes para reintentar."
+      "es": "No se pudieron cargar los temas personalizados. Ejecuta whatsfast reload-themes para volver a intentarlo."
     },
     {
       "key": "ThemeLoadingLocal",
@@ -3728,7 +3813,7 @@
     {
       "key": "ThemeErrSelectedUnavailable",
       "en": "The selected theme is unavailable. Keeping the last usable appearance. See the log for details.",
-      "es": "El tema elegido no está disponible. Se mantiene el último aspecto que funcionó. Mira el registro para más detalles."
+      "es": "El tema seleccionado no está disponible. Se mantiene la última apariencia válida. Consulta el registro para más detalles."
     },
     {
       "key": "ThemeErrOmarchyColors",
@@ -3849,6 +3934,11 @@
       "key": "NotifyErrIdentity",
       "en": "notification identity unavailable: {error}",
       "es": "identidad de notificación no disponible: {error}"
+    },
+    {
+      "key": "SearchClear",
+      "en": "Clear",
+      "es": "Limpiar"
     }
   ],
   "sites": [
@@ -7469,6 +7559,37 @@
         {
           "literal": "notification identity unavailable: {error}",
           "new": "i18n::f(Key::NotifyErrIdentity, &[(\"error\", &error.to_string())])"
+        }
+      ]
+    },
+    {
+      "name": "chat-edited",
+      "file": "src/ui/conversation.rs",
+      "literals": [
+        {
+          "exact": "edited",
+          "new": "i18n::t(I18nKey::ChatEdited)",
+          "all": true
+        }
+      ]
+    },
+    {
+      "name": "dialogs-online",
+      "file": "src/ui/dialogs.rs",
+      "literals": [
+        {
+          "exact": "online",
+          "new": "i18n::t(Key::ChatOnline)"
+        }
+      ]
+    },
+    {
+      "name": "widgets-search-clear",
+      "file": "src/ui/widgets.rs",
+      "literals": [
+        {
+          "exact": "Clear",
+          "new": "i18n::t(Key::SearchClear)"
         }
       ]
     }

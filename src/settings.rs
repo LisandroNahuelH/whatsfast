@@ -126,12 +126,22 @@ impl ChatWallpaper {
     }
 }
 
+/// Reads the interface language forgivingly: a value the enum does not know
+/// falls back to following the system instead of dropping the whole file.
+fn read_language<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Language, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_str()
+        .and_then(|text| text.parse().ok())
+        .unwrap_or_default())
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub theme: ThemeChoice,
     /// Interface language. `System` follows the operating system.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "read_language")]
     pub language: Language,
     /// Filename of the selected local JSON palette.
     pub custom_theme: Option<String>,
@@ -321,6 +331,22 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_short_language_value_parses() {
+        let parsed: Settings =
+            serde_json::from_str(r#"{"language":"es","zoom":1.25}"#).expect("parses");
+        assert_eq!(parsed.language, Language::Spanish);
+        assert_eq!(parsed.zoom, 1.25);
+    }
+
+    #[test]
+    fn an_unknown_language_keeps_the_other_settings() {
+        let parsed: Settings =
+            serde_json::from_str(r#"{"language":"klingon","zoom":1.25}"#).expect("parses");
+        assert_eq!(parsed.language, Language::System);
+        assert_eq!(parsed.zoom, 1.25);
+    }
 
     #[test]
     fn unknown_and_missing_fields_are_tolerated() {

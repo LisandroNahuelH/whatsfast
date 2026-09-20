@@ -221,6 +221,14 @@ pub struct App {
     /// Ids of the starred messages of each chat, for the mark in the
     /// conversation. Filled when a chat opens and on every confirmed star.
     pub stars: HashMap<ChatId, HashSet<String>>,
+    pub pinned: Vec<crate::archive::Pinned>,
+    pub show_pinned: bool,
+    /// Ids of the pinned messages of each chat, for the menu and viewer.
+    pub pins: HashMap<ChatId, HashSet<String>>,
+    /// Active pins of each chat, for the chips under the header.
+    pub chat_pins: HashMap<ChatId, Vec<crate::archive::Pinned>>,
+    /// Gallery for the open media viewer, oldest first.
+    pub viewer_media: Vec<crate::archive::ChatMedia>,
     /// Draft of the schedule dialog: the day, the month shown, and the time.
     pub schedule_day: jiff::civil::Date,
     pub schedule_month: jiff::civil::Date,
@@ -473,6 +481,11 @@ impl App {
             starred: Vec::new(),
             show_starred: false,
             stars: HashMap::new(),
+            pinned: Vec::new(),
+            show_pinned: false,
+            pins: HashMap::new(),
+            chat_pins: HashMap::new(),
+            viewer_media: Vec::new(),
             schedule_day: today,
             schedule_month: today,
             schedule_hour: 9,
@@ -738,7 +751,16 @@ impl App {
 
     /// Resolves the chat-list title.
     pub fn chat_title(&self, chat: &Chat) -> String {
-        if chat.is_group() || self.me.as_deref() == Some(chat.id.as_str()) {
+        let group = chat.is_group();
+        if group || self.me.as_deref() == Some(chat.id.as_str()) {
+            if crate::model::is_fallback_name(&chat.name, group) {
+                let key = if group {
+                    Key::KindGroup
+                } else {
+                    Key::DisplayYou
+                };
+                return i18n::t(key).to_owned();
+            }
             return chat.name.clone();
         }
         self.person_name(&chat.id, None)
@@ -1007,6 +1029,7 @@ impl App {
             && !self.show_archived
             && !self.show_scheduled
             && !self.show_starred
+            && !self.show_pinned
             && self
                 .chats
                 .iter()
@@ -1426,6 +1449,38 @@ impl App {
                     }
                 }
                 Event::StarredList(list) => self.starred = list,
+                Event::Pins { chat, items } => {
+                    self.pins.insert(
+                        chat.clone(),
+                        items.iter().map(|item| item.id.clone()).collect(),
+                    );
+                    self.chat_pins.insert(chat, items);
+                }
+                Event::PinChanged {
+                    chat,
+                    message,
+                    pinned,
+                } => {
+                    let ids = self.pins.entry(chat.clone()).or_default();
+                    if pinned {
+                        ids.insert(message);
+                    } else {
+                        ids.remove(&message);
+                    }
+                    if self.show_pinned {
+                        self.backend.send(Command::LoadPinned);
+                    }
+                }
+                Event::PinnedList(list) => self.pinned = list,
+                Event::ChatMedia { chat, items } => {
+                    if self
+                        .image_viewer
+                        .as_ref()
+                        .is_some_and(|viewer| viewer.chat == chat)
+                    {
+                        self.viewer_media = items;
+                    }
+                }
                 Event::ChatLists { lists, pins } => {
                     self.chat_lists = lists;
                     let mut map: HashMap<String, HashMap<ChatId, i64>> = HashMap::new();
@@ -1539,6 +1594,11 @@ impl App {
     }
 
     fn handle_media(&mut self, chat: &str, id: &str, result: Result<PathBuf, String>) {
+        if let Ok(path) = &result
+            && let Some(item) = self.viewer_media.iter_mut().find(|item| item.id == id)
+        {
+            item.path = Some(path.clone());
+        }
         let Some(message) = self
             .conversations
             .get_mut(chat)
@@ -2320,32 +2380,66 @@ impl App {
                 }
             }
             Action::ViewImage { chat, message } => {
-                let ready = self
-                    .conversations
-                    .get(&chat)
-                    .and_then(|conversation| conversation.message(&message))
-                    .and_then(crate::ui::viewer::image_path)
-                    .is_some();
-                if ready {
-                    self.image_viewer = Some(crate::ui::viewer::ImageViewer::open(chat, message));
+                if self
+                    .image_viewer
+                    .as_ref()
+                    .is_none_or(|viewer| viewer.chat != chat)
+                {
+                    self.viewer_media.clear();
+                }
+                let needs_file = self
+                    .viewer_media
+                    .iter()
+                    .find(|item| item.id == message)
+                    .map(|item| item.path.is_none())
+                    .or_else(|| {
+                        self.conversations
+                            .get(&chat)
+                            .and_then(|conversation| conversation.message(&message))
+                            .and_then(crate::ui::viewer::media_path)
+                            .map(|_| false)
+                    })
+                    .unwrap_or(true);
+                self.image_viewer = Some(crate::ui::viewer::ImageViewer::open(
+                    chat.clone(),
+                    message.clone(),
+                ));
+                self.backend
+                    .send(Command::LoadChatMedia { chat: chat.clone() });
+                if needs_file {
+                    self.backend.send(Command::Download { chat, message });
                 }
             }
-            Action::CloseImageViewer => self.image_viewer = None,
+            Action::CloseImageViewer => {
+                self.image_viewer = None;
+                self.viewer_media.clear();
+            }
             Action::StepImage(step) => {
                 let Some(viewer) = &self.image_viewer else {
                     return;
                 };
                 let chat = viewer.chat.clone();
                 let current = viewer.message.clone();
-                let next = self
-                    .conversations
-                    .get(&chat)
-                    .and_then(|conversation| {
-                        crate::ui::viewer::neighbor_image(&conversation.messages, &current, step)
-                    })
-                    .map(str::to_owned);
+                let next = crate::ui::viewer::neighbor_media(&self.viewer_media, &current, step)
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        self.conversations.get(&chat).and_then(|conversation| {
+                            crate::ui::viewer::neighbor_image(
+                                &conversation.messages,
+                                &current,
+                                step,
+                            )
+                            .map(str::to_owned)
+                        })
+                    });
                 if let Some(next) = next {
-                    self.image_viewer = Some(crate::ui::viewer::ImageViewer::open(chat, next));
+                    self.apply(
+                        Action::ViewImage {
+                            chat,
+                            message: next,
+                        },
+                        ctx,
+                    );
                 }
             }
             Action::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
@@ -2359,6 +2453,19 @@ impl App {
                 self.highlight = Some((id, Instant::now()));
                 self.highlight_ons = 1;
                 ctx.request_repaint();
+            }
+            Action::ReplyFromViewer { chat, message } => {
+                self.image_viewer = None;
+                self.viewer_media.clear();
+                self.apply(
+                    Action::OpenMessage {
+                        chat,
+                        message: message.clone(),
+                    },
+                    ctx,
+                );
+                self.apply(Action::Reply(message), ctx);
+                self.highlight_ons = 3;
             }
             Action::CancelReply => self.reply_to = None,
             Action::Forward {
@@ -2440,12 +2547,32 @@ impl App {
                 });
                 self.selecting = None;
             }
+            Action::SetMessagePinned {
+                chat,
+                message,
+                pinned,
+            } => {
+                if pinned
+                    && self
+                        .pins
+                        .get(&chat)
+                        .is_some_and(|ids| ids.len() >= 3 && !ids.contains(&message))
+                {
+                    self.toast(i18n::t(Key::ToastPinLimit));
+                } else {
+                    self.backend.send(Command::SetMessagePinned {
+                        chat,
+                        message,
+                        pinned,
+                    });
+                }
+            }
             Action::ToggleScheduled => {
                 self.show_scheduled = !self.show_scheduled;
                 if self.show_scheduled {
-                    // One panel at a time, so going back always lands on chats.
                     self.show_archived = false;
                     self.show_starred = false;
+                    self.show_pinned = false;
                     self.backend.send(Command::LoadScheduled);
                 }
             }
@@ -2454,7 +2581,17 @@ impl App {
                 if self.show_starred {
                     self.show_archived = false;
                     self.show_scheduled = false;
+                    self.show_pinned = false;
                     self.backend.send(Command::LoadStarred);
+                }
+            }
+            Action::TogglePinned => {
+                self.show_pinned = !self.show_pinned;
+                if self.show_pinned {
+                    self.show_archived = false;
+                    self.show_scheduled = false;
+                    self.show_starred = false;
+                    self.backend.send(Command::LoadPinned);
                 }
             }
             Action::ToggleSettings => {
@@ -2841,6 +2978,7 @@ impl App {
                 self.show_archived = false;
                 self.show_scheduled = false;
                 self.show_starred = false;
+                self.show_pinned = false;
                 self.pin_drag = None;
             }
             Action::SaveChatList { id, name, members } => {
@@ -4216,6 +4354,29 @@ mod tests {
     }
 
     #[test]
+    fn reply_from_the_viewer_pulses_three_times() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let chat = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(chat.into(), "Ada".into()));
+        app.image_viewer = Some(crate::ui::viewer::ImageViewer::open(
+            chat.into(),
+            "photo".into(),
+        ));
+        app.apply(
+            Action::ReplyFromViewer {
+                chat: chat.into(),
+                message: "photo".into(),
+            },
+            &ctx,
+        );
+        assert!(app.image_viewer.is_none());
+        assert_eq!(app.reply_to.as_deref(), Some("photo"));
+        assert_eq!(app.highlight_ons, 3);
+        assert_eq!(app.open_chat.as_deref(), Some(chat));
+    }
+
+    #[test]
     fn opening_chat_search_keeps_the_left_list_search() {
         let mut app = app();
         let ctx = egui::Context::default();
@@ -4725,8 +4886,8 @@ mod name_tests {
             app.image_viewer
                 .as_ref()
                 .map(|viewer| viewer.message.as_str()),
-            Some("second"),
-            "a missing photo does not replace the open one"
+            Some("missing"),
+            "the viewer opens a photo that is still downloading"
         );
         app.apply(Action::CloseImageViewer, &ctx);
         assert!(app.image_viewer.is_none());

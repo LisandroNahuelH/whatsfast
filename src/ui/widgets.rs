@@ -8,6 +8,7 @@ use egui::{
 
 use crate::bidi;
 use crate::emoji;
+use crate::i18n::{self, Key};
 use crate::model::Delivery;
 use crate::theme::{self, Icon, Palette};
 
@@ -427,7 +428,7 @@ pub fn search_field(
             15.0,
             palette.secondary,
             palette.text,
-            "Clear",
+            i18n::t(Key::SearchClear),
         )
         .clicked()
         {

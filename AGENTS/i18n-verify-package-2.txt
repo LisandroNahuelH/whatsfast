@@ -1,0 +1,46 @@
+VEREDICTO: FIX_NECESARIO
+paquete_id: I18N-VERIFY-2
+base_de_citas: d52e50b (HEAD). Las citas de linea del paquete 1 quedaron viejas: el arbol de trabajo tiene en vuelo el feature de fijados + visor (13 archivos M + src/archive/pins.rs sin trackear) y NO compila (23 errores). Los fixes se aplican cuando ese trabajo aterrice o sobre un arbol limpio a un SHA; la corrida base se toma ahi.
+hereda: I18N-VERIFY-1 (digest 6b3ff72edc23) con estas CORRECCIONES de la ronda 2.
+
+CORRECCIONES ACEPTADAS (de los 5 asientos)
+- P1 privacy: son 27 claves Privacy* (incluye PrivacyExcept), no 26. Causa raiz: safe_literal tiene el mismo bug en AGENTS/i18n-residual.py Y en AGENTS/i18n-gen.py, y el generador marco la firma privacy-literals como aplicada sin reemplazar nada (AGENTS/i18n-gen.py:214-222 + state). Fix: heuristico por declaracion en LOS DOS scripts, borrar la firma privacy-literals del state, no volver a marcar un sitio sin reemplazos, re-correr.
+- P2 edited: conversation.rs:2616 es la MEDICION de ancho (footer_width, Color32::WHITE) y 2642 el pintado (footer, palette.dim): una sola llamada i18n::t compartida (si no, 'editado' desalinea el ancho).
+- P3 media: usos reales archive.rs:688 y worker.rs:3642 (+ model.rs:584-590 y tests archive.rs:2660/2684, model.rs:1244/1247). ChatRetryFile/ChatFileGone EN ya son EXACTAMENTE los consts (en.rs:564-567) y el ES ya esta (es.rs:582-585): 0 claves nuevas. Convertir a funciones a mano; BORRAR los 2 needles del sitio model-literals (dejarian i18n::t dentro de un const: no compila).
+- P4 online: la fila ChatOnline ('online' / 'en línea') YA esta en AGENTS/i18n-strings.json (1224-1227) y el arbol ya usa I18nKey::ChatOnline en conversation.rs; falta la variante Rust (la agrega el generador al correr) y el call site de dialogs.rs:998. Severidad alta -> media.
+- P5 sentinel: severidad alta -> media. Diseno: marcador estable no localizado (propuesta: "\u{1}fallback" en src/model.rs) + helper is_fallback_name(name, group) que mapea filas viejas ('Group'/'Grupo'/'You'/'Tu') + fallback_name/chat_name devuelven el marcador + request_group_info compara con el helper (hoy compara contra t() del locale actual y deja el grupo con 'Group' para siempre al pasar ES->EN) + chat_title pinta t(KindGroup/DisplayYou) cuando el nombre guardado es el marcador + en el brazo sin nombre del sync conservar el nombre guardado (no pisar el subject real: archive.rs upsert hace name = excluded.name).
+- P6 voters: claves PollVoterOne '1 voto' / PollVoterMany '{count} votos' (votos, no votantes) + i18n::count en polls.rs.
+- P7 escaner: heuristico correcto = un literal es const/static solo si el ultimo inicio de sentencia (';' o '}') abre una declaracion const/static con '=' antes del literal (sin ventana de 4000, sin mirar '{'). Cobertura medida de 0->26 en privacy.rs, 0->2 en model.rs, 0->1 en markup.rs. Ademas: lista de exclusion documentada en el script por (archivo, texto) para las 2 colisiones no-interfaz: ('src/privacy.rs','online') es wire_name de protocolo y ('src/markup.rs','online') es un TLD. Sin esa lista 'residual: none' es inalcanzable. La verificacion 'none' se exige al cerrar B+C+D+E, no tras A.
+- P8 tour: la premisa 'prepare() fuerza ingles' era FALSA: nada fija el idioma y el guion es EN con metas por texto, asi que en maquina ES el tour aborta (tour.rs:391-395, 418-421) y el flujo del README (correr --demo-tour sin --demo-lang) se rompe. Fix: forzar Language::English en el camino del tour (1 linea) + documentarlo. Severidad media.
+- P9 test ES: version minima (no 23 paginas): una pasada a 1180x2400, sumar 4 estados de alto valor (privacy-except, image-viewer, poll, update-failed) y fijar el piso con el mapa medido por pagina (>=8 para 'settings'), no con otro >=3. Severidad baja. La lista larga queda como follow-up en AGENTS/.
+- P10 updater: fix exacto, 3 lineas en main.rs antes de run_helper (--apply-update retorna antes de set_language; install.rs:524-560 usa i18n::t y restore_and_restart pasa --update-error con t(UpdCouldNotStartRestored), que la app muestra como toast). Descartado pasar un flag: rompe el check arguments.len()==3.
+- P11 settings: fix obligatorio (no cosmetico): el parseo fallido escribe Settings::default() encima (guardado cada 2 s y al salir). Atributo #[serde(default, deserialize_with = "read_language")] que usa Language::from_str (acepta system/en/english/es/spanish) y cae a System ante desconocido; 2 tests ({"language":"es","zoom":1.25} conserva zoom; valor invalido conserva el resto). La misma clase para theme/history_prefetch/chat_wallpaper queda como deuda declarada en AGENTS/, fuera de este commit.
+- P12 README: 'applies at once, without a restart' es falso para bandeja y menus de macOS (se construyen una vez). Texto: aplica al instante en la ventana; la bandeja y los menus de macOS toman el idioma al reiniciar (el hint in-app ya lo dice).
+- P13 archive unlock: reusar ArchiveErrUnlockFailed (0 claves nuevas) en worker.rs:247,251.
+- P14 glosario: alinear 7 puntos con AGENTS/i18n-glosario-es.md: MenuView->Ver; LoginTryAgain->Reintentar; ThemeErrReload->'...para volver a intentarlo.'; ThemeErrFolderUnreadable/OmarchyLoad/SelectedUnavailable->'Consulta el registro...' y 'la ultima apariencia valida'; SettingsStorageVideos->Videos; 13 valores 'pack'->'paquete' (pack_id/pack_key quedan como marcador de protocolo). Agregar al glosario: 'Limpiar' (tooltip) y 'votos' (encuestas).
+- P15 Clear: clave SearchClear 'Clear' / 'Limpiar' (tooltip del X de search_field, 7 call sites con una clave).
+- P16 update context: claves UpdErrReadListing / UpdErrUnexpectedListing para updates.rs:63,65.
+- P17 demo fixtures: usar claves existentes (UpdCouldNotVerifyDownload y UpdThrough con argumento) en demo.rs:987,993, no claves nuevas.
+- P18 honestidad: pre-i18n real = fe8b94b (padre de af141d1); 0d60b06 contiene af141d1..b037cb1. Y el debatidor objeta que los 2 fallos de demo::tour::tests pueden ser un RACE del global de idioma (LANG AtomicU8 + a_startup_language_is_read_back en el mismo binario que tests que buscan etiquetas EN). Se verifica con la corrida base: si con --test-threads=1 desaparecen, es race de i18n y se arregla aisl ando el test de idioma en su binario.
+
+CORRECCIONES DE TABLA (no son hallazgos: integridad)
+- El JSON sin commitear tiene 14 filas adelantadas al enum (ChatOnline + 13 de fijados/visor) y reescribe 4 etiquetas del visor. Al correr el generador entran a las tablas: decision del orquestador ACEPTARLAS (estan traducidas; el enum es pub) y declararlo en el commit. Tras el fix: key.rs == en.rs == es.rs == JSON.
+- Fuera de paquete (con lista exhaustiva): filas identicas por diseno = ALLOWED_IDENTICAL de src/i18n/mod.rs (25 claves), colas de error de crates/SO, GifErrMessage, stderr de segunda instancia, panic dump, --help de clap, logs/--verbose, contenido y guion de demo (salvo P17), packaging/docs EN, nombres de paleta, reloj 24 h, y las 2 colisiones de texto del escaner (P7).
+
+PLAN_FIX (A-H; solo el orquestador ejecuta, tras CONSENSO_100 y con el arbol compilando)
+A. Scripts: heuristico por declaracion + exclusiones en i18n-residual.py Y i18n-gen.py; no marcar sitios sin reemplazos; borrar la firma privacy-literals del state. Correr y TRIAR (esperado tras A: 28 reales + 2 excluidos).
+B. privacy.rs: call sites de las 27 claves.
+C. Claves nuevas por JSON + generador (nunca a mano): ChatEdited, PollVoterOne/Many, SearchClear, UpdErrReadListing, UpdErrUnexpectedListing, marcador de P5; ChatOnline ya existe. Call sites: conversation.rs 2616/2642 y dialogs.rs:998, polls.rs, widgets.rs:430, updates.rs, worker.rs 247/251.
+D. model.rs: consts a funciones + usos y tests; quitados los 2 needles de model-literals.
+E. Marcador estable + is_fallback_name + chat_title + brazo de sync sin nombre (P5).
+F. Tour en ingles (1 linea) + PAGES/viewport/piso del test ES + language tolerante (main.rs 3 lineas; settings.rs atributo + fn + 2 tests).
+G. Docs y ruido: README (P12), glosario (P14), demo fixtures (P17), deuda declarada (P11 clase), y AGENTS/i18n-progress.md con la evidencia de cierre.
+H. DoD completo sobre arbol limpio (fmt, clippy x2, test x2, doc) + corrida base y de cierre + commit con bump + push.
+
+EVIDENCIA DE CIERRE (obligatoria, en AGENTS/i18n-progress.md)
+1. SHA + git status --porcelain de la corrida base y de la de cierre.
+2. Corrida base: nombres completos de los tests fallados (no solo el conteo) + log en AGENTS/.
+3. Salida del escaner antes (2 literales, privacy invisible) y despues (residual: none real).
+4. cargo test --features demo --test i18n_es 2/2 con el viewport y el piso nuevos + el mapa pagina->minimo medido.
+5. Atribucion corregida (fe8b94b) y, si la corrida base lo confirma, el race del global de idioma y su fix.
+6. Que cubre cada test (tabla = 770 claves/placeholders/allowlist; test ES = chrome pintado; escaner = call sites) y la definicion corta de 'i18n verificado'.

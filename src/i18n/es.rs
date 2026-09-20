@@ -165,7 +165,7 @@ pub(super) fn text(key: Key) -> &'static str {
             "Peso de las fotos, videos, stickers y GIF que ya están en este equipo. El recuento de mensajes incluye el texto."
         }
         Key::SettingsStorageImages => "Imágenes",
-        Key::SettingsStorageVideos => "Vídeos",
+        Key::SettingsStorageVideos => "Videos",
         Key::SettingsStorageStickersGifs => "Stickers y GIF",
         Key::SettingsStorageOther => "Otros",
         Key::SettingsStorageMessagesOne => "1 mensaje",
@@ -225,9 +225,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ShortcutPreviousNextChat => "Chat anterior / siguiente",
         Key::ShortcutSend => "Enviar (Shift+Enter para una línea nueva)",
         Key::ShortcutDismiss => "Cancelar la acción actual, salir de la búsqueda o cerrar el chat",
-        Key::ShortcutPhotoViewer => "Visor de fotos",
+        Key::ShortcutPhotoViewer => "Visor de multimedia",
         Key::ShortcutPhotoViewerKeys => {
-            "La rueda acerca, el arrastre mueve, ← / → foto anterior o siguiente"
+            "La rueda acerca, el arrastre mueve, ← / → foto o video anterior o siguiente"
         }
         Key::ShortcutPaste => "Pegar texto o enviar una imagen del portapapeles",
         Key::ShortcutChatList => "Mostrar u ocultar la lista de chats",
@@ -243,7 +243,7 @@ pub(super) fn text(key: Key) -> &'static str {
             "Este equipo se desvinculó de tu teléfono. Se está pidiendo un código nuevo."
         }
         Key::LoginRequestingNewCode => "Pidiendo un código nuevo…",
-        Key::LoginTryAgain => "Volver a intentar",
+        Key::LoginTryAgain => "Reintentar",
         Key::LoginRequestingCodeFor => "Pidiendo un código para +{phone}…",
         Key::LoginWaitingForCode => "Esperando un código de WhatsApp…",
         Key::LoginUnofficialWarning => {
@@ -291,10 +291,24 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::UpdateNewVersion => "Hay una versión nueva disponible",
         Key::UpdateDownloadFromGitHub => "Descargar desde GitHub",
         Key::UpdateUpdate => "Actualizar",
-        Key::ViewerCouldNotDisplay => "No se pudo mostrar esta imagen.",
-        Key::ViewerClose => "Cerrar foto",
-        Key::ViewerPrevious => "Foto anterior",
-        Key::ViewerNext => "Foto siguiente",
+        Key::ViewerCouldNotDisplay => "No se pudo mostrar este archivo.",
+        Key::ViewerClose => "Cerrar",
+        Key::ViewerPrevious => "Anterior",
+        Key::ViewerNext => "Siguiente",
+        Key::ViewerZoomIn => "Acercar",
+        Key::ViewerZoomOut => "Alejar",
+        Key::ViewerGoToMessage => "Ir al mensaje",
+        Key::ViewerReact => "Reaccionar",
+        Key::ChatPinMessage => "Fijar",
+        Key::ChatUnpinMessage => "Dejar de fijar",
+        Key::ChatListPinned => "Fijados",
+        Key::ChatListPinnedMessages => "Mensajes fijados",
+        Key::ChatListNoPinned => "No hay mensajes fijados",
+        Key::ChatListNoPinnedHint => "Fija un mensaje desde el chat o el visor.",
+        Key::ToastPinned => "Fijado por 7 días",
+        Key::ToastUnpinned => "Se dejó de fijar el mensaje",
+        Key::ToastPinLimit => "Este chat ya tiene 3 mensajes fijados.",
+        Key::ChatOnline => "en línea",
         Key::PaneSearchTitle => "Buscar mensajes",
         Key::PaneFilterByDate => "Filtrar por fecha",
         Key::PaneSearchHint => "Buscar",
@@ -629,6 +643,8 @@ pub(super) fn text(key: Key) -> &'static str {
         }
         Key::PollErrVoteSend => "No se pudo enviar tu voto. Inténtalo de nuevo.",
         Key::PollErrVoteNotSaved => "Tu voto se envió, pero no se pudo guardar en este equipo.",
+        Key::PollVoterOne => "1 voto",
+        Key::PollVoterMany => "{count} votos",
         Key::ChatWaitingMessage => "Esperando este mensaje. Abre WhatsApp en tu teléfono",
         Key::ToastHistoryPartFailed => "No se pudo leer parte del historial: {error}",
         Key::ToastNoOlder => {
@@ -639,14 +655,15 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ToastStarRemoved => "Se quitó el destacado",
         Key::ToastStarredProgress => "Destacados {done} de {total}",
         Key::ChatSendToWhatsApp => "Enviar a WhatsApp",
+        Key::ChatEdited => "editado",
         Key::ToastStickerSaveFailed => "No se pudo guardar el sticker: {error}",
-        Key::DialogAddPack => "Añadir un pack de stickers",
-        Key::DialogStickerPacks => "Packs de stickers",
+        Key::DialogAddPack => "Añadir un paquete de stickers",
+        Key::DialogStickerPacks => "Paquetes de stickers",
         Key::ToastContactSaveFailed => "No se pudo guardar el contacto: {error}",
         Key::ToastContactAdded => "Se añadió {name} a los contactos",
         Key::ToastNotOnWhatsApp => "{name} no está en WhatsApp",
-        Key::ToastPackAdded => "Se añadió el pack de stickers \"{name}\"",
-        Key::ToastPackFailed => "No se pudo añadir el pack de stickers: {error}",
+        Key::ToastPackAdded => "Se añadió el paquete de stickers \"{name}\"",
+        Key::ToastPackFailed => "No se pudo añadir el paquete de stickers: {error}",
         Key::ToastPrivacyFailed => "No se pudieron actualizar los ajustes de privacidad.",
         Key::ToastLinkPhoneFailed => "No se pudo vincular con el número de teléfono: {error}",
         Key::ToastMessageNotSent => "No se envió el mensaje: {error}",
@@ -701,7 +718,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::KindContactsMany => "{count} contactos",
         Key::KindPoll => "Encuesta",
         Key::KindGroupInvite => "invitación a un grupo",
-        Key::KindStickerPack => "pack de stickers",
+        Key::KindStickerPack => "paquete de stickers",
         Key::KindInteractive => "mensaje interactivo",
         Key::KindAnimatedSticker => "sticker animado",
         Key::GifErrNoKey => "La búsqueda de GIF necesita una clave de API de GIPHY.",
@@ -726,22 +743,22 @@ pub(super) fn text(key: Key) -> &'static str {
         }
         Key::StickerErrIncompleteData => "Los datos del sticker están incompletos",
         Key::StickerErrKeyDerive => "No se pudo derivar la clave del sticker",
-        Key::StickerErrKeyMismatch => "La clave no coincide con este pack",
-        Key::StickerErrDecrypt => "No se pudo descifrar el pack de stickers",
+        Key::StickerErrKeyMismatch => "La clave no coincide con este paquete",
+        Key::StickerErrDecrypt => "No se pudo descifrar el paquete de stickers",
         Key::StickerManifestIncomplete => "El manifiesto del sticker está incompleto",
         Key::StickerManifestNumber => "El manifiesto del sticker tiene un número inválido",
         Key::StickerManifestField => "El manifiesto del sticker tiene un campo desconocido",
         Key::StickerErrCertificate => "No se pudo leer el certificado de Signal: {error}",
         Key::StickerErrRequest => "Falló la solicitud a signal.art: {error}",
         Key::StickerErrResponse => "No se pudo leer la respuesta de signal.art: {error}",
-        Key::StickerErrNoStickers => "Este pack no tiene stickers",
+        Key::StickerErrNoStickers => "Este paquete no tiene stickers",
         Key::StickerErrOpenFile => "No se pudo abrir el archivo: {error}",
         Key::StickerErrNotArchive => "Este archivo no es un archivo de stickers: {error}",
-        Key::StickerErrNoneRead => "No se pudo leer ningún sticker de este pack",
-        Key::StickerErrWrite => "No se pudo escribir el pack de stickers: {error}",
-        Key::StickerErrCreateFolder => "No se pudo crear la carpeta del pack: {error}",
-        Key::StickerErrTooMany => "Hay demasiados packs de stickers con este nombre",
-        Key::KindStickerPackTitle => "Pack de stickers",
+        Key::StickerErrNoneRead => "No se pudo leer ningún sticker de este paquete",
+        Key::StickerErrWrite => "No se pudo escribir el paquete de stickers: {error}",
+        Key::StickerErrCreateFolder => "No se pudo crear la carpeta del paquete: {error}",
+        Key::StickerErrTooMany => "Hay demasiados paquetes de stickers con este nombre",
+        Key::KindStickerPackTitle => "Paquete de stickers",
         Key::KindStickers => "Stickers",
         Key::MenuAbout => "Acerca de WhatsFast",
         Key::MenuSettings => "Ajustes…",
@@ -758,7 +775,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::MenuPaste => "Pegar",
         Key::MenuSelectAll => "Seleccionar todo",
         Key::MenuFind => "Buscar…",
-        Key::MenuView => "Visualización",
+        Key::MenuView => "Ver",
         Key::MenuToggleSidebar => "Mostrar u ocultar la barra lateral",
         Key::MenuZoomIn => "Acercar",
         Key::MenuZoomOut => "Alejar",
@@ -890,7 +907,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ThemeErrTooBig => "el tema supera el límite de 64 KiB",
         Key::ThemeErrUtf8 => "se esperaba JSON en UTF-8",
         Key::ThemeErrFolderUnreadable => {
-            "No se pudo leer la carpeta de temas. Mira el registro para más detalles."
+            "No se pudo leer la carpeta de temas. Consulta el registro para más detalles."
         }
         Key::ThemeErrTooManyEntries => {
             "La carpeta de temas tiene más de 512 entradas. Deja menos archivos ahí para listar los temas personalizados."
@@ -899,14 +916,14 @@ pub(super) fn text(key: Key) -> &'static str {
             "Solo se pueden listar 128 temas personalizados. Deja menos archivos JSON en la carpeta de temas para ver el resto."
         }
         Key::ThemeErrOmarchyLoad => {
-            "No se pudo cargar la paleta de Omarchy. Se mantiene el último aspecto que funcionó. Mira el registro para más detalles."
+            "No se pudo cargar la paleta de Omarchy. Se mantiene la última apariencia válida. Consulta el registro para más detalles."
         }
         Key::ThemeErrReload => {
-            "No se pudieron cargar los temas personalizados. Ejecuta whatsfast reload-themes para reintentar."
+            "No se pudieron cargar los temas personalizados. Ejecuta whatsfast reload-themes para volver a intentarlo."
         }
         Key::ThemeLoadingLocal => "Cargando temas locales…",
         Key::ThemeErrSelectedUnavailable => {
-            "El tema elegido no está disponible. Se mantiene el último aspecto que funcionó. Mira el registro para más detalles."
+            "El tema seleccionado no está disponible. Se mantiene la última apariencia válida. Consulta el registro para más detalles."
         }
         Key::ThemeErrOmarchyColors => "No se pudieron leer los colores actuales de Omarchy",
         Key::ThemeErrOmarchyTooBig => "El archivo de tema de Omarchy supera los 64 KiB",
@@ -946,5 +963,6 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ArchiveErrIntegrity => "El archivo cifrado no pasó la verificación de integridad",
         Key::ArchiveErrReplaceFailed => "No se pudo reemplazar el archivo por su copia cifrada",
         Key::NotifyErrIdentity => "identidad de notificación no disponible: {error}",
+        Key::SearchClear => "Limpiar",
     }
 }

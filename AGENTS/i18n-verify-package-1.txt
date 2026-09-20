@@ -1,0 +1,41 @@
+VEREDICTO: FIX_NECESARIO
+paquete_id: I18N-VERIFY-1
+target: sweep i18n EN->ES de WhatsFast (770 claves, commits af141d1, 9f871d5, 381890f, bef19b9, fdcfebb)
+
+HALLAZGOS ACORDADOS (id | severidad | evidencia | fix)
+1. PRIV-EN-01 | critica | src/privacy.rs:42-49 (label), 55-62 (hint), 70-74 (except_title), 156-161 (PrivacyChoice::label); pintado en src/ui/settings.rs:849,891 y src/ui/dialogs.rs:368 | Aplicar los call sites a las claves Privacy* que ya existen traducidas en src/i18n/{en,es}.rs.
+2. EDITED-EN-02 | alta | src/ui/conversation.rs:2616 y 2642 (literal "edited") | Clave nueva ChatEdited y call sites (dos ramas de color).
+3. MEDIA-NOTICE-EN-03 | alta | src/model.rs:566-568 (consts en ingles), usos src/archive.rs:675,680 y src/backend/worker.rs:3565; pintado en src/ui/conversation.rs:3710,3964 | Volver consts a funciones media_still_trying()/media_no_longer() con Key::ChatRetryFile/Key::ChatFileGone y actualizar usos y tests.
+4. ONLINE-EN-04 | alta | src/ui/conversation.rs:371 y src/ui/dialogs.rs:998 (literal "online") | Clave nueva ChatOnline ("en linea") y call sites.
+5. SENTINEL-NAME | alta | src/backend/worker.rs:5653-5658 (fallback_name => i18n::t), 1180-1184 (comparacion), src/archive.rs:268 persiste name; chat_name devuelve t(Key::DisplayYou) | El nombre de respaldo no se persiste traducido: devolver un marcador estable en ingles y pintar t() en la vista cuando el nombre guardado es el marcador.
+6. VOTERS-EN-05 | media | src/ui/polls.rs:276-282 (voter/voters a mano) | i18n::count con claves PollVoterOne/PollVoterMany.
+7. GUARD-CIEGO-06 | media | AGENTS/i18n-residual.py:36-37 safe_literal: el heurístico de const/static corta en el primer &'static str de una firma y saltea el resto del archivo (25 literales de privacy.rs invisibles; el script imprime residual: none) | Corregir el heurístico (const/static solo como declaracion, sin fn/impl entre la palabra y el literal) y volver a correr el escaneo hasta residual: none real.
+8. TOUR-ES | media | src/demo/tour.rs:179,191,206,252,254,272,274,408 (metas por texto) y 392,418-421 (aborta) | prepare() fuerza ingles (el tour es un guion en ingles); documentarlo; el tour no corre en ES.
+9. TEST-COVERAGE | media | tests/i18n_es.rs:16-27 (10 de 51 estados demo), src/demo/tour.rs:579 (viewport 1180x780; la mitad baja de Ajustes nunca se pinta), piso labels.len() >= 3, 105 claves con {placeholder} indetectables | Sumar a PAGES los estados con mas claves (update-failed, update-ready, poll, poll-create, unlink, leave-group, leave-channel, new-contact, privacy-except, forward, image-viewer, search, picker, stickers, gifs, voice, recording, archived, offline, typing, themes, react-menu, react-picker), cosechar en dos pasadas (780 y 2000) y subir el piso.
+10. UPDATER-LANG | media | src/main.rs:82-85 retorna antes de set_language (152) y usa textos i18n; restore_and_restart pasa --update-error con t(Key::UpdCouldNotStartRestored) y la app lo muestra | Resolver el idioma en la ruta --apply-update antes de usarlo.
+11. SETTINGS-TOLERANT | media | src/settings.rs:292-307: un language invalido hace fallar el parseo entero y Settings::default() borra tema/zoom/giphy/ultimo chat; FromStr acepta "es" pero el JSON usa "spanish" | Campo language tolerante (deserializador propio) y aceptar "es"/"en" tambien en el JSON.
+12. README-CLAIM | media | README.md:349 dice "applies at once, without a restart" | Decir que aplica al instante en la ventana y que la bandeja y los menus de macOS toman el idioma al reiniciar.
+13. LOGIN-ARCHIVE-ERR | media | src/backend/worker.rs:247,251 ("Archive unlock worker failed") llega a la pantalla de login | Clave nueva y call site.
+14. GLOSSARY-DRIFT | baja | es.rs:761 MenuView "Visualizacion" (glosario: Ver); "pack" (14 filas) vs "paquete" (5); "Mira el registro" vs "Consulta el registro"; "Volver a intentar"/"Reintentar"/"para reintentar"; "Videos" vs "Video" | Alinear los 6 puntos con AGENTS/i18n-glosario-es.md.
+15. TOOLTIP-CLEAR | baja | src/ui/widgets.rs:430 pasa "Clear" a theme::icon_button | Clave nueva.
+16. UPDATE-CONTEXT | baja | src/updates.rs:63,65 contextos anyhow en ingles | Claves Upd* y call sites.
+17. DEMO-FIXTURES | baja | src/demo.rs:987,993 ingles hardcodeado | Usar las claves Upd* que ya existen.
+18. CLAIM-HONESTY | baja | el claim dijo "0d60b06 es anterior al i18n": falso, 0d60b06 contiene af141d1..b037cb1; el pre-i18n real es fe8b94b (padre de af141d1); y los 2 fallos de demo::tour::tests no tienen corrida base registrada | Registrar en AGENTS/i18n-progress.md la corrida base con nombres y SHA, y corregir la atribucion.
+
+FUERA DE PAQUETE (no cambia severidad, no frena el cierre)
+- Filas identicas por diseno (marca, protocolo, Marker*, Kind*, plantillas de fecha) y el tooltip "WhatsFast" de la bandeja.
+- Colas de error de crates/SO y el mensaje de la API de GIPHY dentro de mensajes ya traducidos.
+- stderr de segunda instancia, volcado de panic, --help de clap, logs y --verbose.
+- Contenido de muestra y guion del tour de src/demo (salvo el punto 17).
+- packaging/*, README/docs en ingles, nombres de paleta, reloj de 24 h.
+- Los 2 fallos de demo::tour::tests quedan como pendiente del repo con nombre y corrida base (punto 18), no como defecto de i18n.
+
+PLAN_FIX (priorizado, diff minimo; solo el orquestador ejecuta tras CONSENSO_100)
+A. Escaner: arreglar safe_literal (punto 7) y re-correr hasta residual: none real. Verifica 1 y 3.
+B. privacy.rs: call sites de las 26 claves Privacy* (punto 1). Verifica 1.
+C. Claves nuevas: ChatEdited (2), ChatOnline (4), PollVoterOne/Many (6), Clear tooltip (15), Archive unlock (13). Verifica 2, 4, 6, 13, 15.
+D. model.rs: funciones de media (3) + usos y tests. Verifica 3.
+E. Marcador estable para nombres (5). Verifica 5.
+F. Tour en ingles (8) + PAGES/viewport del test ES (9) + language tolerante (11) + updater con idioma (10). Verifica 8, 9, 11, 10.
+G. Docs y ruido: README (12), glosario (14), updates.rs (16), demo.rs (17), nota de corrida base (18).
+H. DoD completo (fmt, clippy x2, test x2, doc) y commit con bump.
