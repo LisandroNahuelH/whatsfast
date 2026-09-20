@@ -25,7 +25,14 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   with wheel zoom, click-and-drag pan, and previous/next among downloaded
   photos in that chat. Stickers, videos, and **Open file** still use the
   system handler.
-- **`src/app.rs`** — Applies actions after each frame.
+- **`src/app.rs`** — Applies actions after each frame. A verified GitHub update
+  in `.whatsfast-pending` is adopted here on process start (not in demos).
+  Quit while the payload is Ready starts the helper; closing to the tray does
+  not.
+- **`src/updates/`** — GitHub latest, SHA-256, helper `--apply-update`. Staging
+  is `.whatsfast-pending` beside the install, with `prepared.json`. Click
+  **Update** runs the helper now. The next process start does the same when
+  auto-download is on.
 - **`src/backend.rs` / `src/backend/worker.rs`** — Tokio worker thread; owns
   whatsapp-rust `Bot`, archive, downloads, profile pictures. Talks to UI via
   `Command` and `Event`. Serial `Command::Forward` keeps a queue and starts
@@ -36,6 +43,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   open conversation. A failed file is retried with backoff for 30 days.
   Leaving a group uses `Client::groups().leave`. The chat row stays; `read_only`
   is set and `me` is dropped from `participants`. Archive is optional.
+  Leaving a channel (`@newsletter`) uses `Client::newsletter().leave`. Lists
+  (`@broadcast`) have no leave path.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
   link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
