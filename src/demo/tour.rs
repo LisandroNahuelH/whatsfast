@@ -1214,7 +1214,7 @@ mod tests {
     }
 
     #[test]
-    fn clicking_a_chat_search_hit_pulses_the_bubble() {
+    fn clicking_a_chat_search_hit_pulses_the_row() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
         let chat = super::super::SAMPLES[0].id;
@@ -1257,6 +1257,16 @@ mod tests {
             Some(hit.id.as_str())
         );
         assert_eq!(app.scroll_anchor.as_deref(), Some(hit.id.as_str()));
+        // One frame registers the row, the next paints its wash.
+        step_output(&mut app, &ctx, Vec::new(), 0.15, true);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.2, true);
+        let expected = app.palette.accent.gamma_multiply(0.16);
+        assert!(
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == expected)
+            }),
+            "the pulse washes the full message row"
+        );
     }
 
     #[test]

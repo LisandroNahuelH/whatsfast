@@ -1531,7 +1531,7 @@ struct View<'a> {
     selecting: Option<&'a HashSet<String>>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
-    /// OpenMessage pulse: message id and whether this 200 ms slice is on.
+    /// OpenMessage pulse: message id and whether this 200 ms slice washes the row.
     highlight: Option<(String, bool)>,
     /// Resolves a name with the message's stored name as fallback.
     names_or: &'a dyn Fn(&str, Option<&str>) -> String,
@@ -1670,21 +1670,29 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 || previous.is_none_or(|previous| {
                                     previous.sender != message.sender || previous.from_me
                                 }));
-                        // Selection mode makes the whole row the target: a
-                        // picked row keeps a wash of its own, and the pointer
-                        // adds a softer one. Both paint from the row's rect of
-                        // the last frame, before the bubble, so the highlight
-                        // never covers the message.
+                        // Selection and the OpenMessage pulse both wash the
+                        // whole row from last frame's rect, before the bubble.
                         let row_id =
                             egui::Id::new(("message-row", chat.id.as_str(), message.id.as_str()));
                         let selecting = view.selecting.is_some();
                         let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
-                        if selecting
-                            && let Some((rect, hovered)) =
-                                ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
-                            && let Some(wash) = row_wash(&palette, picked, hovered)
+                        let (highlight_this, flashing) = match &view.highlight {
+                            Some((id, on)) if id == &message.id => (true, *on),
+                            _ => (false, false),
+                        };
+                        if let Some((rect, hovered)) =
+                            ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
                         {
-                            ui.painter().rect_filled(rect, 6.0, wash);
+                            let wash = if flashing {
+                                row_wash(&palette, true, false)
+                            } else if selecting {
+                                row_wash(&palette, picked, hovered)
+                            } else {
+                                None
+                            };
+                            if let Some(wash) = wash {
+                                ui.painter().rect_filled(rect, 6.0, wash);
+                            }
                         }
                         let row_top = ui.cursor().top();
                         if let Some(response) =
@@ -1694,22 +1702,28 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             response.scroll_to_me(Some(Align::Center));
                             anchored = true;
                         }
-                        if selecting {
+                        if selecting || highlight_this {
                             let row = Rect::from_min_max(
                                 pos2(ui.max_rect().left(), row_top),
                                 pos2(ui.max_rect().right(), ui.cursor().top()),
                             );
-                            let response = ui.interact(row, row_id, Sense::click());
-                            ui.ctx().data_mut(|data| {
-                                data.insert_temp(row_id, (row, response.hovered()));
-                            });
-                            paint_pick(ui, &palette, row, message.from_me, picked);
-                            if response.clicked() {
-                                actions.push(Action::ToggleSelected {
-                                    message: message.id.clone(),
+                            if selecting {
+                                let response = ui.interact(row, row_id, Sense::click());
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(row_id, (row, response.hovered()));
+                                });
+                                paint_pick(ui, &palette, row, message.from_me, picked);
+                                if response.clicked() {
+                                    actions.push(Action::ToggleSelected {
+                                        message: message.id.clone(),
+                                    });
+                                }
+                                response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            } else {
+                                ui.ctx().data_mut(|data| {
+                                    data.insert_temp(row_id, (row, false));
                                 });
                             }
-                            response.on_hover_cursor(egui::CursorIcon::PointingHand);
                         }
                         previous = Some(message);
                     }
@@ -2187,21 +2201,13 @@ fn bubble_frame(
     let palette = view.palette;
     let own = message.from_me;
     // Draw stickers without a bubble.
-    let mut fill = if matches!(message.content, Content::Sticker { .. }) {
+    let fill = if matches!(message.content, Content::Sticker { .. }) {
         Color32::TRANSPARENT
     } else if own {
         palette.bubble_out
     } else {
         palette.bubble_in
     };
-    if fill != Color32::TRANSPARENT
-        && view
-            .highlight
-            .as_ref()
-            .is_some_and(|(id, on)| *on && id == &message.id)
-    {
-        fill = theme::blend(fill, palette.accent, 0.45);
-    }
     // Register the bubble from its previous rect before its contents so inner
     // links, quotes, and attachments win clicks. The bubble handles right-click.
     let bubble_id = bubble_id(&view.chat.id, &message.id);

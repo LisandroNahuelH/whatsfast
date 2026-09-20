@@ -160,7 +160,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Search messages in the open chat
 
-- **Technical:** The open chat shows a **Search** icon to the left of **More**. It opens a right inspector (**Ctrl+G**) that searches this chat, with an optional day filter. A click on a hit scrolls to the bubble and pulses it three times. **Ctrl+F** / **Ctrl+K** still search the chat list.
+- **Technical:** The open chat shows a **Search** icon to the left of **More**. It opens a right inspector (**Ctrl+G**) that searches this chat, with an optional day filter. A click on a hit scrolls to the message and pulses the whole row three times. **Ctrl+F** / **Ctrl+K** still search the chat list.
 - **Daily use:** You can find a message in the thread you already have open, without leaving that chat or mixing it with results from every other conversation.
 
 </td>
