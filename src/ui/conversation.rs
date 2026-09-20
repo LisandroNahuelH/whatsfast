@@ -3258,10 +3258,7 @@ fn content(
             seconds,
             waveform,
             ..
-        } => {
-            voice_player(ui, view, message, media, *seconds, waveform, width, actions);
-            None
-        }
+        } => voice_player(ui, view, message, media, *seconds, waveform, width, actions),
         Content::Document {
             media,
             file_name,
@@ -4144,7 +4141,8 @@ fn attachment(
     }
 }
 
-/// In-chat voice and audio player.
+/// In-chat voice and audio player. Returns the footer row so duration sits
+/// with the clock, left-aligned to the waveform.
 #[allow(clippy::too_many_arguments)]
 fn voice_player(
     ui: &mut egui::Ui,
@@ -4155,7 +4153,7 @@ fn voice_player(
     waveform: &[u8],
     width: f32,
     actions: &mut Vec<Action>,
-) {
+) -> Option<Rect> {
     use crate::audio::{State, speed_label};
     let palette = view.palette;
     let status = view.player.status(&message.id);
@@ -4185,15 +4183,14 @@ fn voice_player(
             });
         });
     };
+    let mut wave_left = None;
     // Force left-to-right layout at the player's width inside own bubbles.
     ui.allocate_ui_with_layout(
         vec2(width.max(0.0), button),
         Layout::left_to_right(Align::Center),
         |ui| {
-            // The centre the play button aligns to. The waveform and its
-            // duration stretch the row past this height, and the chip comes
-            // after them, so the chip centres on this instead of the
-            // stretched rect, which would leave it below the button.
+            // Play, waveform, and chip share this 36 px row. Duration lives on
+            // the footer row so it cannot stretch this centre line.
             let row_center = ui.max_rect().center().y;
             ui.spacing_mut().item_spacing.x = 10.0;
             match (&media.path, &media.state) {
@@ -4243,82 +4240,57 @@ fn voice_player(
                     }
                 },
             }
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 2.0;
-                let (rect, response) =
-                    ui.allocate_exact_size(vec2(wave_width, bar_height), Sense::click());
-                let pitch = 3.0;
-                let count = (rect.width() / pitch).floor() as usize;
-                let fraction = if status.total > Duration::ZERO {
-                    status.position.as_secs_f32() / status.total.as_secs_f32()
-                } else {
-                    0.0
-                };
-                let played_until = rect.left() + fraction * rect.width();
-                let quiet = palette.secondary.gamma_multiply(0.7);
-                if count > 0 {
-                    for index in 0..count {
-                        let level = f32::from(bars[index * bars.len() / count]) / 100.0;
-                        let height = (2.0 + level * (bar_height - 4.0)).max(2.0);
-                        let x = rect.left() + index as f32 * pitch + 1.0;
-                        let colour = if status.state != State::Idle && x <= played_until {
-                            palette.accent
-                        } else {
-                            quiet
-                        };
-                        ui.painter().rect_filled(
-                            Rect::from_center_size(
-                                egui::pos2(x, rect.center().y),
-                                vec2(2.0, height),
-                            ),
-                            1.0,
-                            colour,
-                        );
-                    }
-                }
-                if matches!(status.state, State::Playing | State::Paused) && rect.width() >= 10.0 {
-                    let knob = played_until.clamp(rect.left() + 5.0, rect.right() - 5.0);
-                    ui.painter().circle_filled(
-                        egui::pos2(knob, rect.center().y),
-                        5.0,
-                        palette.accent,
+            let (rect, response) =
+                ui.allocate_exact_size(vec2(wave_width, bar_height), Sense::click());
+            wave_left = Some(rect.left());
+            let pitch = 3.0;
+            let count = (rect.width() / pitch).floor() as usize;
+            let fraction = if status.total > Duration::ZERO {
+                status.position.as_secs_f32() / status.total.as_secs_f32()
+            } else {
+                0.0
+            };
+            let played_until = rect.left() + fraction * rect.width();
+            let quiet = palette.secondary.gamma_multiply(0.7);
+            if count > 0 {
+                for index in 0..count {
+                    let level = f32::from(bars[index * bars.len() / count]) / 100.0;
+                    let height = (2.0 + level * (bar_height - 4.0)).max(2.0);
+                    let x = rect.left() + index as f32 * pitch + 1.0;
+                    let colour = if status.state != State::Idle && x <= played_until {
+                        palette.accent
+                    } else {
+                        quiet
+                    };
+                    ui.painter().rect_filled(
+                        Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(2.0, height)),
+                        1.0,
+                        colour,
                     );
                 }
-                if let Some(path) = &media.path {
-                    let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
-                    if response.clicked()
-                        && let Some(pointer) = response.interact_pointer_pos()
-                    {
-                        let fraction = if rect.width() > 0.0 {
-                            ((pointer.x - rect.left()) / rect.width()).clamp(0.0, 1.0)
-                        } else {
-                            0.0
-                        };
-                        actions.push(Action::SeekVoice {
-                            message: message.id.clone(),
-                            path: path.clone(),
-                            fraction,
-                        });
-                    }
+            }
+            if matches!(status.state, State::Playing | State::Paused) && rect.width() >= 10.0 {
+                let knob = played_until.clamp(rect.left() + 5.0, rect.right() - 5.0);
+                ui.painter()
+                    .circle_filled(egui::pos2(knob, rect.center().y), 5.0, palette.accent);
+            }
+            if let Some(path) = &media.path {
+                let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                if response.clicked()
+                    && let Some(pointer) = response.interact_pointer_pos()
+                {
+                    let fraction = if rect.width() > 0.0 {
+                        ((pointer.x - rect.left()) / rect.width()).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    actions.push(Action::SeekVoice {
+                        message: message.id.clone(),
+                        path: path.clone(),
+                        fraction,
+                    });
                 }
-                // Show playback position while active, otherwise total duration.
-                let shown = match status.state {
-                    State::Playing | State::Paused => {
-                        crate::util::duration(status.position.as_secs() as u32)
-                    }
-                    _ => seconds
-                        .or_else(|| {
-                            (status.total > Duration::ZERO).then_some(status.total.as_secs() as u32)
-                        })
-                        .map(crate::util::duration)
-                        .unwrap_or_else(|| crate::util::bytes(media.size)),
-                };
-                let text = match &media.state {
-                    MediaState::Failed(error) => error.clone(),
-                    _ => shown,
-                };
-                theme::text(ui, text, theme::regular(11.5), palette.secondary);
-            });
+            }
             // Speed chip, cycling 1x, 1.5x, and 2x like the phone.
             if shows_chip {
                 let speed = view.player.speed();
@@ -4379,6 +4351,28 @@ fn voice_player(
             }
         },
     );
+    let shown = match status.state {
+        State::Playing | State::Paused => crate::util::duration(status.position.as_secs() as u32),
+        _ => seconds
+            .or_else(|| (status.total > Duration::ZERO).then_some(status.total.as_secs() as u32))
+            .map(crate::util::duration)
+            .unwrap_or_else(|| crate::util::bytes(media.size)),
+    };
+    let text = match &media.state {
+        MediaState::Failed(error) => error.clone(),
+        _ => shown,
+    };
+    let (row, _) = ui.allocate_exact_size(vec2(width.max(0.0), 15.0), Sense::hover());
+    if let Some(left) = wave_left {
+        let galley = ui
+            .painter()
+            .layout_no_wrap(text, theme::regular(11.5), palette.secondary);
+        ui.painter().galley(
+            pos2(left, row.center().y - galley.size().y / 2.0),
+            galley,
+            palette.secondary,
+        );
+    }
     let auto = media.path.is_none()
         && matches!(media.state, MediaState::Idle)
         && view.auto_download
@@ -4389,6 +4383,7 @@ fn voice_player(
             message: message.id.clone(),
         });
     }
+    Some(row)
 }
 
 /// Voice-recording controls and live waveform.
