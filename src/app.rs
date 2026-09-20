@@ -770,12 +770,13 @@ impl App {
         let contact = self.contacts.get(id);
         let present = |name: Option<&str>| name.filter(|name| !name.is_empty()).map(str::to_owned);
         let saved = present(contact.and_then(|contact| contact.full_name.as_deref()));
-        let called = present(contact.and_then(|contact| contact.push_name.as_deref()))
-            .or_else(|| present(hint));
+        let profile = present(contact.and_then(|contact| contact.push_name.as_deref()));
+        let hinted = present(hint);
+        // On: the name saved for that chat in live data (`push_name`). Off: public `full_name`.
         let (first, second) = if self.settings.names_from_contacts {
-            (saved, called.map(|name| format!("~{name}")))
+            (profile.or(hinted), saved)
         } else {
-            (called, saved)
+            (saved.or(hinted), profile.map(|name| format!("~{name}")))
         };
         if let Some(name) = first.or(second) {
             return name;
@@ -4728,7 +4729,7 @@ mod tests {
                 push_name: Some("Bob".into()),
             },
         );
-        assert_eq!(app.display_name("42@lid"), "~Bob");
+        assert_eq!(app.display_name("42@lid"), "Bob");
         app.me = Some("42@lid".into());
         assert_eq!(app.display_name("42@lid"), i18n::t(Key::DisplayYou));
     }
@@ -4766,11 +4767,11 @@ mod name_tests {
     #[test]
     fn the_setting_picks_the_source_and_the_other_fills_in() {
         let mut app = app();
-        assert_eq!(app.display_name("1@s.whatsapp.net"), "Ada Lovelace");
-        assert_eq!(app.display_name("2@s.whatsapp.net"), "~Bob");
-        app.settings.names_from_contacts = false;
         assert_eq!(app.display_name("1@s.whatsapp.net"), "Ada");
         assert_eq!(app.display_name("2@s.whatsapp.net"), "Bob");
+        app.settings.names_from_contacts = false;
+        assert_eq!(app.display_name("1@s.whatsapp.net"), "Ada Lovelace");
+        assert_eq!(app.display_name("2@s.whatsapp.net"), "~Bob");
         assert_eq!(
             app.display_name_or("3@s.whatsapp.net", Some("Cy")),
             "Cy",

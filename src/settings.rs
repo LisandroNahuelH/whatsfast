@@ -191,6 +191,7 @@ pub struct Settings {
     #[serde(default = "default_true")]
     pub download_updates_automatically: bool,
     /// Prefer address-book names over public profile names.
+    #[serde(default = "default_true")]
     pub names_from_contacts: bool,
     /// Voice and audio playback speed multiplier.
     pub voice_speed: f32,
@@ -356,6 +357,7 @@ mod tests {
         assert!(parsed.enter_sends);
         assert!(parsed.check_for_updates);
         assert!(parsed.download_updates_automatically);
+        assert!(parsed.names_from_contacts);
         assert_eq!(parsed.history_prefetch, HistoryPrefetch::RecentAndPinned);
         assert_eq!(parsed.chat_wallpaper, ChatWallpaper::Auto);
         assert_eq!(parsed.chat_wallpaper_index, 0);
