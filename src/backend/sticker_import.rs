@@ -5,6 +5,8 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use crate::i18n::{self, Key};
+
 /// Parses a pack id and key from a signal.art URL or parameter string.
 pub fn parse_signal_url(url: &str) -> Result<(String, [u8; 32]), String> {
     let tail = url.rsplit('#').next().unwrap_or(url);
@@ -20,10 +22,10 @@ pub fn parse_signal_url(url: &str) -> Result<(String, [u8; 32]), String> {
     }
     let id = id
         .filter(|id| id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .ok_or("Missing pack_id. Copy the full signal.art link")?;
+        .ok_or(i18n::t(Key::StickerErrMissingPackId))?;
     let key = key
         .and_then(|key| hex_bytes(&key))
-        .ok_or("Missing or invalid pack_key. Copy the full signal.art link")?;
+        .ok_or(i18n::t(Key::StickerErrMissingPackKey))?;
     Ok((id, key))
 }
 
@@ -49,26 +51,26 @@ pub fn decrypt_blob(payload: &[u8], pack_key: &[u8; 32]) -> Result<Vec<u8>, Stri
     use hmac::{Hmac, Mac};
     use sha2::Sha256;
     if payload.len() < 16 + 16 + 32 {
-        return Err("The sticker data is incomplete".to_owned());
+        return Err(i18n::t(Key::StickerErrIncompleteData).to_owned());
     }
     let mut keys = [0u8; 64];
     hkdf::Hkdf::<Sha256>::new(Some(&[0u8; 32]), pack_key)
-        .expand(b"Sticker Pack", &mut keys)
-        .map_err(|_| "Could not derive the sticker key".to_owned())?;
+        .expand(bi18n::t(Key::KindStickerPackTitle), &mut keys)
+        .map_err(|_| i18n::t(Key::StickerErrKeyDerive).to_owned())?;
     let (aes_key, mac_key) = keys.split_at(32);
     let (iv, rest) = payload.split_at(16);
     let (ciphertext, mac) = rest.split_at(rest.len() - 32);
     let mut hmac = <Hmac<Sha256> as KeyInit>::new_from_slice(mac_key)
-        .map_err(|_| "Could not derive the sticker key".to_owned())?;
+        .map_err(|_| i18n::t(Key::StickerErrKeyDerive).to_owned())?;
     hmac.update(iv);
     hmac.update(ciphertext);
     hmac.verify_slice(mac)
-        .map_err(|_| "The key does not match this pack".to_owned())?;
+        .map_err(|_| i18n::t(Key::StickerErrKeyMismatch).to_owned())?;
     let iv: [u8; 16] = iv.try_into().expect("split at 16");
     let aes_key: [u8; 32] = aes_key.try_into().expect("split at 32");
     cbc::Decryptor::<aes::Aes256>::new(&aes_key.into(), &iv.into())
         .decrypt_padded_vec::<Pkcs7>(ciphertext)
-        .map_err(|_| "Could not decrypt the sticker pack".to_owned())
+        .map_err(|_| i18n::t(Key::StickerErrDecrypt).to_owned())
 }
 
 /// Reads the pack title and sticker ids from the small manifest protobuf.
@@ -104,14 +106,14 @@ fn read_varint(bytes: &[u8], pos: &mut usize) -> Result<u64, String> {
     for shift in 0..10 {
         let byte = *bytes
             .get(*pos)
-            .ok_or("The sticker manifest is incomplete".to_owned())?;
+            .ok_or(i18n::t(Key::StickerManifestIncomplete).to_owned())?;
         *pos += 1;
         value |= u64::from(byte & 0x7f) << (shift * 7);
         if byte & 0x80 == 0 {
             return Ok(value);
         }
     }
-    Err("The sticker manifest contains an invalid number".to_owned())
+    Err(i18n::t(Key::StickerManifestNumber).to_owned())
 }
 
 fn read_tag(bytes: &[u8], pos: &mut usize) -> Result<(u64, u64), String> {
@@ -124,7 +126,7 @@ fn read_chunk<'a>(bytes: &'a [u8], pos: &mut usize) -> Result<&'a [u8], String> 
     let end = pos
         .checked_add(length)
         .filter(|end| *end <= bytes.len())
-        .ok_or("The sticker manifest is incomplete".to_owned())?;
+        .ok_or(i18n::t(Key::StickerManifestIncomplete).to_owned())?;
     let chunk = &bytes[*pos..end];
     *pos = end;
     Ok(chunk)
@@ -140,10 +142,10 @@ fn skip_field(bytes: &[u8], pos: &mut usize, wire: u64) -> Result<(), String> {
             read_chunk(bytes, pos)?;
         }
         5 => *pos += 4,
-        _ => return Err("The sticker manifest contains an unknown field".to_owned()),
+        _ => return Err(i18n::t(Key::StickerManifestField).to_owned()),
     }
     if *pos > bytes.len() {
-        return Err("The sticker manifest is incomplete".to_owned());
+        return Err(i18n::t(Key::StickerManifestIncomplete).to_owned());
     }
     Ok(())
 }
@@ -188,7 +190,7 @@ Lrsybb0z5gg8w7ZblEuB9zOW9M3l60DXuJO6l7g+deV6P96rv2unHS8UlvWiVWDy\n\
 fn signal_agent() -> Result<ureq::Agent, String> {
     use ureq::tls::{Certificate, RootCerts, TlsConfig};
     let ca = Certificate::from_pem(SIGNAL_CA.as_bytes())
-        .map_err(|error| format!("Could not read the Signal certificate: {error}"))?;
+        .map_err(|error| i18n::f(Key::StickerErrCertificate, &[("error", &error.to_string())]))?;
     let tls = TlsConfig::builder()
         .root_certs(RootCerts::new_with_certs(&[ca]))
         .build();
@@ -199,10 +201,10 @@ fn fetch(agent: &ureq::Agent, url: &str) -> Result<Vec<u8>, String> {
     agent
         .get(url)
         .call()
-        .map_err(|error| format!("signal.art request failed: {error}"))?
+        .map_err(|error| i18n::f(Key::StickerErrRequest, &[("error", &error.to_string())]))?
         .body_mut()
         .read_to_vec()
-        .map_err(|error| format!("Could not read the signal.art response: {error}"))
+        .map_err(|error| i18n::f(Key::StickerErrResponse, &[("error", &error.to_string())]))
 }
 
 /// Downloads a signal.art pack into a directory named after its title.
@@ -218,7 +220,7 @@ pub fn import_signal_pack(url: &str, packs: &Path) -> Result<String, String> {
     )?;
     let (title, ids) = parse_manifest(&manifest)?;
     if ids.is_empty() {
-        return Err("This pack contains no stickers".to_owned());
+        return Err(i18n::t(Key::StickerErrNoStickers).to_owned());
     }
     // Download several of the pack's files concurrently.
     let mut blobs: Vec<Option<Vec<u8>>> = vec![None; ids.len()];
@@ -247,10 +249,10 @@ pub fn import_signal_pack(url: &str, packs: &Path) -> Result<String, String> {
 
 /// Imports a .wastickers or zip archive. Uses `title.txt` or the filename as title.
 pub fn import_archive(path: &Path, packs: &Path) -> Result<String, String> {
-    let file =
-        std::fs::File::open(path).map_err(|error| format!("Could not open the file: {error}"))?;
+    let file = std::fs::File::open(path)
+        .map_err(|error| i18n::f(Key::StickerErrOpenFile, &[("error", &error.to_string())]))?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| format!("This file is not a sticker archive: {error}"))?;
+        .map_err(|error| i18n::f(Key::StickerErrNotArchive, &[("error", &error.to_string())]))?;
     let mut title: Option<String> = None;
     let mut pictures: Vec<(String, Vec<u8>)> = Vec::new();
     for index in 0..archive.len() {
@@ -294,12 +296,12 @@ pub fn import_archive(path: &Path, packs: &Path) -> Result<String, String> {
 /// Writes pack images to a new directory named after the title.
 fn write_pack(packs: &Path, title: &str, files: Vec<Vec<u8>>) -> Result<String, String> {
     if files.is_empty() {
-        return Err("No stickers could be read from this pack".to_owned());
+        return Err(i18n::t(Key::StickerErrNoneRead).to_owned());
     }
     let dir = unique_pack_dir(packs, title)?;
     for (index, bytes) in files.iter().enumerate() {
         std::fs::write(dir.join(format!("{index:03}.webp")), bytes)
-            .map_err(|error| format!("Could not write the sticker pack: {error}"))?;
+            .map_err(|error| i18n::f(Key::StickerErrWrite, &[("error", &error.to_string())]))?;
     }
     Ok(dir
         .file_name()
@@ -404,7 +406,7 @@ fn unique_pack_dir(root: &Path, title: &str) -> Result<PathBuf, String> {
         .take(60)
         .collect();
     let base = if clean.trim().is_empty() {
-        "Stickers".to_owned()
+        i18n::t(Key::KindStickers).to_owned()
     } else {
         clean.trim().to_owned()
     };
@@ -416,12 +418,16 @@ fn unique_pack_dir(root: &Path, title: &str) -> Result<PathBuf, String> {
         };
         let dir = root.join(&name);
         if !dir.exists() {
-            std::fs::create_dir_all(&dir)
-                .map_err(|error| format!("Could not create the pack folder: {error}"))?;
+            std::fs::create_dir_all(&dir).map_err(|error| {
+                i18n::f(
+                    Key::StickerErrCreateFolder,
+                    &[("error", &error.to_string())],
+                )
+            })?;
             return Ok(dir);
         }
     }
-    Err("Too many sticker packs have this name".to_owned())
+    Err(i18n::t(Key::StickerErrTooMany).to_owned())
 }
 
 #[cfg(test)]
@@ -451,7 +457,7 @@ mod tests {
         let pack_key = [7u8; 32];
         let mut keys = [0u8; 64];
         hkdf::Hkdf::<Sha256>::new(Some(&[0u8; 32]), &pack_key)
-            .expand(b"Sticker Pack", &mut keys)
+            .expand(bi18n::t(Key::KindStickerPackTitle), &mut keys)
             .expect("expands");
         let (aes_key, mac_key) = keys.split_at(32);
         let aes_key: [u8; 32] = aes_key.try_into().expect("32");

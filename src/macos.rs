@@ -8,6 +8,7 @@ use objc2_app_kit::{NSApplication, NSView, NSWindowButton};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem as Native, Submenu};
 
+use crate::i18n::{self, Key};
 use crate::model::{Action, Dialog, Page};
 
 thread_local! {
@@ -29,59 +30,75 @@ fn build_menu() -> tray_icon::menu::Result<Menu> {
     let menu = Menu::new();
     let app = Submenu::new("WhatsFast", true);
     app.append_items(&[
-        &item("about", "About WhatsFast", None),
+        &item("about", i18n::t(Key::MenuAbout), None),
         &Native::separator(),
-        &item("settings", "Settings…", Some("Super+Comma")),
+        &item("settings", i18n::t(Key::MenuSettings), Some("Super+Comma")),
         &Native::separator(),
         &Native::services(None),
         &Native::separator(),
-        &Native::hide(Some("Hide WhatsFast")),
+        &Native::hide(Some(i18n::t(Key::MenuHide))),
         &Native::hide_others(None),
         &Native::show_all(None),
         &Native::separator(),
-        &item("quit", "Quit WhatsFast", Some("Super+KeyQ")),
+        &item("quit", i18n::t(Key::MenuQuit), Some("Super+KeyQ")),
     ])?;
-    let file = Submenu::new("File", true);
+    let file = Submenu::new(i18n::t(Key::MenuFile), true);
     file.append_items(&[
-        &item("new", "New Contact…", Some("Super+KeyN")),
+        &item("new", i18n::t(Key::MenuNewContact), Some("Super+KeyN")),
         &Native::separator(),
-        &item("close", "Close Window", Some("Super+KeyW")),
+        &item("close", i18n::t(Key::MenuCloseWindow), Some("Super+KeyW")),
     ])?;
-    let edit = Submenu::new("Edit", true);
+    let edit = Submenu::new(i18n::t(Key::MenuEdit), true);
     // Winit's view is not an NSTextView: AppKit's copy:/undo: selectors
     // cannot edit egui text. Send the same events as its keyboard shortcuts.
     edit.append_items(&[
-        &item("undo", "Undo", Some("Super+KeyZ")),
-        &item("redo", "Redo", Some("Super+Shift+KeyZ")),
+        &item("undo", i18n::t(Key::MenuUndo), Some("Super+KeyZ")),
+        &item("redo", i18n::t(Key::MenuRedo), Some("Super+Shift+KeyZ")),
         &Native::separator(),
-        &item("cut", "Cut", Some("Super+KeyX")),
-        &item("copy", "Copy", Some("Super+KeyC")),
-        &item("paste", "Paste", Some("Super+KeyV")),
-        &item("select-all", "Select All", Some("Super+KeyA")),
+        &item("cut", i18n::t(Key::MenuCut), Some("Super+KeyX")),
+        &item("copy", i18n::t(Key::MenuCopy), Some("Super+KeyC")),
+        &item("paste", i18n::t(Key::MenuPaste), Some("Super+KeyV")),
+        &item(
+            "select-all",
+            i18n::t(Key::MenuSelectAll),
+            Some("Super+KeyA"),
+        ),
         &Native::separator(),
-        &item("search", "Find…", Some("Super+KeyF")),
+        &item("search", i18n::t(Key::MenuFind), Some("Super+KeyF")),
     ])?;
-    let view = Submenu::new("View", true);
+    let view = Submenu::new(i18n::t(Key::MenuView), true);
     view.append_items(&[
-        &item("sidebar", "Toggle Sidebar", Some("Super+KeyB")),
+        &item(
+            "sidebar",
+            i18n::t(Key::MenuToggleSidebar),
+            Some("Super+KeyB"),
+        ),
         &Native::separator(),
-        &item("zoom-in", "Zoom In", Some("Super+Equal")),
-        &item("zoom-out", "Zoom Out", Some("Super+Minus")),
-        &item("zoom-reset", "Actual Size", Some("Super+Digit0")),
+        &item("zoom-in", i18n::t(Key::MenuZoomIn), Some("Super+Equal")),
+        &item("zoom-out", i18n::t(Key::MenuZoomOut), Some("Super+Minus")),
+        &item(
+            "zoom-reset",
+            i18n::t(Key::MenuActualSize),
+            Some("Super+Digit0"),
+        ),
         &Native::separator(),
         &Native::fullscreen(None),
     ])?;
-    let window = Submenu::new("Window", true);
+    let window = Submenu::new(i18n::t(Key::SettingsSectionWindow), true);
     window.append_items(&[
         &Native::minimize(None),
-        &Native::maximize(Some("Zoom")),
+        &Native::maximize(Some(i18n::t(Key::SettingsZoomLabel))),
         &Native::separator(),
-        &item("show-window", "Show WhatsFast", None),
+        &item("show-window", i18n::t(Key::MenuShowWhatsFast), None),
     ])?;
-    let help = Submenu::new("Help", true);
+    let help = Submenu::new(i18n::t(Key::MenuHelp), true);
     help.append_items(&[
-        &item("shortcuts", "Keyboard Shortcuts", Some("Super+Slash")),
-        &item("help", "WhatsFast Help", None),
+        &item(
+            "shortcuts",
+            i18n::t(Key::MenuKeyboardShortcuts),
+            Some("Super+Slash"),
+        ),
+        &item("help", i18n::t(Key::MenuWhatsFastHelp), None),
     ])?;
     menu.append_items(&[&app, &file, &edit, &view, &window, &help])?;
     window.set_as_windows_menu_for_nsapp();

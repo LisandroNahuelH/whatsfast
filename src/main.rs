@@ -56,6 +56,11 @@ struct Cli {
     #[cfg(feature = "demo")]
     #[arg(long, value_name = "PATH")]
     demo_shot: Option<std::path::PathBuf>,
+    /// Interface language for a demo run: `en` or `es`.
+    #[cfg(feature = "demo")]
+    #[arg(long, value_name = "LANG")]
+    demo_lang: Option<String>,
+
     /// Screenshot window size as WxH logical points.
     #[arg(long, value_name = "WxH")]
     demo_size: Option<String>,
@@ -143,6 +148,8 @@ fn main() -> eframe::Result<()> {
     logger.init();
     log_panics(dirs.panic_log());
     let settings = settings::Settings::load(&dirs.settings_file());
+    // Resolve the interface language once, before anything paints.
+    whatsfast::i18n::set_language(settings.language);
     let demo_persistence = demo.then(|| dirs.state.join("window.ron"));
 
     #[allow(unused_mut)]
@@ -162,6 +169,9 @@ fn main() -> eframe::Result<()> {
     }
     #[cfg(feature = "demo")]
     if demo {
+        if let Some(lang) = cli.demo_lang.as_deref() {
+            whatsfast::i18n::set_language(lang.parse().unwrap_or_default());
+        }
         whatsfast::demo::populate(&mut app);
         whatsfast::demo::apply_flags(&mut app, cli.demo_page.as_deref());
         if cli.demo_tour {

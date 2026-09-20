@@ -1,6 +1,6 @@
 [package]
 name = "whatsfast"
-version = "0.15.233"
+version = "0.15.234"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
@@ -132,6 +132,10 @@ winresource = "0.1"
 tempfile = "3"
 # Creates small APNGs in sticker-import tests. Already included through image.
 png = "0.18"
+
+[[test]]
+name = "i18n_es"
+required-features = ["demo"]
 
 [features]
 # Sample data, layout tests, and screenshots. Not used in release builds.

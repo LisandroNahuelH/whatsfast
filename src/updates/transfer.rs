@@ -6,6 +6,8 @@ use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use crate::i18n::{self, Key};
+
 use super::{Release, install};
 
 const DOWNLOAD_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
@@ -103,12 +105,12 @@ fn asset<'a>(metadata: &'a Metadata, name: &str) -> Result<&'a Asset> {
         .collect();
     ensure!(
         matches.len() == 1,
-        "The release has no unique {name} download"
+        i18n::f(Key::UpdNoUniqueDownload, &[("name", name)])
     );
     let asset = matches[0];
     ensure!(
         asset.size > 0 && asset.size <= DOWNLOAD_LIMIT,
-        "Invalid update download size"
+        i18n::t(Key::UpdInvalidDownloadSize)
     );
     Ok(asset)
 }
@@ -120,15 +122,15 @@ fn checksum(text: &str, name: &str) -> Result<String> {
         if let (Some(digest), Some(file), None) = (fields.next(), fields.next(), fields.next())
             && file.trim_start_matches('*') == name
         {
-            ensure!(found.is_none(), "Duplicate checksum for the update");
+            ensure!(found.is_none(), i18n::t(Key::UpdDuplicateChecksum));
             ensure!(
                 digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit()),
-                "Invalid update checksum"
+                i18n::t(Key::UpdInvalidChecksum)
             );
             found = Some(digest.to_ascii_lowercase());
         }
     }
-    found.context("The release is missing the update checksum")
+    found.context(i18n::t(Key::UpdMissingChecksum))
 }
 
 pub fn download(
@@ -152,7 +154,7 @@ pub fn download_for(
                 .version
                 .bytes()
                 .all(|byte| byte.is_ascii_digit() || byte == b'.'),
-        "Invalid release version"
+        i18n::t(Key::UpdInvalidReleaseVersion)
     );
     let policy = source.clone();
     let http = reqwest::blocking::Client::builder()
@@ -163,7 +165,7 @@ pub fn download_for(
             if attempt.previous().len() < 5 && policy.allowed(attempt.url()) {
                 attempt.follow()
             } else {
-                attempt.error("Update redirect is not allowed")
+                attempt.error(i18n::t(Key::UpdRedirectNotAllowed))
             }
         }))
         .build()?;
@@ -177,7 +179,7 @@ pub fn download_for(
         !metadata.draft
             && !metadata.prerelease
             && metadata.tag_name == format!("v{}", release.version),
-        "The release changed. Check for updates again."
+        i18n::t(Key::UpdReleaseChanged)
     );
     let target = match (std::env::consts::OS, std::env::consts::ARCH) {
         ("windows", "x86_64") => "x86_64-pc-windows-msvc",
@@ -185,7 +187,7 @@ pub fn download_for(
         ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
         ("linux", "aarch64") => "aarch64-unknown-linux-gnu",
         ("macos", "aarch64" | "x86_64") => "macos-universal",
-        _ => bail!("Use the download page for this operating system or architecture"),
+        _ => bail!(i18n::t(Key::UpdUseDownloadPage)),
     };
     let stem = format!("whatsfast-v{}-{target}", release.version);
     let name = match installation.kind {
@@ -199,10 +201,7 @@ pub fn download_for(
     let checksums = asset(&metadata, "checksums.txt")?;
     for candidate in [package, checksums] {
         let url = reqwest::Url::parse(&candidate.browser_download_url)?;
-        ensure!(
-            source.allowed(&url),
-            "Update download is not on the release host"
-        );
+        ensure!(source.allowed(&url), i18n::t(Key::UpdNotOnReleaseHost));
         if matches!(source, Source::GitHub) {
             ensure!(
                 url.host_str() == Some("github.com")
@@ -211,7 +210,7 @@ pub fn download_for(
                             "/LisandroNahuelH/whatsfast/releases/download/v{}/{}",
                             release.version, candidate.name
                         ),
-                "Update asset does not belong to this release"
+                i18n::t(Key::UpdAssetOtherRelease)
             );
         }
     }
@@ -239,10 +238,7 @@ pub fn download_for(
                 break;
             }
             received += count as u64;
-            ensure!(
-                received <= package.size,
-                "Update download exceeds its published size"
-            );
+            ensure!(received <= package.size, i18n::t(Key::UpdExceedsSize));
             hash.update(&buffer[..count]);
             output.write_all(&buffer[..count])?;
             if received % (1024 * 1024) < count as u64 || received == package.size {
@@ -251,13 +247,10 @@ pub fn download_for(
         }
         output.sync_all()?;
         drop(output);
-        ensure!(
-            received == package.size,
-            "The update download was interrupted"
-        );
+        ensure!(received == package.size, i18n::t(Key::UpdInterrupted));
         ensure!(
             super::hex(&hash.finalize()) == expected,
-            "The download couldn't be verified. Try downloading it again."
+            i18n::t(Key::UpdCouldNotVerifyDownload)
         );
         #[cfg(target_os = "macos")]
         if installation.kind == install::Kind::MacBundle {

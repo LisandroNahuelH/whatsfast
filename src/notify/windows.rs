@@ -6,6 +6,8 @@ use windows_sys::Win32::System::Registry::{
 };
 use winrt_notification::{IconCrop, Toast};
 
+use crate::i18n::{self, Key};
+
 const APPLICATION_ID: &str = "me.paolino.whatsfast";
 
 fn wide(value: &str) -> Vec<u16> {
@@ -54,7 +56,10 @@ fn notification(title: &str, body: &str, picture: Option<&Path>) -> Toast {
 pub(super) fn show(title: &str, body: &str, picture: Option<&Path>) -> anyhow::Result<()> {
     static REGISTERED: OnceLock<Result<(), String>> = OnceLock::new();
     if let Err(error) = REGISTERED.get_or_init(|| register_identity().map_err(|e| e.to_string())) {
-        anyhow::bail!("notification identity unavailable: {error}");
+        anyhow::bail!(i18n::f(
+            Key::NotifyErrIdentity,
+            &[("error", &error.to_string())]
+        ));
     }
     notification(title, body, picture).show()?;
     Ok(())

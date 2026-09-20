@@ -1683,7 +1683,7 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
                     &[("who", typing[0].1.trim_start_matches('~'))],
                 )
             } else {
-                "typing…".to_owned()
+                i18n::t(Key::TypingShort).to_owned()
             };
             widgets::line(
                 ui,

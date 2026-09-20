@@ -6,14 +6,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::{self, Key, Language};
 
-use crate::i18n::{self, Key, Language};
-
-use crate::i18n::{self, Key, Language};
-
-use crate::i18n::{self, Key, Language};
-
-use crate::i18n::{self, Key, Language};
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ThemeChoice {
@@ -138,18 +130,6 @@ impl ChatWallpaper {
 #[serde(default)]
 pub struct Settings {
     pub theme: ThemeChoice,
-    /// Interface language. `System` follows the operating system.
-    #[serde(default)]
-    pub language: Language,
-    /// Interface language. `System` follows the operating system.
-    #[serde(default)]
-    pub language: Language,
-    /// Interface language. `System` follows the operating system.
-    #[serde(default)]
-    pub language: Language,
-    /// Interface language. `System` follows the operating system.
-    #[serde(default)]
-    pub language: Language,
     /// Interface language. `System` follows the operating system.
     #[serde(default)]
     pub language: Language,

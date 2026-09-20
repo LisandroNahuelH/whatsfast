@@ -551,12 +551,50 @@ impl Tour {
             });
         }
     }
+    /// Every label the last `observe` pass found, with its position.
+    pub fn labels(&self) -> &HashMap<String, Pos2> {
+        &self.labels
+    }
+
+    /// Renders one demo page offscreen and returns every painted label, sorted.
+    /// Used by the Spanish label test and by screenshots of a translated page.
+    pub fn harvest_labels(page: Option<&str>) -> Vec<String> {
+        let root = std::env::temp_dir().join(format!(
+            "whatsfast-labels-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let (mut app, _events) = App::headless(
+            crate::paths::AppDirs::under(&root),
+            crate::settings::Settings::default(),
+        );
+        crate::demo::populate(&mut app);
+        crate::demo::apply_flags(&mut app, page);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 780.0))),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                app.background_frame(&ctx);
+                app.frame_ui(ui);
+                tour.observe(&mut app, &ctx);
+            });
+            output.textures_delta.clear();
+        }
+        let mut labels: Vec<String> = tour.labels().keys().cloned().collect();
+        labels.sort();
+        labels
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Dialog, PickerTab};
+    use crate::model::{Action, Dialog, PickerTab};
     use crate::settings::HistoryPrefetch;
 
     fn frame(app: &mut App, tour: &mut Tour, ctx: &egui::Context, events: Vec<Event>) {
@@ -739,6 +777,48 @@ mod tests {
         click(&mut app, &mut tour, &ctx, "Green 1");
         assert_eq!(app.settings.chat_wallpaper, ChatWallpaper::Green);
         assert_eq!(app.settings.chat_wallpaper_index, 0);
+    }
+
+    #[test]
+    fn settings_downloads_shows_usage_and_opens_the_media_folder() {
+        let mut app = super::super::tests::app();
+        app.page = Page::Settings;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 2000.0))),
+                events: Vec::new(),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                app.background_frame(&ctx);
+                app.frame_ui(ui);
+                tour.observe(&mut app, &ctx);
+            });
+            output.textures_delta.clear();
+        }
+        for name in [
+            "Downloads",
+            "Images",
+            "Videos",
+            "Stickers and GIFs",
+            "Other",
+            "Open folder",
+        ] {
+            assert!(
+                tour.labels.contains_key(name),
+                "missing downloads label {name}"
+            );
+        }
+        crate::ui::settings::open_media_folder(&mut app);
+        let media = app.dirs.media_cache_dir();
+        assert!(
+            matches!(app.actions.last(), Some(Action::OpenFile(path)) if *path == media),
+            "Open folder should target the media cache"
+        );
+        assert!(media.is_dir(), "Open folder should create the media cache");
     }
 
     #[test]

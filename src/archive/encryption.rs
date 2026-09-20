@@ -2,6 +2,7 @@
 
 use std::{fs, io::Read, path::Path};
 
+use crate::i18n::{self, Key};
 use anyhow::{Context, Result, ensure};
 use keyring_core::api::CredentialStoreApi;
 use rusqlite::{Connection, OpenFlags};
@@ -42,10 +43,7 @@ fn legacy_state_roots(name: &str) -> Vec<std::path::PathBuf> {
 }
 
 fn secret_to_key(secret: Vec<u8>) -> Result<Zeroizing<[u8; 32]>> {
-    ensure!(
-        secret.len() == 32,
-        "The archive key in the OS keyring is invalid"
-    );
+    ensure!(secret.len() == 32, i18n::t(Key::ArchiveErrBadKeyringKey));
     let mut key = Zeroizing::new([0; 32]);
     key.copy_from_slice(&secret);
     Ok(key)
@@ -105,34 +103,34 @@ fn plaintext(path: &Path) -> Result<bool> {
 }
 
 pub(super) fn key_for(path: &Path) -> Result<Zeroizing<[u8; 32]>> {
-    let parent = path.parent().context("Archive has no parent directory")?;
+    let parent = path.parent().context(i18n::t(Key::ArchiveErrNoParentDir))?;
     fs::create_dir_all(parent)?;
     let identity = identity_for_dir(parent)?;
     #[cfg(target_os = "linux")]
     {
         let store = zbus_secret_service_keyring_store::Store::new()
-            .context("Unlock your OS keyring and restart WhatsFast")?;
+            .context(i18n::t(Key::ArchiveErrUnlockKeyring))?;
         let entry = store
             .build(SERVICE, &identity, None)
-            .context("The OS keyring could not open WhatsFast's archive key")?;
+            .context(i18n::t(Key::ArchiveErrKeyringOpen))?;
         key_from_entry(path, &entry, store.as_ref())
     }
     #[cfg(target_os = "macos")]
     {
         let store = apple_native_keyring_store::keychain::Store::new()
-            .context("Unlock your OS keyring and restart WhatsFast")?;
+            .context(i18n::t(Key::ArchiveErrUnlockKeyring))?;
         let entry = store
             .build(SERVICE, &identity, None)
-            .context("The OS keyring could not open WhatsFast's archive key")?;
+            .context(i18n::t(Key::ArchiveErrKeyringOpen))?;
         key_from_entry(path, &entry, store.as_ref())
     }
     #[cfg(windows)]
     {
         let store = windows_native_keyring_store::Store::new()
-            .context("Unlock your OS keyring and restart WhatsFast")?;
+            .context(i18n::t(Key::ArchiveErrUnlockKeyring))?;
         let entry = store
             .build(SERVICE, &identity, None)
-            .context("The OS keyring could not open WhatsFast's archive key")?;
+            .context(i18n::t(Key::ArchiveErrKeyringOpen))?;
         key_from_entry(path, &entry, store.as_ref())
     }
 }
@@ -149,31 +147,29 @@ fn key_from_entry(
                 if let Some(legacy) = try_legacy_archive_key(store, path)? {
                     entry
                         .set_secret(legacy.as_ref())
-                        .context("Could not save the migrated archive key in the OS keyring")?;
+                        .context(i18n::t(Key::ArchiveErrKeySaveMigrated))?;
                     return Ok(legacy);
                 }
-                anyhow::bail!(
-                    "The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed"
-                );
+                anyhow::bail!(i18n::t(Key::ArchiveErrKeyMissing));
             }
             let mut key = Zeroizing::new([0; 32]);
-            getrandom::fill(key.as_mut()).context("Could not generate an archive key")?;
+            getrandom::fill(key.as_mut()).context(i18n::t(Key::ArchiveErrKeyGenerate))?;
             entry
                 .set_secret(key.as_ref())
-                .context("Could not save the archive key in the OS keyring")?;
+                .context(i18n::t(Key::ArchiveErrKeySave))?;
             // Read back before touching the only copy of the message history.
             let saved = Zeroizing::new(
                 entry
                     .get_secret()
-                    .context("Could not verify the saved archive key")?,
+                    .context(i18n::t(Key::ArchiveErrKeyVerify))?,
             );
             ensure!(
                 saved.as_slice() == key.as_ref(),
-                "The OS keyring did not retain the archive key"
+                i18n::t(Key::ArchiveErrKeyNotRetained)
             );
             Ok(key)
         }
-        Err(error) => Err(error).context("Unlock your OS keyring and restart WhatsFast"),
+        Err(error) => Err(error).context(i18n::t(Key::ArchiveErrUnlockKeyring)),
     }
 }
 
@@ -193,17 +189,14 @@ fn keyed(path: &Path, key: &[u8; 32]) -> Result<Connection> {
     connection.pragma_update(None, "key", &*key_literal(key))?;
     let version: String = connection
         .query_row("PRAGMA cipher_version", [], |row| row.get(0))
-        .context("This build does not support encrypted archives")?;
-    ensure!(
-        !version.is_empty(),
-        "This build does not support encrypted archives"
-    );
+        .context(i18n::t(Key::ArchiveErrNoCipher))?;
+    ensure!(!version.is_empty(), i18n::t(Key::ArchiveErrNoCipher));
     // PRAGMA key alone does not verify a key. Read a page before any migration.
     connection
         .query_row("SELECT count(*) FROM sqlite_master", [], |row| {
             row.get::<_, i64>(0)
         })
-        .context("The archive could not be unlocked with its OS keyring key")?;
+        .context(i18n::t(Key::ArchiveErrUnlockFailed))?;
     connection.pragma_update(None, "temp_store", "MEMORY")?;
     Ok(connection)
 }
@@ -235,10 +228,7 @@ pub(super) fn open(path: &Path, key: &[u8; 32]) -> Result<Connection> {
         let source = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
         let mode: String =
             source.query_row("PRAGMA journal_mode = DELETE", [], |row| row.get(0))?;
-        ensure!(
-            mode == "delete",
-            "Close other programs using the archive before migrating it"
-        );
+        ensure!(mode == "delete", i18n::t(Key::ArchiveErrClosePrograms));
         source.pragma_update(None, "temp_store", "MEMORY")?;
         if staging.try_exists()? {
             fs::remove_file(&staging)?;
@@ -247,7 +237,9 @@ pub(super) fn open(path: &Path, key: &[u8; 32]) -> Result<Connection> {
         source.execute(
             "ATTACH DATABASE ?1 AS encrypted KEY ?2",
             rusqlite::params![
-                staging.to_str().context("Archive path is not UTF-8")?,
+                staging
+                    .to_str()
+                    .context(i18n::t(Key::ArchiveErrPathNotUtf8))?,
                 &*key_literal(key)
             ],
         )?;
@@ -261,10 +253,7 @@ pub(super) fn open(path: &Path, key: &[u8; 32]) -> Result<Connection> {
         let verified = keyed(&staging, key)?;
         let integrity: String =
             verified.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
-        ensure!(
-            integrity == "ok",
-            "The encrypted archive failed its integrity check"
-        );
+        ensure!(integrity == "ok", i18n::t(Key::ArchiveErrIntegrity));
         drop(verified);
         drop(source);
         // FlushFileBuffers on Windows requires a writable handle.
@@ -272,8 +261,7 @@ pub(super) fn open(path: &Path, key: &[u8; 32]) -> Result<Connection> {
             .write(true)
             .open(&staging)?
             .sync_all()?;
-        fs::rename(&staging, path)
-            .context("Could not replace the archive with its encrypted copy")?;
+        fs::rename(&staging, path).context(i18n::t(Key::ArchiveErrReplaceFailed))?;
         #[cfg(unix)]
         if let Some(parent) = path.parent() {
             fs::File::open(parent)?.sync_all()?;

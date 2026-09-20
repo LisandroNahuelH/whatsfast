@@ -1,5 +1,7 @@
 //! Optional, per-user setup for Linux packages. Runs in the theme worker.
 
+use crate::i18n::{self, Key};
+
 use std::{
     collections::BTreeMap,
     fs,
@@ -119,9 +121,7 @@ fn read_colors(path: &Path) -> io::Result<String> {
         .stdin(Stdio::null())
         .output()?;
     if !output.status.success() || output.stdout.len() > 64 * 1024 {
-        return Err(io::Error::other(
-            "Omarchy's current colors could not be read",
-        ));
+        return Err(io::Error::other(i18n::t(Key::ThemeErrOmarchyColors)));
     }
     String::from_utf8(output.stdout).map_err(io::Error::other)
 }
@@ -132,7 +132,7 @@ fn read_small(path: &Path) -> io::Result<String> {
         .take(64 * 1024 + 1)
         .read_to_end(&mut bytes)?;
     if bytes.len() > 64 * 1024 {
-        return Err(io::Error::other("Omarchy theme file exceeds 64 KiB"));
+        return Err(io::Error::other(i18n::t(Key::ThemeErrOmarchyTooBig)));
     }
     String::from_utf8(bytes).map_err(io::Error::other)
 }
@@ -175,13 +175,13 @@ fn render_seed(template: &str, colors: &str) -> io::Result<String> {
         output.push_str(before);
         let (token, after) = token
             .split_once("}}")
-            .ok_or_else(|| io::Error::other("incomplete palette placeholder"))?;
+            .ok_or_else(|| io::Error::other(i18n::t(Key::ThemeErrOmarchyIncomplete)))?;
         let words: Vec<_> = token.split_whitespace().collect();
         let get = |key: &str| {
             colors
                 .get(key)
                 .copied()
-                .ok_or_else(|| io::Error::other("missing Omarchy color"))
+                .ok_or_else(|| io::Error::other(i18n::t(Key::ThemeErrOmarchyMissingColor)))
         };
         match words.as_slice() {
             [key] => output.push_str(get(key)?),
@@ -190,12 +190,12 @@ fn render_seed(template: &str, colors: &str) -> io::Result<String> {
                     .strip_suffix('%')
                     .and_then(|p| p.parse().ok())
                     .filter(|p| *p <= 100)
-                    .ok_or_else(|| io::Error::other("unsupported palette mix"))?;
+                    .ok_or_else(|| io::Error::other(i18n::t(Key::ThemeErrOmarchyMix)))?;
                 let rgb = |value: &str| -> io::Result<u32> {
                     let hex = value
                         .strip_prefix('#')
                         .filter(|s| s.len() == 6)
-                        .ok_or_else(|| io::Error::other("expected an RGB color"))?;
+                        .ok_or_else(|| io::Error::other(i18n::t(Key::ThemeErrRgb)))?;
                     u32::from_str_radix(hex, 16).map_err(io::Error::other)
                 };
                 let (from, to) = (rgb(get(from)?)?, rgb(get(to)?)?);
@@ -208,7 +208,7 @@ fn render_seed(template: &str, colors: &str) -> io::Result<String> {
                     output.push_str(&format!("{value:02x}"));
                 }
             }
-            _ => return Err(io::Error::other("unsupported palette placeholder")),
+            _ => return Err(io::Error::other(i18n::t(Key::ThemeErrOmarchyPlaceholder))),
         }
         rest = after;
     }

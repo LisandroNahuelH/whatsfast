@@ -6,7 +6,6 @@ use jiff::{Timestamp, Zoned};
 use crate::i18n::{self, Key};
 use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
 
-use crate::i18n::{self, Key};
 use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
 
 /// File-loader identifier for a native path. egui requires a slash after

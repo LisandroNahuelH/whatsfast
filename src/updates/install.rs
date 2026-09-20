@@ -5,6 +5,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
+
+use crate::i18n::{self, Key};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -46,16 +48,16 @@ pub fn detect_at(executable: &Path) -> Result<Installation> {
     let path = executable.to_string_lossy().replace('\\', "/");
     let lower = path.to_lowercase();
     if std::env::var_os("FLATPAK_ID").is_some() || path.starts_with("/app/") {
-        bail!("Update this installation through your software center or flatpak update.");
+        bail!(i18n::t(Key::UpdFlatpak));
     }
     if std::env::var_os("SNAP").is_some() || path.starts_with("/snap/") {
-        bail!("Update this installation with snap refresh.");
+        bail!(i18n::t(Key::UpdSnap));
     }
     if lower.contains("/.cargo/") {
-        bail!("Update this installation with cargo install.");
+        bail!(i18n::t(Key::UpdCargo));
     }
     if path.starts_with("/nix/") || lower.contains("/cellar/") || lower.contains("/caskroom/") {
-        bail!("Update this installation with Nix or Homebrew.");
+        bail!(i18n::t(Key::UpdNix));
     }
     #[cfg(target_os = "linux")]
     {
@@ -70,19 +72,15 @@ pub fn detect_at(executable: &Path) -> Result<Installation> {
                 .output()
                 .is_ok_and(|output| output.status.success())
             {
-                bail!("Update this installation through {instruction} or your software center.");
+                bail!(i18n::f(Key::UpdThrough, &[("instruction", instruction)]));
             }
         }
         if path.starts_with("/usr/") || path.starts_with("/bin/") || path.starts_with("/sbin/") {
-            bail!(
-                "This installation is in a system directory. Use your package manager or the download page."
-            );
+            bail!(i18n::t(Key::UpdSystemDir));
         }
     }
     #[cfg(not(target_os = "macos"))]
-    let directory = executable
-        .parent()
-        .context("The application has no installation directory")?;
+    let directory = executable.parent().context(i18n::t(Key::UpdNoInstallDir))?;
     #[cfg(windows)]
     {
         let installed = std::env::var_os("LOCALAPPDATA")
@@ -115,7 +113,7 @@ pub fn detect_at(executable: &Path) -> Result<Installation> {
         ensure!(
             fs::read_to_string(directory.join("whatsfast-portable.txt"))
                 .is_ok_and(|value| value.trim() == MARKER),
-            "This installation does not identify itself as a portable download. Use the download page to install an update-enabled build."
+            i18n::t(Key::UpdNotPortable)
         );
         Ok(Installation {
             executable: executable.to_owned(),
@@ -158,7 +156,7 @@ fn pending_directory(installation: &Installation) -> Result<PathBuf> {
     Ok(installation
         .root()?
         .parent()
-        .context("Missing installation directory")?
+        .context(i18n::t(Key::UpdMissingInstallDir))?
         .join(PENDING_DIR))
 }
 
@@ -166,9 +164,9 @@ fn pending_directory(installation: &Installation) -> Result<PathBuf> {
 pub fn staging(installation: &Installation) -> Result<PathBuf> {
     let directory = pending_directory(installation)?;
     if directory.exists() {
-        fs::remove_dir_all(&directory).context("Cannot replace the staged update")?;
+        fs::remove_dir_all(&directory).context(i18n::t(Key::UpdCannotReplaceStaged))?;
     }
-    fs::create_dir(&directory).context("Cannot write to the installation directory")?;
+    fs::create_dir(&directory).context(i18n::t(Key::UpdCannotWriteInstallDir))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -226,25 +224,17 @@ pub fn extract(archive: &Path, entry: &str, destination: &Path) -> Result<()> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
     hidden(&mut command);
-    let mut child = command
-        .spawn()
-        .context("Cannot run tar to unpack the update")?;
+    let mut child = command.spawn().context(i18n::t(Key::UpdCannotRunTar))?;
     let result = (|| -> Result<()> {
         let mut stdout = child
             .stdout
             .take()
-            .context("Missing archive stream")?
+            .context(i18n::t(Key::UpdMissingArchiveStream))?
             .take(LIMIT + 1);
         let mut file = file;
         let count = std::io::copy(&mut stdout, &mut file)?;
-        ensure!(
-            count > 0 && count <= LIMIT,
-            "The update executable has an invalid size"
-        );
-        ensure!(
-            child.wait()?.success(),
-            "Cannot unpack the update executable"
-        );
+        ensure!(count > 0 && count <= LIMIT, i18n::t(Key::UpdExeInvalidSize));
+        ensure!(child.wait()?.success(), i18n::t(Key::UpdCannotUnpackExe));
         file.sync_all()?;
         Ok(())
     })();
@@ -281,31 +271,28 @@ pub fn verify_version(executable: &Path, expected: &str) -> Result<()> {
     hidden(&mut command);
     let mut child = command
         .spawn()
-        .context("The downloaded app cannot run on this computer")?;
+        .context(i18n::t(Key::UpdDownloadCannotRun))?;
     let start = Instant::now();
     loop {
         if let Some(status) = child.try_wait()? {
-            ensure!(
-                status.success(),
-                "The downloaded app failed its startup check"
-            );
+            ensure!(status.success(), i18n::t(Key::UpdStartupCheckFailed));
             let mut version = String::new();
             child
                 .stdout
                 .take()
-                .context("Missing version output")?
+                .context(i18n::t(Key::UpdMissingVersionOutput))?
                 .take(4096)
                 .read_to_string(&mut version)?;
             ensure!(
                 version.trim() == format!("whatsfast {expected}"),
-                "The downloaded app has the wrong version"
+                i18n::t(Key::UpdWrongVersion)
             );
             return Ok(());
         }
         if start.elapsed() >= Duration::from_secs(10) {
             let _ = child.kill();
             let _ = child.wait();
-            bail!("The downloaded app did not answer its startup check");
+            bail!(i18n::t(Key::UpdStartupCheckNoAnswer));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -314,7 +301,7 @@ pub fn verify_version(executable: &Path, expected: &str) -> Result<()> {
 pub fn handoff(prepared: &Prepared, arguments: Vec<String>) -> Result<()> {
     ensure!(
         hash(&prepared.payload)? == prepared.sha256,
-        "The staged update changed. Download it again."
+        i18n::t(Key::UpdStagedChanged)
     );
     let helper = prepared.directory.join(if cfg!(windows) {
         "helper.exe"
@@ -342,22 +329,21 @@ pub fn handoff(prepared: &Prepared, arguments: Vec<String>) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     hidden(&mut command);
-    let mut child = command.spawn().context("Cannot start the update helper")?;
+    let mut child = command
+        .spawn()
+        .context(i18n::t(Key::UpdCannotStartHelper))?;
     let ready = prepared.directory.join("ready");
     let start = Instant::now();
     while start.elapsed() < Duration::from_secs(10) {
         if ready.exists() {
             return Ok(());
         }
-        ensure!(
-            child.try_wait()?.is_none(),
-            "The update helper exited before it was ready"
-        );
+        ensure!(child.try_wait()?.is_none(), i18n::t(Key::UpdHelperExited));
         std::thread::sleep(Duration::from_millis(50));
     }
     let _ = child.kill();
     let _ = child.wait();
-    bail!("The update helper did not start. Try again.")
+    bail!(i18n::t(Key::UpdHelperNoStart))
 }
 
 fn wait_for_parent(parent: u32, ready: &Path) -> Result<()> {
@@ -368,7 +354,7 @@ fn wait_for_parent(parent: u32, ready: &Path) -> Result<()> {
             OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject,
         };
         let process = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, parent) };
-        ensure!(!process.is_null(), "Cannot watch the running app");
+        ensure!(!process.is_null(), i18n::t(Key::UpdCannotWatchApp));
         let result = fs::write(ready, b"ready");
         if result.is_err() {
             unsafe {
@@ -380,23 +366,20 @@ fn wait_for_parent(parent: u32, ready: &Path) -> Result<()> {
         unsafe {
             CloseHandle(process);
         }
-        ensure!(
-            outcome == WAIT_OBJECT_0,
-            "The app did not close within one minute"
-        );
+        ensure!(outcome == WAIT_OBJECT_0, i18n::t(Key::UpdAppDidNotClose));
     }
     #[cfg(target_os = "linux")]
     {
         let process = PathBuf::from(format!("/proc/{parent}/stat"));
-        let original = fs::read_to_string(&process).context("Cannot watch the running app")?;
-        let identity = process_identity(&original).context("Cannot identify the running app")?;
+        let original = fs::read_to_string(&process).context(i18n::t(Key::UpdCannotWatchApp))?;
+        let identity = process_identity(&original).context(i18n::t(Key::UpdCannotIdentifyApp))?;
         fs::write(ready, b"ready")?;
         let start = Instant::now();
         loop {
             let current = match fs::read_to_string(&process) {
                 Ok(current) => current,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-                Err(error) => return Err(error).context("Cannot watch the running app"),
+                Err(error) => return Err(error).context(i18n::t(Key::UpdCannotWatchApp)),
             };
             if process_identity(&current) != Some(identity)
                 || current
@@ -407,7 +390,7 @@ fn wait_for_parent(parent: u32, ready: &Path) -> Result<()> {
             }
             ensure!(
                 start.elapsed() < Duration::from_secs(60),
-                "The app did not close within one minute"
+                i18n::t(Key::UpdAppDidNotClose)
             );
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -424,7 +407,7 @@ fn wait_for_parent(parent: u32, ready: &Path) -> Result<()> {
         {
             ensure!(
                 start.elapsed() < Duration::from_secs(60),
-                "The app did not close within one minute"
+                i18n::t(Key::UpdAppDidNotClose)
             );
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -440,7 +423,7 @@ fn process_identity(stat: &str) -> Option<&str> {
 pub fn replace(prepared: &Prepared) -> Result<()> {
     ensure!(
         hash(&prepared.payload)? == prepared.sha256,
-        "The staged update checksum changed"
+        i18n::t(Key::UpdStagedChecksumChanged)
     );
     let target = &prepared.installation.executable;
     let backup = prepared.directory.join("previous");
@@ -448,18 +431,18 @@ pub fn replace(prepared: &Prepared) -> Result<()> {
         #[cfg(target_os = "macos")]
         Kind::MacBundle => super::macos::replace(prepared)?,
         Kind::Portable => {
-            ensure!(!backup.exists(), "This update was already applied");
-            backup_current(target, &backup).context("Cannot back up the current app")?;
+            ensure!(!backup.exists(), i18n::t(Key::UpdAlreadyApplied));
+            backup_current(target, &backup).context(i18n::t(Key::UpdCannotBackUp))?;
             #[cfg(windows)]
-            fs::remove_file(target).context("The app is still running or cannot be replaced")?;
+            fs::remove_file(target).context(i18n::t(Key::UpdAppStillRunning))?;
             if let Err(error) = fs::rename(&prepared.payload, target) {
                 #[cfg(windows)]
-                fs::copy(&backup, target).context("Could not restore the previous app")?;
-                return Err(error).context("Could not replace the app");
+                fs::copy(&backup, target).context(i18n::t(Key::UpdCannotRestore))?;
+                return Err(error).context(i18n::t(Key::UpdCannotReplaceApp));
             }
         }
         Kind::WindowsInstaller => {
-            backup_current(target, &backup).context("Cannot back up the current app")?;
+            backup_current(target, &backup).context(i18n::t(Key::UpdCannotBackUp))?;
             let mut command = Command::new(&prepared.payload);
             command
                 .args([
@@ -471,7 +454,11 @@ pub fn replace(prepared: &Prepared) -> Result<()> {
                 ])
                 .arg(format!(
                     "/DIR={}",
-                    installer_path(target.parent().context("Missing installation directory")?)
+                    installer_path(
+                        target
+                            .parent()
+                            .context(i18n::t(Key::UpdMissingInstallDir))?
+                    )
                 ))
                 .arg(format!(
                     "/LOG={}",
@@ -480,7 +467,7 @@ pub fn replace(prepared: &Prepared) -> Result<()> {
             hidden(&mut command);
             ensure!(
                 command.status()?.success(),
-                "The installer failed. See the update installer log."
+                i18n::t(Key::UpdInstallerFailed)
             );
         }
     }
@@ -500,7 +487,7 @@ fn write_backup(source: &mut impl Read, backup: &Path, permissions: fs::Permissi
     ensure!(
         fs::symlink_metadata(backup)
             .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound),
-        "This update already has a backup"
+        i18n::t(Key::UpdHasBackup)
     );
     let partial = backup.with_extension("partial");
     let mut output = OpenOptions::new()
@@ -539,19 +526,19 @@ pub fn run_helper(job: &Path) -> Result<()> {
     let prepared = &handoff.prepared;
     ensure!(
         job.parent() == Some(prepared.directory.as_path()),
-        "Invalid update job directory"
+        i18n::t(Key::UpdInvalidJobDir)
     );
     ensure!(
         prepared.payload.parent() == Some(prepared.directory.as_path()),
-        "Invalid staged payload"
+        i18n::t(Key::UpdInvalidPayload)
     );
     ensure!(
         prepared.directory.parent() == prepared.installation.root()?.parent(),
-        "Invalid installation directory"
+        i18n::t(Key::UpdInvalidInstallDir)
     );
     ensure!(
         hash(&prepared.payload)? == prepared.sha256,
-        "The staged update checksum changed"
+        i18n::t(Key::UpdStagedChecksumChanged)
     );
     wait_for_parent(handoff.parent, &prepared.directory.join("ready"))?;
     let result = replace(prepared);
@@ -559,7 +546,7 @@ pub fn run_helper(job: &Path) -> Result<()> {
         restore_and_restart(prepared, &handoff.arguments)?;
         fs::write(
             prepared.directory.join("result.txt"),
-            format!("Update failed: {error:#}"),
+            i18n::f(Key::UpdFailed, &[("error", &format!("{error:#}"))]),
         )?;
         return Err(error);
     }
@@ -572,7 +559,7 @@ pub fn run_helper(job: &Path) -> Result<()> {
     let launch = (|| -> Result<()> {
         let mut child = command
             .spawn()
-            .context("Could not launch the updated app")?;
+            .context(i18n::t(Key::UpdCannotLaunchUpdated))?;
         let start = Instant::now();
         loop {
             if prepared.directory.join("started").is_file() {
@@ -580,12 +567,12 @@ pub fn run_helper(job: &Path) -> Result<()> {
             }
             ensure!(
                 child.try_wait()?.is_none(),
-                "The updated app exited before opening its window"
+                i18n::t(Key::UpdUpdatedAppExited)
             );
             if start.elapsed() >= Duration::from_secs(60) {
                 let _ = child.kill();
                 let _ = child.wait();
-                bail!("The updated app did not open its window within one minute");
+                bail!(i18n::t(Key::UpdUpdatedAppNoWindow));
             }
             std::thread::sleep(Duration::from_millis(100));
         }
@@ -594,13 +581,13 @@ pub fn run_helper(job: &Path) -> Result<()> {
         restore_and_restart(prepared, &handoff.arguments)?;
         fs::write(
             prepared.directory.join("result.txt"),
-            format!("Update failed; restored the previous app: {error:#}"),
+            i18n::f(Key::UpdFailedRestored, &[("error", &format!("{error:#}"))]),
         )?;
         return Err(error);
     }
     fs::write(
         prepared.directory.join("result.txt"),
-        format!("Updated to {}", prepared.version),
+        i18n::f(Key::UpdUpdatedTo, &[("version", &version.to_string())]),
     )?;
     Ok(())
 }
@@ -613,17 +600,16 @@ fn restore_and_restart(prepared: &Prepared, arguments: &[String]) -> Result<()> 
     let backup = prepared.directory.join("previous");
     if backup.is_file() {
         fs::copy(&backup, &prepared.installation.executable)
-            .context("Could not restore the previous app")?;
+            .context(i18n::t(Key::UpdCannotRestore))?;
     }
     let mut command = Command::new(&prepared.installation.executable);
-    command.args(arguments).args([
-        "--update-error",
-        "The update could not start. The previous version has been restored.",
-    ]);
+    command
+        .args(arguments)
+        .args(["--update-error", i18n::t(Key::UpdCouldNotStartRestored)]);
     hidden(&mut command);
     command
         .spawn()
-        .context("Could not restart the previous app")?;
+        .context(i18n::t(Key::UpdCannotRestartPrevious))?;
     Ok(())
 }
 
@@ -631,16 +617,16 @@ pub fn acknowledge(job: &Path) -> Result<()> {
     let handoff: Handoff = serde_json::from_reader(File::open(job)?)?;
     ensure!(
         job.parent() == Some(handoff.prepared.directory.as_path()),
-        "Invalid update receipt directory"
+        i18n::t(Key::UpdInvalidReceiptDir)
     );
     ensure!(
         std::env::current_exe()?.canonicalize()?
             == handoff.prepared.installation.executable.canonicalize()?,
-        "The receipt belongs to a different installation"
+        i18n::t(Key::UpdReceiptOtherInstall)
     );
     ensure!(
         env!("CARGO_PKG_VERSION") == handoff.prepared.version,
-        "The updated app reports the wrong version"
+        i18n::t(Key::UpdUpdatedWrongVersion)
     );
     fs::write(
         handoff.prepared.directory.join("started"),

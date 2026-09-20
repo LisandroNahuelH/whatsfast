@@ -1,6 +1,8 @@
 //! Local palette files and their asynchronous catalog.
 
 use super::Palette;
+
+use crate::i18n::{self, Key};
 use egui::Color32;
 use std::{
     io::Read,
@@ -67,9 +69,9 @@ pub(super) fn parse_palette(text: &str) -> Result<Palette, String> {
     for (name, value) in &file.colors {
         let hex = value
             .strip_prefix('#')
-            .ok_or_else(|| format!("{name}: expected #RRGGBB or #RRGGBBAA"))?;
+            .ok_or_else(|| i18n::f(Key::ThemeErrHexColor, &[("name", name)]))?;
         if !matches!(hex.len(), 6 | 8) || !hex.bytes().all(|c| c.is_ascii_hexdigit()) {
-            return Err(format!("{name}: expected #RRGGBB or #RRGGBBAA"));
+            return Err(i18n::f(Key::ThemeErrHexColor, &[("name", name)]));
         }
         let color = u32::from_str_radix(hex, 16).map_err(|error| error.to_string())?;
         let color = if hex.len() == 6 {
@@ -104,7 +106,7 @@ pub(super) fn parse_palette(text: &str) -> Result<Palette, String> {
             "bubble_out" => palette.bubble_out = color,
             "link" => palette.link = color,
             "read" => palette.read = color,
-            _ => return Err(format!("unknown color: {name}")),
+            _ => return Err(i18n::f(Key::ThemeErrUnknownColor, &[("name", name)])),
         }
     }
     // Spotifast palettes share the sixteen interface colours. Derive chat-only
@@ -148,24 +150,24 @@ fn filename_is_local(filename: &str) -> bool {
 
 fn read_theme(directory: &Path, filename: &str) -> Result<CustomTheme, String> {
     if !filename_is_local(filename) {
-        return Err("expected a JSON filename in the themes folder".into());
+        return Err(i18n::t(Key::ThemeErrJsonFilename).into());
     }
     let path = directory.join(filename);
     let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
     if !metadata.is_file() {
-        return Err("expected a regular file, not a directory or symbolic link".into());
+        return Err(i18n::t(Key::ThemeErrRegularFile).into());
     }
     if metadata.len() > MAX_FILE_BYTES {
-        return Err("theme exceeds the 64 KiB file limit".into());
+        return Err(i18n::t(Key::ThemeErrTooBig).into());
     }
     let mut bytes = Vec::new();
     std::fs::File::open(&path)
         .and_then(|file| file.take(MAX_FILE_BYTES + 1).read_to_end(&mut bytes))
         .map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_FILE_BYTES {
-        return Err("theme exceeds the 64 KiB file limit".into());
+        return Err(i18n::t(Key::ThemeErrTooBig).into());
     }
-    let text = std::str::from_utf8(&bytes).map_err(|_| "expected UTF-8 JSON".to_string())?;
+    let text = std::str::from_utf8(&bytes).map_err(|_| i18n::t(Key::ThemeErrUtf8).to_string())?;
     Ok(CustomTheme {
         filename: filename.into(),
         palette: parse_palette(text)?,
@@ -196,8 +198,7 @@ fn discover(directory: &Path, selected: Option<&str>) -> Loaded {
         Ok(entries) => entries,
         Err(error) => {
             if error.kind() != std::io::ErrorKind::NotFound {
-                loaded.problem =
-                    Some("The themes folder could not be read. See the log for details.".into());
+                loaded.problem = Some(i18n::t(Key::ThemeErrFolderUnreadable).into());
                 log::warn!("unable to read themes at {}: {error}", directory.display());
             }
             return loaded;
@@ -206,7 +207,7 @@ fn discover(directory: &Path, selected: Option<&str>) -> Loaded {
     let mut names = Vec::new();
     for (index, entry) in entries.take(MAX_DIRECTORY_ENTRIES + 1).enumerate() {
         if index == MAX_DIRECTORY_ENTRIES {
-            loaded.problem = Some("The themes folder has more than 512 entries. Keep fewer files there to list the custom palettes.".into());
+            loaded.problem = Some(i18n::t(Key::ThemeErrTooManyEntries).into());
             // Do not offer a different arbitrary subset depending on filesystem order.
             return loaded;
         }
@@ -231,7 +232,7 @@ fn discover(directory: &Path, selected: Option<&str>) -> Loaded {
     }
     names.sort();
     if names.len() + loaded.themes.len() > MAX_THEMES {
-        loaded.problem = Some("Only 128 custom palettes can be listed. Keep fewer JSON files in the themes folder to see the rest.".into());
+        loaded.problem = Some(i18n::t(Key::ThemeErrTooManyThemes).into());
     }
     for filename in names.into_iter().take(MAX_THEMES - loaded.themes.len()) {
         match read_theme(directory, &filename) {
@@ -325,13 +326,20 @@ impl Catalog {
                 log::warn!("unable to prepare the optional Omarchy theme: {error}");
             }
             let selected_file = scan.selected.as_deref().filter(|filename| {
-                !presets || !super::presets::contains(filename) || scan.directory.join(filename).exists()
+                !presets
+                    || !super::presets::contains(filename)
+                    || scan.directory.join(filename).exists()
             });
             let mut loaded = discover(&scan.directory, selected_file);
             if presets {
                 for theme in super::presets::themes() {
-                    if selected_file == Some(theme.filename.as_str()) && scan.directory.join(&theme.filename).exists()
-                        && !loaded.themes.iter().any(|local| local.filename == theme.filename) {
+                    if selected_file == Some(theme.filename.as_str())
+                        && scan.directory.join(&theme.filename).exists()
+                        && !loaded
+                            .themes
+                            .iter()
+                            .any(|local| local.filename == theme.filename)
+                    {
                         // A broken user override keeps the cached selection; it
                         // must not silently turn back into the bundled default.
                         continue;
@@ -380,7 +388,9 @@ impl Catalog {
                         }
                         Err(error) => {
                             log::warn!("unable to read the current Omarchy palette: {error}");
-                            loaded.problem.get_or_insert_with(|| "The Omarchy palette could not be loaded. Keeping the last usable appearance. See the log for details.".into());
+                            loaded
+                                .problem
+                                .get_or_insert_with(|| i18n::t(Key::ThemeErrOmarchyLoad).into());
                         }
                     }
                 }
@@ -409,10 +419,7 @@ impl Catalog {
             Ok(_) => self.receiver = Some(receiver),
             Err(error) => {
                 log::warn!("unable to start the theme loader: {error}");
-                self.problem = Some(
-                    "Custom themes could not be loaded. Run whatsfast reload-themes to try again."
-                        .into(),
-                );
+                self.problem = Some(i18n::t(Key::ThemeErrReload).into());
             }
         }
     }
@@ -453,10 +460,10 @@ impl Catalog {
 
     pub fn detail(&self, selected: Option<&str>) -> &str {
         if self.loading() {
-            return "Loading local themes…";
+            return i18n::t(Key::ThemeLoadingLocal);
         }
         if selected.is_some_and(|filename| self.find(filename).is_none()) {
-            return "The selected theme is unavailable. Keeping the last usable appearance. See the log for details.";
+            return i18n::t(Key::ThemeErrSelectedUnavailable);
         }
         self.problem.as_deref().unwrap_or("")
     }
@@ -488,10 +495,7 @@ impl Catalog {
                 }
             }
             Err(mpsc::TryRecvError::Disconnected) => {
-                self.problem = Some(
-                    "Custom themes could not be loaded. Run whatsfast reload-themes to try again."
-                        .into(),
-                );
+                self.problem = Some(i18n::t(Key::ThemeErrReload).into());
             }
             Err(mpsc::TryRecvError::Empty) => unreachable!("handled above"),
         }

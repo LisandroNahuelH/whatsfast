@@ -10,7 +10,6 @@ use egui::{
 
 use crate::app::App;
 use crate::i18n::{self, Key};
-use crate::i18n::{self, Key};
 use crate::model::{Action, PickerTab};
 use crate::theme::{self, Icon, Palette};
 

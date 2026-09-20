@@ -84,6 +84,20 @@ impl Language {
     }
 }
 
+impl std::str::FromStr for Language {
+    type Err = ();
+
+    /// Parses `system`, `en`, or `es` (case-insensitive).
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        match text.to_ascii_lowercase().as_str() {
+            "system" => Ok(Self::System),
+            "en" | "english" => Ok(Self::English),
+            "es" | "spanish" => Ok(Self::Spanish),
+            _ => Err(()),
+        }
+    }
+}
+
 /// The locale every interface string renders in. Starts in English as the
 /// pre-resolution state; every real start overwrites it from settings before
 /// the interface is built.

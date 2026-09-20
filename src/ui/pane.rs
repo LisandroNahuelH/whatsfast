@@ -4,8 +4,9 @@ use egui::{Align, Align2, Frame, Layout, Margin, Rect, Sense, Vec2, pos2, vec2};
 use jiff::civil::Date;
 
 use crate::app::App;
+use crate::i18n::{self, Key};
 use crate::model::{Action, Message, Page, RightPane};
-use crate::schedule::{weekday_from_offset, weekday_name};
+use crate::schedule::{month_name, weekday_from_offset, weekday_name};
 use crate::theme::{self, Icon, Palette};
 use crate::util;
 
@@ -307,25 +308,13 @@ fn month_step(month: Date, direction: i32) -> Date {
 }
 
 fn month_label(month: Date) -> String {
-    const NAMES: [&str; 12] = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ];
-    let name = NAMES
-        .get(usize::try_from(month.month() - 1).unwrap_or(0))
-        .copied()
-        .unwrap_or("January");
-    format!("{name} {}", month.year())
+    i18n::f(
+        Key::MonthYear,
+        &[
+            ("month", month_name(month.month())),
+            ("year", &month.year().to_string()),
+        ],
+    )
 }
 
 fn hit_row(app: &mut App, ui: &mut egui::Ui, hit: &Message, query: &str) {

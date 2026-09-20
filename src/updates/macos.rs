@@ -4,6 +4,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result, ensure};
 
+use crate::i18n::{self, Key};
+
 use super::install::{self, Installation, Prepared};
 
 const IDENTIFIER: &str = "me.paolino.fastsapp";
@@ -12,18 +14,18 @@ pub(super) fn bundle_root(executable: &Path) -> Result<&Path> {
     let root = executable
         .ancestors()
         .nth(3)
-        .context("Missing app bundle")?;
+        .context(i18n::t(Key::UpdMissingAppBundle))?;
     ensure!(
         root.extension().is_some_and(|extension| extension == "app")
             && root.join("Contents/MacOS/whatsfast") == executable,
-        "Move the app to Applications, then open it to update."
+        i18n::t(Key::UpdMoveToApplications)
     );
     Ok(root)
 }
 
 fn plist(bundle: &Path, key: &str) -> Result<String> {
     let output = Command::new("/usr/libexec/PlistBuddy")
-        .args(["-c", &format!("Print :{key}")])
+        .args(["-c", &i18n::f(Key::UpdBundleMissingKey, &[("key", key)])])
         .arg(bundle.join("Contents/Info.plist"))
         .output()?;
     ensure!(output.status.success(), "The app bundle is missing {key}");
@@ -35,7 +37,7 @@ fn identity(bundle: &Path) -> Result<()> {
         plist(bundle, "CFBundleIdentifier")? == IDENTIFIER
             && plist(bundle, "CFBundleExecutable")? == "whatsfast"
             && plist(bundle, "CFBundlePackageType")? == "APPL",
-        "The download is not a WhatsFast app bundle"
+        i18n::t(Key::UpdNotAnAppBundle)
     );
     Ok(())
 }
@@ -46,7 +48,7 @@ pub(super) fn detect(executable: &Path) -> Result<()> {
             && !executable
                 .components()
                 .any(|part| part.as_os_str() == "AppTranslocation"),
-        "Move the app to Applications, then open it to update."
+        i18n::t(Key::UpdMoveToApplications)
     );
     let bundle = bundle_root(executable)?;
     let prefixes = [
@@ -59,7 +61,7 @@ pub(super) fn detect(executable: &Path) -> Result<()> {
             !["whatsfast", "fastsapp"]
                 .iter()
                 .any(|name| cask_owns(&prefix.join("Caskroom").join(name), bundle)),
-            "Update this installation with Homebrew."
+            i18n::t(Key::UpdHomebrew)
         );
     }
     identity(bundle)
@@ -89,16 +91,13 @@ fn team(bundle: &Path) -> Result<Option<String>> {
         .output()?;
     ensure!(
         verify.status.success(),
-        "The app signature could not be verified"
+        i18n::t(Key::UpdSignatureUnverified)
     );
     let output = Command::new("/usr/bin/codesign")
         .args(["--display", "--verbose=4"])
         .arg(bundle)
         .output()?;
-    ensure!(
-        output.status.success(),
-        "Cannot read the app signing identity"
-    );
+    ensure!(output.status.success(), i18n::t(Key::UpdCannotReadSigning));
     Ok(String::from_utf8(output.stderr)?
         .lines()
         .find_map(|line| line.strip_prefix("TeamIdentifier="))
@@ -110,13 +109,13 @@ fn validate(bundle: &Path, installation: &Installation, version: &str) -> Result
     identity(bundle)?;
     ensure!(
         plist(bundle, "CFBundleShortVersionString")? == version,
-        "The app bundle has the wrong version"
+        i18n::t(Key::UpdBundleWrongVersion)
     );
     let incoming = team(bundle)?;
     if let Some(current) = team(bundle_root(&installation.executable)?)? {
         ensure!(
             incoming.as_deref() == Some(current.as_str()),
-            "The update was signed by a different publisher"
+            i18n::t(Key::UpdSignedByOther)
         );
         let assessment = Command::new("/usr/sbin/spctl")
             .args(["--assess", "--type", "execute"])
@@ -124,7 +123,7 @@ fn validate(bundle: &Path, installation: &Installation, version: &str) -> Result
             .output()?;
         ensure!(
             assessment.status.success(),
-            "macOS could not approve this update for launch"
+            i18n::t(Key::UpdMacosNotApproved)
         );
     }
     install::verify_version(&bundle.join("Contents/MacOS/whatsfast"), version)
@@ -135,7 +134,7 @@ struct Mounted(PathBuf);
 fn mountpoint(archive: &Path) -> Result<PathBuf> {
     let mount = archive
         .parent()
-        .context("Missing update directory")?
+        .context(i18n::t(Key::UpdMissingUpdateDir))?
         .join(format!("mounted-{:016x}", rand::random::<u64>()));
     fs::create_dir(&mount)?;
     Ok(mount)
@@ -153,7 +152,7 @@ impl Mounted {
             .output()?;
         if !output.status.success() {
             let _ = fs::remove_dir(&mount);
-            anyhow::bail!("macOS could not open the downloaded disk image");
+            anyhow::bail!(i18n::t(Key::UpdCannotOpenDmg));
         }
         Ok(Self(mount))
     }
@@ -168,17 +167,14 @@ fn image_bundle(root: &Path) -> Result<PathBuf> {
         let bundle = root.join(name);
         match fs::symlink_metadata(&bundle) {
             Ok(metadata) => {
-                ensure!(
-                    metadata.is_dir(),
-                    "The disk image has an invalid app bundle"
-                );
+                ensure!(metadata.is_dir(), i18n::t(Key::UpdDmgInvalidBundle));
                 return Ok(bundle);
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error.into()),
         }
     }
-    anyhow::bail!("The disk image has no WhatsFast app bundle")
+    anyhow::bail!(i18n::t(Key::UpdDmgNoBundle))
 }
 
 impl Drop for Mounted {
@@ -209,7 +205,7 @@ pub(super) fn replace(prepared: &Prepared) -> Result<()> {
     let candidate = prepared.directory.join("WhatsFast.app");
     ensure!(
         !backup.exists() && !candidate.exists(),
-        "This update was already applied"
+        i18n::t(Key::UpdAlreadyApplied)
     );
     let mounted = Mounted::open(&prepared.payload)?;
     let source = mounted.bundle()?;
@@ -218,16 +214,13 @@ pub(super) fn replace(prepared: &Prepared) -> Result<()> {
         .arg(&source)
         .arg(&candidate)
         .output()?;
-    ensure!(
-        copy.status.success(),
-        "Could not copy the downloaded app bundle"
-    );
+    ensure!(copy.status.success(), i18n::t(Key::UpdCannotCopyBundle));
     validate(&candidate, &prepared.installation, &prepared.version)?;
     drop(mounted);
-    fs::rename(target, &backup).context("Cannot back up the current app bundle")?;
+    fs::rename(target, &backup).context(i18n::t(Key::UpdCannotBackUpBundle))?;
     if let Err(error) = fs::rename(&candidate, target) {
-        fs::rename(&backup, target).context("Could not restore the previous app bundle")?;
-        return Err(error).context("Could not replace the app bundle");
+        fs::rename(&backup, target).context(i18n::t(Key::UpdCannotRestoreBundle))?;
+        return Err(error).context(i18n::t(Key::UpdCannotReplaceBundle));
     }
     Ok(())
 }
@@ -238,9 +231,9 @@ pub(super) fn restore(prepared: &Prepared) -> Result<()> {
         let target = bundle_root(&prepared.installation.executable)?;
         if target.exists() {
             fs::rename(target, prepared.directory.join("failed.app"))
-                .context("Could not move the failed update aside")?;
+                .context(i18n::t(Key::UpdCannotMoveFailed))?;
         }
-        fs::rename(backup, target).context("Could not restore the previous app bundle")?;
+        fs::rename(backup, target).context(i18n::t(Key::UpdCannotRestoreBundle))?;
     }
     Ok(())
 }
