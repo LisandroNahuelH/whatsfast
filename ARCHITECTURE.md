@@ -57,7 +57,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   Connect loads account privacy with `fetch_privacy_settings` and MEX
   `get_privacy_lists`. Settings Privacy writes `set_privacy_setting` and
   `set_privacy_disallowed_list` (a 409 refetches the list hash once). Values
-  stay on the phone, not in `settings.json`.
+  stay on the phone, not in `settings.json`. The same section also paints
+  this-copy **Send read receipts** and **Show when you are typing**, which
+  stay in `settings.json` and do not need the link.
 - **`src/privacy.rs`** — Account privacy kinds, values, Except lists, and the
   in-memory snapshot the Settings page shows.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
