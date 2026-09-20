@@ -156,6 +156,16 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 </td>
 </tr>
 <tr>
+<td colspan="2" valign="top">
+
+### Search from the open-chat header
+
+- **Technical:** The open chat shows a **Search** icon to the left of **More**. It focuses the existing chat-list search field, the same as **Ctrl+F**.
+- **Daily use:** You can start a search without moving to the left list or remembering the shortcut.
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### One-click in-app updates
