@@ -8,6 +8,8 @@ WhatsFast uses a **green chat bubble** as its app icon. The product is **unoffic
 
 Source artwork: [packaging/icons/whatsfast-1024.png](packaging/icons/whatsfast-1024.png).
 
+Interface text is Montserrat Variable (`wght` 100–900). Size and weight pick the face; there is no `wdth` axis. Scale: display 28/700 (login brand), page 24/700 (Settings), heading 20/700 (chat-list headers), section 17/700, chat name 14.5/500, body 14/400, meta 12.5, caption 11.5. Reason: one variable file covers titles and body without a second family.
+
 The empty message composer is 35% taller than one text line, the caret fills that band, and typed letters sit on the vertical center of that band with attach, emoji, send, and schedule. The bubble keeps 20% more space above the window's bottom edge than the old 8px inset. Reason: a tight one-line field against the window reads cheap; extra air does not change send keys.
 
 Chat wallpaper names in Settings are Auto or `Black 1` to `White 3`. Hover a name to preview it in the empty Settings margin. Right-click the thread for Next wallpaper. Reason: one doodle per colour felt static; the preview uses spare width instead of covering the combo.

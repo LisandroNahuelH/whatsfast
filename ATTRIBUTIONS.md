@@ -35,7 +35,7 @@ Thank you to the whatsapp-rust maintainers and contributors.
 |-----------|--------|---------|
 | Immediate-mode UI | [egui](https://github.com/emilk/egui) / [emilk](https://github.com/emilk) | MIT OR Apache-2.0 |
 | UI icons (Lucide-style) | [Lucide](https://lucide.dev/) | ISC ([assets/icons/LICENSE.txt](assets/icons/LICENSE.txt)) |
-| Inter variable font | [Inter](https://github.com/rsms/inter) | SIL Open Font License ([assets/fonts/Inter-LICENSE.txt](assets/fonts/Inter-LICENSE.txt)) |
+| Montserrat variable font | [Montserrat](https://github.com/JulietaUla/Montserrat) | SIL Open Font License ([assets/fonts/Montserrat-LICENSE.txt](assets/fonts/Montserrat-LICENSE.txt)) |
 | Color emoji (where used) | Noto Color Emoji | See [assets/fonts/NotoColorEmoji-LICENSE.txt](assets/fonts/NotoColorEmoji-LICENSE.txt) |
 
 Thank you to the authors of these libraries and asset packs.

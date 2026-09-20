@@ -74,6 +74,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 - **Read state across devices.** Reading a chat syncs its unread badge with your phone and other linked devices, including when read receipts are off. Replies from another device clear preceding unread messages. The read-receipt toggle also controls voice-message played receipts; account privacy is checked before sending receipts in direct chats. A hidden window does not read messages.
 - **Conversations.** See replies, reactions, edits, deleted messages, read receipts, sender names, and group pictures. Older messages load as you scroll up, first from the local archive and then from your phone. Group messages show two gray checks after every recipient has received them, and blue checks after every recipient has read them. The recipient list and individual receipts are saved locally; later membership changes do not change that list. If the original recipients are unknown, WhatsFast waits for the phone's aggregate status instead of guessing from one reader.
 - **WhatsApp formatting.** Bold, italic, strikethrough, code, lists, quotes, mentions, and link previews are supported. Links are clickable. Hebrew and Arabic RTL paragraphs keep logical word order by reordering font runs; this is not a full Unicode Bidirectional Algorithm. Emoji use the desktop's color emoji font, with a bundled fallback, and emoji-only messages are larger.
+- **Interface type.** Every window label uses bundled [Montserrat](https://github.com/JulietaUla/Montserrat) Variable (`wght` 100–900): titles, lists, composer, and code spans. Scripts Montserrat does not cover fall back to a system sans.
 - **Send attachments with captions.** Paste a picture, drop files, or use the file picker. They stay in the composer until you send them or press Escape.
 - **Mute chats** for eight hours, one week, or indefinitely. The setting also applies on your phone and to desktop notifications. Mute changes from your phone survive history arriving later, including during initial linking. Existing installations request one settings refresh after upgrading to recover previously lost mute settings and pin order, without relinking.
 - **Voice messages.** Play, seek, record, reply with, and send voice messages in the chat. The playback speed cycles between 1x, 1.5x, and 2x from the bubble, keeping the speaker's pitch, and the last choice applies to later messages. The app normalizes quiet recordings and handles OGG/Opus without external tools.
@@ -428,7 +429,7 @@ WhatsFast is distributed under the **[MIT License](LICENSE)**.
 
 The `LICENSE` file names **Lisandro Nahuel** as copyright holder for this repository. Portions derive from ZapFast (see [ATTRIBUTIONS.md](ATTRIBUTIONS.md)). You may use, modify, and redistribute the software under the conditions in that file. The software is provided **as is**, without warranty.
 
-Inter and Noto Color Emoji are under the SIL Open Font License; the icons are from [Lucide](https://lucide.dev) (ISC).
+Montserrat and Noto Color Emoji are under the SIL Open Font License; the icons are from [Lucide](https://lucide.dev) (ISC).
 
 For a full list of credits and third-party components, see [Attributions](#attributions) below and [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
 
@@ -439,7 +440,7 @@ WhatsFast stands on work by many open-source authors. **Thank you** to:
 - **[Carmine Paolino](https://github.com/crmne)** and contributors of **[ZapFast](https://github.com/crmne/zapfast)**: foundation of this client (MIT).
 - **[oxidezap/whatsapp-rust](https://github.com/oxidezap/whatsapp-rust)**: WhatsApp linked-device protocol.
 - **[egui](https://github.com/emilk/egui)**: native UI toolkit.
-- **Lucide** icon authors ([license](assets/icons/LICENSE.txt)) and **Inter** font authors ([license](assets/fonts/Inter-LICENSE.txt)): interface assets.
+- **Lucide** icon authors ([license](assets/icons/LICENSE.txt)) and **Montserrat** font authors ([license](assets/fonts/Montserrat-LICENSE.txt)): interface assets.
 
 WhatsApp is a trademark of **Meta Platforms, Inc.** WhatsFast is independent and is not affiliated with WhatsApp or Meta.
 
