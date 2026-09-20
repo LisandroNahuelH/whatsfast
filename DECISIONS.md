@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Double-click a message bubble or its row replies, with one row flash | The documented empty-strip double-click was gone; a flash confirms the quote | Double-click beside a message, or on its edge, replies; text keeps the word |
 | 2026-09-19 | OpenMessage pulse washes the full message row | The bubble is only part of the line; search must mark the whole row | Bubble fill lerp toward accent |
 | 2026-09-19 | Header Search and Ctrl+G open a right inspector for in-chat search | Ctrl+F keeps the chat list; a second finder in the same field mixed two jobs | Open-chat header Search runs FocusSearch |
 | 2026-09-19 | Open-chat header Search runs FocusSearch | Same field as Ctrl+F; a second in-chat finder would split results | Header had More only |
