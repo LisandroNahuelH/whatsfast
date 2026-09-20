@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Incoming REVOKE stores `revoked_at` and keeps `content` | Recover the body on this copy; Settings can still paint the deleted placeholder | `set_content(Revoked)`, which destroyed the JSON body |
 | 2026-09-20 | Selection-bar Delete is delete-for-me for every picked row | Mixed incoming and outgoing picks cannot all revoke; the bubble menu still has both items | No batch delete on the bar |
 | 2026-09-20 | Live `cargo watch` uses `-d 30` | Agents edit many files; 15 s still restarted compile mid-turn | `-d 15` after last crate-input change |
 | 2026-09-20 | Ctrl+V image paste uses Ctrl chord memory and skips a duplicate pending picture | egui-winit drops V-press; Windows often reports V-up after Ctrl-up; a time debounce still cloned the same clip | Retries, `CF_DIB`, and a 0.7 s paste timer |

@@ -83,7 +83,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   attachment sizes by JSON `kind` without loading message bodies.
   `message_pins` stores in-chat pins (`PIN_FOR_ALL` / `UNPIN_FOR_ALL`) with
   `expires_at`; at most three active pins per chat. `App::pins` feeds the
-  bubble menu, the media viewer, and the same footer mark as a star. `chat_media()` lists
+  bubble menu, the media viewer, and the same footer mark as a star. A live
+  or history `REVOKE` writes `messages.revoked_at` and leaves `content`.
+  Local Delete for everyone still stores `Content::Revoked`. `chat_media()` lists
   Image and non-GIF Video rows for the viewer strip.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 - **`src/i18n/`** — Every interface string is a `Key` in an enum with an
