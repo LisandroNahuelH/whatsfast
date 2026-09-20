@@ -33,3 +33,5 @@ The media viewer is a full-window overlay: a 56 px header (avatar, name, last se
 A message pin is not a chat pin. Pin for everyone for 7 days, at most three per chat, with a left-list copy of Starred, chips under the chat header, and the same footer mark a star uses. Reason: WhatsApp Web's pin-in-chat is a protocol act, and the row itself must show the pin.
 
 The bubble footer uses one 8 px gap from the time to the nearest mark and between pin and star. Reason: a 16 px slot with a 13 px icon left about 1.5 px of air and the two marks read as one blob.
+
+A voice bubble keeps play and waveform on one 36 px row, centred together. Duration sits on the footer row at the waveform's left edge, beside the clock. Reason: stacking duration under the bars stretched the row, sat the button high, and Label padding shifted the time off the first bar.
