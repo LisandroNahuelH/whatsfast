@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::model::{
-    Chat, ChatId, ChatList, Contact, Gif, GifError, Message, PollDraft, StickerPack,
+    Chat, ChatId, ChatList, Contact, Gif, GifError, Message, PollDraft, StickerPack, StorageStats,
 };
 use crate::paths::AppDirs;
 use crate::settings::HistoryPrefetch;
@@ -258,6 +258,8 @@ pub enum Command {
         from: Option<i64>,
         until: Option<i64>,
     },
+    /// Attachment counts and sizes from the archive, for Settings.
+    StorageStats,
     /// Creates an archive chat before its first message is sent.
     EnsureChat {
         chat: ChatId,
@@ -591,6 +593,8 @@ pub enum Event {
         until: Option<i64>,
         messages: Vec<Message>,
     },
+    /// Attachment counts and sizes from the archive.
+    StorageStats(StorageStats),
     Typing {
         chat: ChatId,
         sender: String,

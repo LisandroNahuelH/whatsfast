@@ -11,7 +11,8 @@ use crate::audio::{Player, Recorder};
 use crate::backend::{Backend, Command, Event, LinkStatus, Waker};
 use crate::model::{
     Action, Chat, ChatId, ChatList, ChatListId, Contact, Content, Delivery, Dialog, Gif, GifError,
-    Media, MediaState, Message, Page, PickerTab, RightPane, StickerPack, Toast, ToastKind,
+    Media, MediaState, Message, Page, PickerTab, RightPane, StickerPack, StorageStats, Toast,
+    ToastKind,
 };
 use crate::paths::AppDirs;
 use crate::settings::{Settings, ThemeChoice};
@@ -165,6 +166,10 @@ pub struct App {
     pub highlight: Option<(String, Instant)>,
     /// How many 200 ms ON slices [`Self::highlight`] plays. Search uses 3; reply uses 1.
     pub highlight_ons: u8,
+    /// Downloaded-attachment counts for Settings. Refreshed when that page opens.
+    pub storage_stats: StorageStats,
+    pub(crate) storage_stats_at: Option<Instant>,
+    pub(crate) storage_stats_asked: bool,
     /// Active typers and their latest event time by chat.
     pub typing: HashMap<ChatId, Vec<(String, Instant)>>,
     pub presence: HashMap<String, Presence>,
@@ -436,6 +441,9 @@ impl App {
             focus_chat_search: false,
             highlight: None,
             highlight_ons: 3,
+            storage_stats: StorageStats::default(),
+            storage_stats_at: None,
+            storage_stats_asked: false,
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
@@ -1216,6 +1224,11 @@ impl App {
                     {
                         self.chat_search_hits = messages;
                     }
+                }
+                Event::StorageStats(stats) => {
+                    self.storage_stats = stats;
+                    self.storage_stats_at = Some(Instant::now());
+                    self.storage_stats_asked = false;
                 }
                 Event::Incoming { chat, message } => self.maybe_notify(&chat, &message),
                 Event::Picked { chat, paths } => {

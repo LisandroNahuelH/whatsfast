@@ -9,7 +9,7 @@ use egui::{
 };
 
 use crate::app::App;
-use crate::i18n::{self, Key};
+use crate::i18n::{self, Key as I18nKey};
 use crate::model::{Action, PickerTab};
 use crate::theme::{self, Icon, Palette};
 
@@ -102,12 +102,16 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 fn tabs(app: &mut App, ui: &mut egui::Ui, palette: &Palette, current: PickerTab) {
     ui.horizontal(|ui| {
         let entries = [
-            (PickerTab::Emoji, Icon::Smile, i18n::t(Key::PickerTabEmoji)),
-            (PickerTab::Gifs, Icon::Gif, i18n::t(Key::PickerTabGif)),
+            (
+                PickerTab::Emoji,
+                Icon::Smile,
+                i18n::t(I18nKey::PickerTabEmoji),
+            ),
+            (PickerTab::Gifs, Icon::Gif, i18n::t(I18nKey::PickerTabGif)),
             (
                 PickerTab::Stickers,
                 Icon::Sticker,
-                i18n::t(Key::PickerTabStickers),
+                i18n::t(I18nKey::PickerTabStickers),
             ),
         ];
         let spacing = ui.spacing().item_spacing.x;
@@ -142,15 +146,15 @@ fn search_box(
 
 fn group_name(group: emojis::Group) -> &'static str {
     match group {
-        emojis::Group::SmileysAndEmotion => i18n::t(Key::PickerGroupSmileys),
-        emojis::Group::PeopleAndBody => i18n::t(Key::PickerGroupPeople),
-        emojis::Group::AnimalsAndNature => i18n::t(Key::PickerGroupAnimals),
-        emojis::Group::FoodAndDrink => i18n::t(Key::PickerGroupFood),
-        emojis::Group::TravelAndPlaces => i18n::t(Key::PickerGroupTravel),
-        emojis::Group::Activities => i18n::t(Key::PickerGroupActivities),
-        emojis::Group::Objects => i18n::t(Key::PickerGroupObjects),
-        emojis::Group::Symbols => i18n::t(Key::PickerGroupSymbols),
-        emojis::Group::Flags => i18n::t(Key::PickerGroupFlags),
+        emojis::Group::SmileysAndEmotion => i18n::t(I18nKey::PickerGroupSmileys),
+        emojis::Group::PeopleAndBody => i18n::t(I18nKey::PickerGroupPeople),
+        emojis::Group::AnimalsAndNature => i18n::t(I18nKey::PickerGroupAnimals),
+        emojis::Group::FoodAndDrink => i18n::t(I18nKey::PickerGroupFood),
+        emojis::Group::TravelAndPlaces => i18n::t(I18nKey::PickerGroupTravel),
+        emojis::Group::Activities => i18n::t(I18nKey::PickerGroupActivities),
+        emojis::Group::Objects => i18n::t(I18nKey::PickerGroupObjects),
+        emojis::Group::Symbols => i18n::t(I18nKey::PickerGroupSymbols),
+        emojis::Group::Flags => i18n::t(I18nKey::PickerGroupFlags),
     }
 }
 
@@ -191,7 +195,7 @@ fn rows_for(
             .map(|emoji| emoji.as_str())
             .collect();
         if found.is_empty() {
-            rows.push(Row::Header(i18n::t(Key::PickerNothingMatches)));
+            rows.push(Row::Header(i18n::t(I18nKey::PickerNothingMatches)));
         } else {
             chunk(&mut rows, found);
         }
@@ -237,7 +241,7 @@ fn place_picker(screen: Rect, anchor: Option<Rect>, width: f32, height: f32) -> 
 /// come from the same place the grid headers do, so a jump matches by text.
 fn categories() -> [(Option<emojis::Group>, &'static str, &'static str); 10] {
     [
-        (None, "🕒", i18n::t(Key::PickerFrequentlyUsed)),
+        (None, "🕒", i18n::t(I18nKey::PickerFrequentlyUsed)),
         (
             Some(emojis::Group::SmileysAndEmotion),
             "😀",
@@ -357,7 +361,7 @@ fn emoji_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
         palette,
         "emoji-search",
         "emoji-grid",
-        i18n::t(Key::PickerRecent),
+        i18n::t(I18nKey::PickerRecent),
     ) {
         app.actions.push(Action::InsertEmoji(emoji));
     }
@@ -407,7 +411,7 @@ fn reaction_picker(app: &mut App, ctx: &egui::Context) {
                                         &palette,
                                         "reaction-emoji-search",
                                         "reaction-emoji-grid",
-                                        i18n::t(Key::PickerFrequentlyUsed),
+                                        i18n::t(I18nKey::PickerFrequentlyUsed),
                                     ) {
                                         let current = app
                                             .conversations
@@ -539,7 +543,7 @@ fn emoji_grid(
         palette,
         search_id,
         &mut search,
-        i18n::t(Key::PickerSearchEmoji),
+        i18n::t(I18nKey::PickerSearchEmoji),
     );
     let query_changed = search != app.picker_search;
     if query_changed {
@@ -721,7 +725,7 @@ mod emoji_tests {
 
     #[test]
     fn search_finds_emoji_by_name_and_shortcode() {
-        let rows = rows_for("crab", &[], 8, i18n::t(Key::PickerRecent));
+        let rows = rows_for("crab", &[], 8, i18n::t(I18nKey::PickerRecent));
         let found: Vec<&str> = rows
             .iter()
             .filter_map(|row| match row {
@@ -736,11 +740,9 @@ mod emoji_tests {
 
     #[test]
     fn empty_query_lists_recent_then_groups() {
-        let rows = rows_for("", &["👍".into()], 8, i18n::t(Key::PickerFrequentlyUsed));
-        assert!(matches!(
-            rows.first(),
-            Some(Row::Header(i18n::t(Key::PickerFrequentlyUsed)))
-        ));
+        let freq = i18n::t(I18nKey::PickerFrequentlyUsed);
+        let rows = rows_for("", &["👍".into()], 8, freq);
+        assert!(matches!(rows.first(), Some(Row::Header(label)) if *label == freq));
         assert!(
             rows.iter()
                 .any(|row| matches!(row, Row::Header("Smileys & Emotion")))
@@ -751,12 +753,13 @@ mod emoji_tests {
     #[test]
     fn empty_recent_omits_the_recent_header() {
         for recent in [Vec::new(), vec!["not-an-emoji".into()]] {
-            let rows = rows_for("", &recent, 8, i18n::t(Key::PickerFrequentlyUsed));
+            let freq = i18n::t(I18nKey::PickerFrequentlyUsed);
+            let recent_label = i18n::t(I18nKey::PickerRecent);
+            let rows = rows_for("", &recent, 8, freq);
             assert!(
                 !rows.iter().any(|row| matches!(
                     row,
-                    Row::Header(i18n::t(Key::PickerFrequentlyUsed))
-                        | Row::Header(i18n::t(Key::PickerRecent))
+                    Row::Header(label) if *label == freq || *label == recent_label
                 )),
                 "{recent:?}"
             );
@@ -770,36 +773,41 @@ mod emoji_tests {
     #[test]
     fn empty_recent_omits_the_frequently_used_tab() {
         let labels: Vec<&str> = category_entries(false).map(|(_, _, label)| label).collect();
-        assert!(!labels.contains(&i18n::t(Key::PickerFrequentlyUsed)));
+        assert!(!labels.contains(&i18n::t(I18nKey::PickerFrequentlyUsed)));
         assert_eq!(labels.first().copied(), Some("Smileys & Emotion"));
         let with_recent: Vec<&str> = category_entries(true).map(|(_, _, label)| label).collect();
         assert_eq!(
             with_recent.first().copied(),
-            Some(i18n::t(Key::PickerFrequentlyUsed))
+            Some(i18n::t(I18nKey::PickerFrequentlyUsed))
         );
         assert_eq!(with_recent.len(), labels.len() + 1);
     }
 
     #[test]
     fn empty_recent_jump_falls_back_to_the_first_unicode_group() {
-        let empty = rows_for("", &[], 8, i18n::t(Key::PickerFrequentlyUsed));
+        let empty = rows_for("", &[], 8, i18n::t(I18nKey::PickerFrequentlyUsed));
         assert_eq!(
-            resolve_jump(Some(i18n::t(Key::PickerFrequentlyUsed)), &empty),
+            resolve_jump(Some(i18n::t(I18nKey::PickerFrequentlyUsed)), &empty),
             Some("Smileys & Emotion")
         );
         assert_eq!(
             resolve_jump(
-                Some(i18n::t(Key::PickerRecent)),
-                &rows_for("", &[], 8, i18n::t(Key::PickerRecent))
+                Some(i18n::t(I18nKey::PickerRecent)),
+                &rows_for("", &[], 8, i18n::t(I18nKey::PickerRecent))
             ),
             Some("Smileys & Emotion")
         );
         assert_eq!(resolve_jump(Some("Flags"), &empty), Some("Flags"));
         assert_eq!(resolve_jump(None, &empty), None);
-        let with_recent = rows_for("", &["👍".into()], 8, i18n::t(Key::PickerFrequentlyUsed));
+        let with_recent = rows_for(
+            "",
+            &["👍".into()],
+            8,
+            i18n::t(I18nKey::PickerFrequentlyUsed),
+        );
         assert_eq!(
-            resolve_jump(Some(i18n::t(Key::PickerFrequentlyUsed)), &with_recent),
-            Some(i18n::t(Key::PickerFrequentlyUsed))
+            resolve_jump(Some(i18n::t(I18nKey::PickerFrequentlyUsed)), &with_recent),
+            Some(i18n::t(I18nKey::PickerFrequentlyUsed))
         );
     }
 
@@ -842,9 +850,9 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
         theme::paragraph(
             ui,
             if bad_key {
-                i18n::t(Key::PickerGiphyKeyRejected)
+                i18n::t(I18nKey::PickerGiphyKeyRejected)
             } else {
-                i18n::t(Key::PickerGiphyKeyNeeded)
+                i18n::t(I18nKey::PickerGiphyKeyNeeded)
             },
             theme::regular(13.0),
             palette.text,
@@ -870,7 +878,7 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                 let response = ui.add(
                     egui::TextEdit::singleline(&mut app.settings.giphy_key)
                         .hint_text(
-                            egui::RichText::new(i18n::t(Key::SettingsGiphyKey))
+                            egui::RichText::new(i18n::t(I18nKey::SettingsGiphyKey))
                                 .color(palette.dim)
                                 .font(theme::regular(13.5)),
                         )
@@ -896,7 +904,7 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
         palette,
         "gif-search",
         &mut query,
-        i18n::t(Key::PickerSearchGifs),
+        i18n::t(I18nKey::PickerSearchGifs),
     );
     if query != app.picker_search {
         app.picker_search = query.clone();
@@ -909,7 +917,7 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             theme::spinner(ui, 16.0, palette.accent);
             theme::text(
                 ui,
-                i18n::t(Key::PickerSearching),
+                i18n::t(I18nKey::PickerSearching),
                 theme::regular(12.5),
                 palette.secondary,
             );
@@ -965,7 +973,7 @@ fn gif_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                 ui.vertical_centered(|ui| {
                     theme::text(
                         ui,
-                        i18n::t(Key::PickerGifEmpty),
+                        i18n::t(I18nKey::PickerGifEmpty),
                         theme::regular(13.0),
                         palette.secondary,
                     );
@@ -996,9 +1004,9 @@ fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             theme::paragraph(
                 ui,
                 if app.stickers_pending {
-                    i18n::t(Key::PickerStickersLoading)
+                    i18n::t(I18nKey::PickerStickersLoading)
                 } else {
-                    i18n::t(Key::PickerStickersEmpty)
+                    i18n::t(I18nKey::PickerStickersEmpty)
                 },
                 theme::regular(13.0),
                 palette.secondary,
@@ -1018,7 +1026,7 @@ fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             if !saved.is_empty() {
                 theme::text(
                     ui,
-                    i18n::t(Key::PickerStickersSaved),
+                    i18n::t(I18nKey::PickerStickersSaved),
                     theme::semibold(12.5),
                     palette.secondary,
                 );
@@ -1035,7 +1043,7 @@ fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                             14.0,
                             palette.dim,
                             palette.danger,
-                            i18n::t(Key::PickerStickerRemovePack),
+                            i18n::t(I18nKey::PickerStickerRemovePack),
                         )
                         .clicked()
                         {
@@ -1049,7 +1057,7 @@ fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             if !recent.is_empty() {
                 theme::text(
                     ui,
-                    i18n::t(Key::PickerRecent),
+                    i18n::t(I18nKey::PickerRecent),
                     theme::semibold(12.5),
                     palette.secondary,
                 );
@@ -1074,8 +1082,8 @@ fn sticker_tab(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
 fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         let spacing = ui.spacing().item_spacing.x;
-        let buttons = theme::soft_button_width(ui, i18n::t(Key::PickerFindPacks), true)
-            + theme::soft_button_width(ui, i18n::t(Key::CommonOpenFile), true)
+        let buttons = theme::soft_button_width(ui, i18n::t(I18nKey::PickerFindPacks), true)
+            + theme::soft_button_width(ui, i18n::t(I18nKey::CommonOpenFile), true)
             + spacing * 2.0;
         let field = Frame::new()
             .fill(palette.surface)
@@ -1086,7 +1094,7 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
                     egui::TextEdit::singleline(&mut app.sticker_link)
                         .id(egui::Id::new("sticker-link"))
                         .hint_text(
-                            egui::RichText::new(i18n::t(Key::PickerPasteLink))
+                            egui::RichText::new(i18n::t(I18nKey::PickerPasteLink))
                                 .color(palette.dim)
                                 .font(theme::regular(13.0)),
                         )
@@ -1111,10 +1119,10 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             ui,
             palette,
             Some(Icon::ExternalLink),
-            i18n::t(Key::PickerFindPacks),
+            i18n::t(I18nKey::PickerFindPacks),
             false,
         )
-        .on_hover_text(i18n::t(Key::PickerBrowseStickers))
+        .on_hover_text(i18n::t(I18nKey::PickerBrowseStickers))
         .clicked()
         {
             app.actions
@@ -1124,7 +1132,7 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             ui,
             palette,
             Some(Icon::FileText),
-            i18n::t(Key::CommonOpenFile),
+            i18n::t(I18nKey::CommonOpenFile),
             false,
         )
         .clicked()
@@ -1138,7 +1146,7 @@ fn import_row(app: &mut App, ui: &mut egui::Ui, palette: &Palette) {
             theme::spinner(ui, 14.0, palette.accent);
             theme::text(
                 ui,
-                i18n::t(Key::PickerImportingPack),
+                i18n::t(I18nKey::PickerImportingPack),
                 theme::regular(12.5),
                 palette.secondary,
             );
@@ -1158,7 +1166,7 @@ fn sticker_grid(
     let gap = 6.0;
     let cell = (ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32;
     ui.spacing_mut().item_spacing = vec2(gap, gap);
-    let menu_width = widgets::menu_width(ui, &[i18n::t(Key::PickerRemoveFromSaved)], true);
+    let menu_width = widgets::menu_width(ui, &[i18n::t(I18nKey::PickerRemoveFromSaved)], true);
     for row in stickers.chunks(columns) {
         ui.horizontal(|ui| {
             for path in row {
@@ -1199,7 +1207,7 @@ fn sticker_grid(
                                 ui,
                                 palette,
                                 Some(Icon::X),
-                                i18n::t(Key::PickerRemoveFromSaved),
+                                i18n::t(I18nKey::PickerRemoveFromSaved),
                             ) {
                                 choices.forget = Some(path.clone());
                             }
@@ -1207,7 +1215,7 @@ fn sticker_grid(
                             ui,
                             palette,
                             Some(Icon::Sticker),
-                            i18n::t(Key::PickerSaveSticker),
+                            i18n::t(I18nKey::PickerSaveSticker),
                         ) {
                             choices.save = Some(path.clone());
                         }

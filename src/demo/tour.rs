@@ -555,40 +555,40 @@ impl Tour {
     pub fn labels(&self) -> &HashMap<String, Pos2> {
         &self.labels
     }
+}
 
-    /// Renders one demo page offscreen and returns every painted label, sorted.
-    /// Used by the Spanish label test and by screenshots of a translated page.
-    pub fn harvest_labels(page: Option<&str>) -> Vec<String> {
-        let root = std::env::temp_dir().join(format!(
-            "whatsfast-labels-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let (mut app, _events) = App::headless(
-            crate::paths::AppDirs::under(&root),
-            crate::settings::Settings::default(),
-        );
-        crate::demo::populate(&mut app);
-        crate::demo::apply_flags(&mut app, page);
-        let ctx = egui::Context::default();
-        app.attach(&ctx);
-        let mut tour = Tour::new(None, None);
-        for _ in 0..3 {
-            let input = egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 780.0))),
-                ..Default::default()
-            };
-            let mut output = ctx.run_ui(input, |ui| {
-                app.background_frame(&ctx);
-                app.frame_ui(ui);
-                tour.observe(&mut app, &ctx);
-            });
-            output.textures_delta.clear();
-        }
-        let mut labels: Vec<String> = tour.labels().keys().cloned().collect();
-        labels.sort();
-        labels
+/// Renders one demo page offscreen and returns every painted label, sorted.
+/// Used by the Spanish label test and by screenshots of a translated page.
+pub fn harvest_labels(page: Option<&str>) -> Vec<String> {
+    let root = std::env::temp_dir().join(format!(
+        "whatsfast-labels-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let (mut app, _events) = App::headless(
+        crate::paths::AppDirs::under(&root),
+        crate::settings::Settings::default(),
+    );
+    crate::demo::populate(&mut app);
+    crate::demo::apply_flags(&mut app, page);
+    let ctx = egui::Context::default();
+    app.attach(&ctx);
+    let mut tour = Tour::new(None, None);
+    for _ in 0..3 {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 780.0))),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            app.background_frame(&ctx);
+            app.frame_ui(ui);
+            tour.observe(&mut app, &ctx);
+        });
+        output.textures_delta.clear();
     }
+    let mut labels: Vec<String> = tour.labels().keys().cloned().collect();
+    labels.sort();
+    labels
 }
 
 #[cfg(test)]
@@ -599,7 +599,7 @@ mod tests {
 
     fn frame(app: &mut App, tour: &mut Tour, ctx: &egui::Context, events: Vec<Event>) {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 780.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 2000.0))),
             events,
             ..Default::default()
         };
@@ -737,7 +737,17 @@ mod tests {
         app.attach(&ctx);
         let mut tour = Tour::new(None, None);
         for _ in 0..3 {
-            frame(&mut app, &mut tour, &ctx, Vec::new());
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1180.0, 2000.0))),
+                events: Vec::new(),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                app.background_frame(&ctx);
+                app.frame_ui(ui);
+                tour.observe(&mut app, &ctx);
+            });
+            output.textures_delta.clear();
         }
         click(&mut app, &mut tour, &ctx, "Recent and pinned");
         for name in ["Off", "Current Chat", "Recent and pinned"] {

@@ -8,7 +8,7 @@ use crate::app::{App, Conversation, Presence};
 use crate::backend::LinkStatus;
 use crate::model::{
     Chat, Contact, Content, Delivery, Dialog, LinkPreview, Media, MentionRef, Message, Page,
-    Quoted, Reaction,
+    Quoted, Reaction, StorageStats,
 };
 use crate::settings::ThemeChoice;
 
@@ -832,6 +832,18 @@ pub fn populate(app: &mut App) {
     app.account_privacy = crate::privacy::Snapshot::demo(ada.to_owned());
     app.scroll_to_bottom = true;
     app.focus_composer = false;
+    app.storage_stats = StorageStats {
+        messages: 128,
+        images: 12,
+        image_bytes: 8_388_608,
+        videos: 3,
+        video_bytes: 25_165_824,
+        stickers_gifs: 18,
+        sticker_gif_bytes: 2_097_152,
+        other: 4,
+        other_bytes: 524_288,
+    };
+    app.storage_stats_at = Some(std::time::Instant::now());
 }
 
 /// Applies the UI state selected by `--demo-page`.

@@ -3,7 +3,6 @@
 use super::*;
 use crate::archive::PollVote;
 use crate::i18n::{self, Key};
-use crate::i18n::{self, Key};
 use crate::model::{PollDraft, PollState};
 use whatsapp_rust::features::PollVoteCiphertext;
 

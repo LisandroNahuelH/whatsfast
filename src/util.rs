@@ -6,8 +6,6 @@ use jiff::{Timestamp, Zoned};
 use crate::i18n::{self, Key};
 use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
 
-use crate::schedule::{month_abbr, month_name, weekday_abbr, weekday_name};
-
 /// File-loader identifier for a native path. egui requires a slash after
 /// `file://` on Windows or it interprets a drive path as a UNC hostname.
 /// Keep native characters: egui's loader does not percent-decode URLs.
@@ -112,22 +110,6 @@ pub fn moment_stamp(unix_seconds: i64) -> String {
             ],
         ),
     }
-}
-
-/// Short stamp for lists, such as "Fri 18 Sep, 21:00".
-pub fn short_stamp(unix_seconds: i64) -> String {
-    let Some(when) = zoned(unix_seconds) else {
-        return String::new();
-    };
-    i18n::f(
-        Key::DateStampShort,
-        &[
-            ("weekday", weekday_abbr(when.date().weekday())),
-            ("day", &when.date().day().to_string()),
-            ("month", month_abbr(when.date().month())),
-            ("time", &format!("{:02}:{:02}", when.hour(), when.minute())),
-        ],
-    )
 }
 
 /// Short stamp for lists, such as "Fri 18 Sep, 21:00".

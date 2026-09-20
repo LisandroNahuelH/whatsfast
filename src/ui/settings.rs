@@ -1,10 +1,13 @@
 //! The settings page.
 
-use egui::{CornerRadius, Frame, Margin, Order, Sense, pos2, vec2};
+use std::time::Duration;
+
+use egui::{CornerRadius, Frame, Margin, Order, Rect, Sense, pos2, vec2};
 
 use crate::app::App;
+use crate::backend::Command;
 use crate::i18n::{self, Key, Language};
-use crate::model::{Action, Dialog, Page};
+use crate::model::{Action, Dialog, Page, StorageStats};
 use crate::privacy::{PrivacyChoice, PrivacyKind};
 use crate::settings::{
     ChatWallpaper, HistoryPrefetch, ThemeChoice, WALLPAPER_SLOTS, WallpaperFamily,
@@ -15,6 +18,7 @@ use super::wallpaper;
 use super::widgets;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
+    request_storage_stats(app);
     super::standalone_header(app, ui);
     if theme::macos_chrome(ui.ctx()) {
         super::banner(app, ui);
@@ -356,72 +360,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(
                         ui,
                         app,
-                        i18n::t(Key::SettingsAutoDownload),
-                        i18n::t(Key::SettingsAutoDownloadHint),
-                        |settings| &mut settings.auto_download,
-                    );
-                    widgets::setting_row(
-                        ui,
-                        &palette,
-                        i18n::t(Key::SettingsHistoryLabel),
-                        i18n::t(Key::SettingsHistoryHint),
-                        |ui| {
-                            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-                                let selected = app.settings.history_prefetch.label();
-                                let mut hint = None;
-                                let response = egui::ComboBox::from_id_salt("history_prefetch")
-                                    .selected_text(" ")
-                                    .width(200.0_f32.min(ui.available_width()))
-                                    .show_ui(ui, |ui| {
-                                        for choice in HistoryPrefetch::ALL {
-                                            let row = wallpaper_option(
-                                                ui,
-                                                &palette,
-                                                choice.label(),
-                                                app.settings.history_prefetch == choice,
-                                            );
-                                            if row.hovered() {
-                                                hint = Some(choice.hint());
-                                            }
-                                            if row.clicked() {
-                                                app.actions
-                                                    .push(Action::SetHistoryPrefetch(choice));
-                                            }
-                                        }
-                                    });
-                                let rect = response.response.rect;
-                                let text = widgets::line(
-                                    ui,
-                                    selected,
-                                    theme::regular(14.0),
-                                    palette.text,
-                                    rect.width() - 36.0,
-                                    1,
-                                );
-                                text.paint(
-                                    ui,
-                                    egui::pos2(
-                                        rect.left() + 8.0,
-                                        rect.center().y - text.size().y / 2.0,
-                                    ),
-                                    palette.text,
-                                );
-                                response.response.widget_info(|| {
-                                    let mut info = egui::WidgetInfo::labeled(
-                                        egui::WidgetType::ComboBox,
-                                        ui.is_enabled(),
-                                        i18n::t(Key::SettingsHistoryLabel),
-                                    );
-                                    info.current_text_value = Some(selected.to_owned());
-                                    info
-                                });
-                                show_prefetch_hint(ui, app, hint);
-                            });
-                        },
-                    );
-                    toggle(
-                        ui,
-                        app,
                         i18n::t(Key::SettingsShowSenderPictures),
                         i18n::t(Key::SettingsShowSenderPicturesHint),
                         |settings| &mut settings.show_sender_pictures,
@@ -460,6 +398,36 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         i18n::t(Key::SettingsShowShortcutHints),
                         "",
                         |settings| &mut settings.show_shortcut_hints,
+                    );
+
+                    section(ui, app, i18n::t(Key::SettingsSectionDownloads));
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsAutoDownload),
+                        i18n::t(Key::SettingsAutoDownloadHint),
+                        |settings| &mut settings.auto_download,
+                    );
+                    history_prefetch_row(ui, app, &palette);
+                    storage_usage(ui, app);
+                    widgets::setting_row(
+                        ui,
+                        &palette,
+                        i18n::t(Key::SettingsDownloadedAttachments),
+                        "",
+                        |ui| {
+                            if theme::soft_button(
+                                ui,
+                                &palette,
+                                Some(Icon::ExternalLink),
+                                i18n::t(Key::SettingsOpenFolder),
+                                false,
+                            )
+                            .clicked()
+                            {
+                                open_media_folder(app);
+                            }
+                        },
                     );
 
                     section(ui, app, i18n::t(Key::SettingsSectionPrivacy));
@@ -584,27 +552,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                             }
                         },
                     );
-                    let media = app.dirs.media_cache_dir();
-                    widgets::setting_row(
-                        ui,
-                        &palette,
-                        i18n::t(Key::SettingsDownloadedAttachments),
-                        &media.display().to_string(),
-                        |ui| {
-                            if theme::soft_button(
-                                ui,
-                                &palette,
-                                Some(Icon::ExternalLink),
-                                i18n::t(Key::SettingsOpenFolder),
-                                false,
-                            )
-                            .clicked()
-                            {
-                                let _ = std::fs::create_dir_all(&media);
-                                app.actions.push(Action::OpenFile(media.clone()));
-                            }
-                        },
-                    );
                     toggle(
                         ui,
                         app,
@@ -680,6 +627,187 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     );
                 });
         });
+}
+
+const STORAGE_STATS_TTL: Duration = Duration::from_secs(60);
+
+fn request_storage_stats(app: &mut App) {
+    let stale = app
+        .storage_stats_at
+        .is_none_or(|at| at.elapsed() >= STORAGE_STATS_TTL);
+    if stale && !app.storage_stats_asked {
+        app.backend.send(Command::StorageStats);
+        app.storage_stats_asked = true;
+    }
+}
+
+pub(crate) fn open_media_folder(app: &mut App) {
+    let media = app.dirs.media_cache_dir();
+    let _ = std::fs::create_dir_all(&media);
+    app.actions.push(Action::OpenFile(media));
+}
+
+fn history_prefetch_row(ui: &mut egui::Ui, app: &mut App, palette: &theme::Palette) {
+    widgets::setting_row(
+        ui,
+        palette,
+        i18n::t(Key::SettingsHistoryLabel),
+        i18n::t(Key::SettingsHistoryHint),
+        |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                let selected = app.settings.history_prefetch.label();
+                let mut hint = None;
+                let response = egui::ComboBox::from_id_salt("history_prefetch")
+                    .selected_text(" ")
+                    .width(200.0_f32.min(ui.available_width()))
+                    .show_ui(ui, |ui| {
+                        for choice in HistoryPrefetch::ALL {
+                            let row = wallpaper_option(
+                                ui,
+                                palette,
+                                choice.label(),
+                                app.settings.history_prefetch == choice,
+                            );
+                            if row.hovered() {
+                                hint = Some(choice.hint());
+                            }
+                            if row.clicked() {
+                                app.actions.push(Action::SetHistoryPrefetch(choice));
+                            }
+                        }
+                    });
+                let rect = response.response.rect;
+                let text = widgets::line(
+                    ui,
+                    selected,
+                    theme::regular(14.0),
+                    palette.text,
+                    rect.width() - 36.0,
+                    1,
+                );
+                text.paint(
+                    ui,
+                    egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0),
+                    palette.text,
+                );
+                response.response.widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(
+                        egui::WidgetType::ComboBox,
+                        ui.is_enabled(),
+                        i18n::t(Key::SettingsHistoryLabel),
+                    );
+                    info.current_text_value = Some(selected.to_owned());
+                    info
+                });
+                show_prefetch_hint(ui, app, hint);
+            });
+        },
+    );
+}
+
+fn storage_usage(ui: &mut egui::Ui, app: &App) {
+    let palette = app.palette;
+    let stats = app.storage_stats;
+    let total = stats.bytes_total();
+    theme::text(
+        ui,
+        crate::util::bytes(total),
+        theme::semibold(16.0),
+        palette.text,
+    );
+    let hint = widgets::line(
+        ui,
+        i18n::t(Key::SettingsStorageHint),
+        theme::regular(12.5),
+        palette.secondary,
+        ui.available_width(),
+        usize::MAX,
+    );
+    let (rect, _) = ui.allocate_exact_size(hint.size(), Sense::hover());
+    if ui.is_rect_visible(rect) {
+        hint.paint(ui, rect.min, palette.secondary);
+    }
+    ui.add_space(4.0);
+    widgets::rich_text(
+        ui,
+        &i18n::count(
+            Key::SettingsStorageMessagesOne,
+            Key::SettingsStorageMessagesMany,
+            stats.messages as usize,
+        ),
+        theme::regular(12.5),
+        palette.secondary,
+    );
+    ui.add_space(8.0);
+    storage_bar_row(
+        ui,
+        &palette,
+        i18n::t(Key::SettingsStorageImages),
+        stats.images,
+        stats.image_bytes,
+        total,
+    );
+    storage_bar_row(
+        ui,
+        &palette,
+        i18n::t(Key::SettingsStorageVideos),
+        stats.videos,
+        stats.video_bytes,
+        total,
+    );
+    storage_bar_row(
+        ui,
+        &palette,
+        i18n::t(Key::SettingsStorageStickersGifs),
+        stats.stickers_gifs,
+        stats.sticker_gif_bytes,
+        total,
+    );
+    if stats.other_bytes > 0 {
+        storage_bar_row(
+            ui,
+            &palette,
+            i18n::t(Key::SettingsStorageOther),
+            stats.other,
+            stats.other_bytes,
+            total,
+        );
+    }
+}
+
+fn storage_bar_row(
+    ui: &mut egui::Ui,
+    palette: &theme::Palette,
+    label: &str,
+    count: u64,
+    bytes: u64,
+    total: u64,
+) {
+    ui.horizontal(|ui| {
+        theme::text(ui, label, theme::medium(14.0), palette.text);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            theme::text(
+                ui,
+                format!("{count} · {}", crate::util::bytes(bytes)),
+                theme::regular(12.5),
+                palette.secondary,
+            );
+        });
+    });
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
+    if ui.is_rect_visible(rect) {
+        ui.painter()
+            .rect_filled(rect, rect.height() / 2.0, palette.outline);
+        let width = StorageStats::bar_width(bytes, total, rect.width());
+        if width > 0.5 {
+            ui.painter().rect_filled(
+                Rect::from_min_size(rect.min, vec2(width, rect.height())),
+                rect.height() / 2.0,
+                palette.accent,
+            );
+        }
+    }
+    ui.add_space(8.0);
 }
 
 fn section(ui: &mut egui::Ui, app: &App, label: &str) {
