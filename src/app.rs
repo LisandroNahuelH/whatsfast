@@ -351,6 +351,7 @@ impl App {
             let waker = waker.clone();
             app.tray = TrayService::spawn(move || waker.wake());
         }
+        app.adopt_pending_update();
         app
     }
 
@@ -1924,6 +1925,35 @@ impl App {
         }
     }
 
+    fn adopt_pending_update(&mut self) {
+        if let Ok(installation) = crate::updates::install::detect() {
+            self.adopt_pending_installation(&installation);
+        }
+    }
+
+    fn adopt_pending_installation(
+        &mut self,
+        installation: &crate::updates::install::Installation,
+    ) {
+        if !self.settings.check_for_updates || !self.settings.download_updates_automatically {
+            return;
+        }
+        let Ok(Some(prepared)) = crate::updates::install::load_pending(installation) else {
+            return;
+        };
+        self.update = Some(crate::updates::Release {
+            version: prepared.version.clone(),
+            url: format!(
+                "https://github.com/LisandroNahuelH/whatsfast/releases/tag/v{}",
+                prepared.version
+            ),
+        });
+        self.update_support = Some(Ok(installation.clone()));
+        self.update_download = crate::updates::DownloadState::Ready(Box::new(prepared));
+        self.install_when_ready = true;
+        self.begin_install_if_ready();
+    }
+
     pub fn mark_settings_dirty(&mut self) {
         self.settings_dirty = true;
     }
@@ -2921,6 +2951,17 @@ impl App {
             }
             Action::Reconnect => self.backend.send(Command::Reconnect),
             Action::Quit => {
+                if self.settings.check_for_updates
+                    && self.settings.download_updates_automatically
+                    && matches!(
+                        self.update_download,
+                        crate::updates::DownloadState::Ready(_)
+                    )
+                {
+                    self.install_when_ready = true;
+                    self.begin_install_if_ready();
+                    return;
+                }
                 self.quit_requested = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
@@ -3474,6 +3515,39 @@ mod tests {
     }
 
     #[test]
+    fn leaving_a_channel_marks_it_read_only_and_can_archive() {
+        let mut app = app();
+        let id = "1@newsletter".to_owned();
+        let chat = Chat::new(id.clone(), "News".into());
+        app.chats.push(chat);
+        app.open_chat = Some(id.clone());
+        app.dialog = Some(Dialog::ConfirmLeaveGroup(id.clone()));
+        let ctx = egui::Context::default();
+        app.apply(
+            Action::LeaveGroup {
+                chat: id.clone(),
+                archive: false,
+            },
+            &ctx,
+        );
+        let chat = app.chat(&id).expect("chat");
+        assert!(chat.read_only);
+        assert!(!chat.archived);
+        assert_eq!(app.open_chat.as_deref(), Some(id.as_str()));
+        assert!(app.dialog.is_none());
+        app.apply(
+            Action::LeaveGroup {
+                chat: id.clone(),
+                archive: true,
+            },
+            &ctx,
+        );
+        let chat = app.chat(&id).expect("chat");
+        assert!(chat.archived);
+        assert!(app.open_chat.is_none());
+    }
+
+    #[test]
     fn marking_unread_leaves_a_real_count_alone() {
         let mut app = app();
         let id = "1@s.whatsapp.net".to_owned();
@@ -3678,6 +3752,102 @@ mod tests {
         app.background_frame(&ctx);
         assert!(matches!(app.update_download, DownloadState::Installing));
         assert!(!app.quit_requested);
+    }
+
+    fn fixture_prepared(version: &str) -> crate::updates::install::Prepared {
+        use crate::updates::install::{Installation, Kind, Prepared};
+        Prepared {
+            installation: Installation {
+                executable: PathBuf::from("/fixture/whatsfast"),
+                kind: Kind::Portable,
+            },
+            directory: "/fixture/staging".into(),
+            payload: "/fixture/staging/next".into(),
+            sha256: String::new(),
+            version: version.into(),
+        }
+    }
+
+    #[test]
+    fn a_ready_download_does_not_install_until_update_is_clicked() {
+        use crate::updates::DownloadState;
+        let mut app = app();
+        app.settings.download_updates_automatically = true;
+        app.update_download = DownloadState::Ready(Box::new(fixture_prepared("99.0.0")));
+        app.maybe_download_update();
+        assert!(matches!(app.update_download, DownloadState::Ready(_)));
+        assert!(!app.install_when_ready);
+    }
+
+    #[test]
+    fn quitting_with_a_ready_download_starts_the_helper() {
+        use crate::updates::DownloadState;
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.settings.check_for_updates = true;
+        app.settings.download_updates_automatically = true;
+        app.update_download = DownloadState::Ready(Box::new(fixture_prepared("99.0.0")));
+        app.apply(Action::Quit, &ctx);
+        assert!(matches!(app.update_download, DownloadState::Installing));
+        assert!(!app.quit_requested, "wait for the helper before closing");
+    }
+
+    #[test]
+    fn quitting_with_auto_download_off_leaves_without_installing() {
+        use crate::updates::DownloadState;
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.settings.download_updates_automatically = false;
+        app.update_download = DownloadState::Ready(Box::new(fixture_prepared("99.0.0")));
+        app.apply(Action::Quit, &ctx);
+        assert!(matches!(app.update_download, DownloadState::Ready(_)));
+        assert!(app.quit_requested);
+    }
+
+    fn write_pending_update() -> (tempfile::TempDir, crate::updates::install::Installation) {
+        use crate::updates::install::{self, Installation, Kind, Prepared};
+        let root = tempfile::tempdir().unwrap();
+        let executable = root.path().join("whatsfast");
+        std::fs::write(&executable, b"old").unwrap();
+        let installation = Installation {
+            executable,
+            kind: Kind::Portable,
+        };
+        let stage = install::staging(&installation).unwrap();
+        let payload = stage.join("next");
+        std::fs::write(&payload, b"new").unwrap();
+        install::save_prepared(&Prepared {
+            installation: installation.clone(),
+            directory: stage,
+            payload: payload.clone(),
+            sha256: install::hash(&payload).unwrap(),
+            version: "99.0.0".into(),
+        })
+        .unwrap();
+        (root, installation)
+    }
+
+    #[test]
+    fn a_pending_file_installs_on_the_next_launch_when_auto_download_is_on() {
+        use crate::updates::DownloadState;
+        let (_root, installation) = write_pending_update();
+        let mut app = app();
+        app.settings.check_for_updates = true;
+        app.settings.download_updates_automatically = true;
+        app.adopt_pending_installation(&installation);
+        assert!(matches!(app.update_download, DownloadState::Installing));
+        assert!(app.install_when_ready);
+    }
+
+    #[test]
+    fn a_pending_file_stays_idle_when_auto_download_is_off() {
+        use crate::updates::DownloadState;
+        let (_root, installation) = write_pending_update();
+        let mut app = app();
+        app.settings.download_updates_automatically = false;
+        app.adopt_pending_installation(&installation);
+        assert!(matches!(app.update_download, DownloadState::Idle));
+        assert!(!app.install_when_ready);
     }
 
     #[test]

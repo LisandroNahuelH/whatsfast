@@ -1,6 +1,6 @@
 [package]
 name = "whatsfast"
-version = "0.15.201"
+version = "0.15.202"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"

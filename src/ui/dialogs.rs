@@ -471,8 +471,18 @@ fn confirm_unlink(app: &mut App, ui: &mut egui::Ui) {
 
 fn confirm_leave_group(app: &mut App, ui: &mut egui::Ui, id: &str) {
     let palette = app.palette;
-    let archived = app.chat(id).is_some_and(|chat| chat.archived);
-    title(ui, app, "Leave this group?");
+    let chat = app.chat(id);
+    let archived = chat.is_some_and(|chat| chat.archived);
+    let channel = chat.is_some_and(crate::model::Chat::is_channel);
+    title(
+        ui,
+        app,
+        if channel {
+            "Leave this channel?"
+        } else {
+            "Leave this group?"
+        },
+    );
     theme::paragraph(
         ui,
         "You will not receive new messages. The local history stays on this computer.",
@@ -480,7 +490,15 @@ fn confirm_leave_group(app: &mut App, ui: &mut egui::Ui, id: &str) {
         palette.text,
     );
     ui.add_space(10.0);
-    if danger_button(ui, app, "Leave group") {
+    if danger_button(
+        ui,
+        app,
+        if channel {
+            "Leave channel"
+        } else {
+            "Leave group"
+        },
+    ) {
         app.actions.push(Action::LeaveGroup {
             chat: id.to_owned(),
             archive: false,
@@ -488,7 +506,18 @@ fn confirm_leave_group(app: &mut App, ui: &mut egui::Ui, id: &str) {
     }
     if !archived {
         ui.add_space(4.0);
-        if theme::pill_button(ui, &palette, "Leave group and archive", false).clicked() {
+        if theme::pill_button(
+            ui,
+            &palette,
+            if channel {
+                "Leave channel and archive"
+            } else {
+                "Leave group and archive"
+            },
+            false,
+        )
+        .clicked()
+        {
             app.actions.push(Action::LeaveGroup {
                 chat: id.to_owned(),
                 archive: true,
@@ -703,7 +732,17 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
         .unwrap_or_else(|| crate::model::Chat::new(id.to_owned(), app.display_name(id)));
     let has_chat = app.chat(id).is_some();
     let name = app.chat_title(&chat);
-    title(ui, app, if chat.is_group() { "Group" } else { "Contact" });
+    title(
+        ui,
+        app,
+        if chat.is_group() {
+            "Group"
+        } else if chat.is_channel() {
+            "Channel"
+        } else {
+            "Contact"
+        },
+    );
     // Scale the photo and member list to fit the window.
     let window = ui.ctx().content_rect().height();
     let photo = (window * 0.34).clamp(120.0, 240.0);
@@ -800,7 +839,15 @@ fn chat_info(app: &mut App, ui: &mut egui::Ui, id: &str) {
         }
         if can_leave {
             ui.add_space(8.0);
-            if danger_button(ui, app, "Leave group") {
+            if danger_button(
+                ui,
+                app,
+                if chat.is_channel() {
+                    "Leave channel"
+                } else {
+                    "Leave group"
+                },
+            ) {
                 leave = true;
             }
         }

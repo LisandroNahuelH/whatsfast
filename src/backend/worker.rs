@@ -3369,13 +3369,35 @@ impl Worker {
     }
 
     async fn leave_group(&self, chat: ChatId, archive: bool) {
-        if let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat))
-            && let Err(error) = client.groups().leave(jid).await
-        {
-            log::warn!("could not leave group: {error}");
-            self.emit(Event::Error("Could not leave the group.".into()));
-            self.emit_chat(&chat);
+        let channel = Chat::is_channel_id(&chat);
+        if !channel && ChatKind::from_id(&chat) != ChatKind::Group {
             return;
+        }
+        if let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) {
+            let result = if channel {
+                client
+                    .newsletter()
+                    .leave(&jid)
+                    .await
+                    .map_err(|error| error.to_string())
+            } else {
+                client
+                    .groups()
+                    .leave(jid)
+                    .await
+                    .map_err(|error| error.to_string())
+            };
+            if let Err(error) = result {
+                if channel {
+                    log::warn!("could not leave channel: {error}");
+                    self.emit(Event::Error("Could not leave the channel.".into()));
+                } else {
+                    log::warn!("could not leave group: {error}");
+                    self.emit(Event::Error("Could not leave the group.".into()));
+                }
+                self.emit_chat(&chat);
+                return;
+            }
         }
         self.finish_leave(&chat, archive);
     }

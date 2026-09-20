@@ -127,8 +127,20 @@ impl Chat {
         self.kind == ChatKind::Group
     }
 
-    /// Whether Leave group is offered. An empty member list means unknown.
+    pub fn is_channel_id(id: &str) -> bool {
+        id.rsplit('@').next() == Some("newsletter")
+    }
+
+    pub fn is_channel(&self) -> bool {
+        Self::is_channel_id(&self.id)
+    }
+
+    /// Whether Leave is offered. An empty group member list means unknown.
+    /// A channel stays leaveable until it is marked read-only after unfollow.
     pub fn can_leave(&self, me: Option<&str>) -> bool {
+        if self.is_channel() {
+            return !self.read_only;
+        }
         if !self.is_group() {
             return false;
         }
@@ -909,7 +921,7 @@ pub enum Action {
         emoji: String,
     },
     SetArchived(ChatId, bool),
-    /// Leaves a group. `archive` also hides the chat in Archived.
+    /// Leaves a group or channel. `archive` also hides the chat in Archived.
     LeaveGroup {
         chat: ChatId,
         archive: bool,
@@ -1050,6 +1062,17 @@ mod tests {
         chat.participants.retain(|id| id != me);
         assert!(!chat.can_leave(Some(me)));
         assert!(!Chat::new("1@s.whatsapp.net".into(), "Ada".into()).can_leave(Some(me)));
+        assert!(!Chat::new("1@broadcast".into(), "List".into()).can_leave(Some(me)));
+    }
+
+    #[test]
+    fn a_channel_can_be_left_until_it_is_read_only() {
+        let me = "me@s.whatsapp.net";
+        let mut chat = Chat::new("1@newsletter".into(), "News".into());
+        assert!(chat.is_channel());
+        assert!(chat.can_leave(Some(me)));
+        chat.read_only = true;
+        assert!(!chat.can_leave(Some(me)));
     }
 
     #[test]

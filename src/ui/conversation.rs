@@ -268,7 +268,11 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                     ui,
                                     &palette,
                                     Some(Icon::LogOut),
-                                    "Leave group",
+                                    if chat.is_channel() {
+                                        "Leave channel"
+                                    } else {
+                                        "Leave group"
+                                    },
                                 )
                             {
                                 app.actions
@@ -981,7 +985,14 @@ fn composer(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             .as_deref()
                             .is_some_and(|me| !chat.participants.iter().any(|id| id == me))
                         && !chat.participants.is_empty();
-                    if left {
+                    if chat.is_channel() {
+                        theme::text(
+                            ui,
+                            "You left this channel",
+                            theme::regular(13.5),
+                            palette.secondary,
+                        );
+                    } else if left {
                         theme::text(
                             ui,
                             "You left this group",
