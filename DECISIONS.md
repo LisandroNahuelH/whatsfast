@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Voice duration paints on the footer at the waveform's left edge | A vertical under the bars stretched the player row and Label padding sat the time off the first bar | Duration under the waveform in `ui.vertical` |
 | 2026-09-20 | UI face is Montserrat Variable (`wght` 100–900), including Monospace | Match the PutMeInThatState product face; official Montserrat has no `wdth` | Inter Variable on Proportional, Hack on Monospace |
 | 2026-09-20 | A pinned message paints `Icon::Pin` in the bubble footer | Stars already mark the row; pins only lived on chips and the menu | Footer reserved star room only |
 | 2026-09-20 | Viewer sizes header, stage, and strip from window `content_rect` | A default egui Modal Area shrinks to allocated widgets after frame 0 | Custom Modal `.area()` plus `ui.max_rect()` |
