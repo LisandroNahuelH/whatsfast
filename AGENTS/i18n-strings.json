@@ -6747,10 +6747,6 @@
           "new": "i18n::t(Key::StickerErrTooMany)"
         },
         {
-          "exact": "Sticker Pack",
-          "new": "i18n::t(Key::KindStickerPackTitle)"
-        },
-        {
           "exact": "Stickers",
           "new": "i18n::t(Key::KindStickers)"
         }

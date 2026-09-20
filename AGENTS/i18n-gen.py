@@ -34,6 +34,22 @@ def unescape_rust(s: str) -> str:
 LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
+def safe_literal(text: str, position: int) -> bool:
+    """False for byte strings, raw strings, and const/static initializers.
+
+    Those carry protocol bytes or compile-time data; translating the text
+    inside them breaks the wire format or does not compile.
+    """
+    prefix = text[max(0, position - 3) : position]
+    if prefix.endswith(("b", "r", "br", "rb")):
+        return False
+    window = text[max(0, position - 4000) : position]
+    const_at = max(window.rfind("const "), window.rfind("static "))
+    if const_at >= 0 and "}" not in window[const_at:]:
+        return False
+    return True
+
+
 def fmt_sites(path: pathlib.Path, name: str, items: list, applied: list) -> str | None:
     """Replaces the whole `format!` call that holds a literal when there is one."""
     text = path.read_text(encoding="utf-8")
@@ -43,6 +59,8 @@ def fmt_sites(path: pathlib.Path, name: str, items: list, applied: list) -> str 
         literal = '"' + item["literal"] + '"'
         while True:
             idx = text.find(literal)
+            while idx >= 0 and not safe_literal(text, idx):
+                idx = text.find(literal, idx + 1)
             if idx < 0:
                 break
             start = text.rfind("format!(", max(0, idx - 400), idx)
@@ -93,6 +111,7 @@ def literal_sites(path: pathlib.Path, name: str, replacements: list, applied: li
             pattern = re.compile('"' + re.escape(escaped) + '(?:[^"\\\\]|\\\\.)*"')
 
         found = list(pattern.finditer(text))
+        found = [m for m in found if safe_literal(text, m.start())]
         if not found:
             if new in text:
                 continue
@@ -207,6 +226,10 @@ def main() -> int:
             continue
         text = path.read_text(encoding="utf-8")
         old, new = site["old"], site["new"]
+        if new.startswith("use crate::i18n") and "use crate::i18n" in text:
+            state.add(sig)
+            skipped += 1
+            continue
         count = text.count(old)
         if new in text and not site.get("all"):
             state.add(sig)

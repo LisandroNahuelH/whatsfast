@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::audio::{Player, Recorder};
 use crate::backend::{Backend, Command, Event, LinkStatus, Waker};
+use crate::i18n::{self, Key};
 use crate::model::{
     Action, Chat, ChatId, ChatList, ChatListId, Contact, Content, Delivery, Dialog, Gif, GifError,
     Media, MediaState, Message, Page, PickerTab, RightPane, StickerPack, StorageStats, Toast,
@@ -715,22 +716,22 @@ impl App {
     }
 
     /// Resolves a consistent display name using settings and an optional
-    /// message-provided fallback. Our own id becomes "You".
+    /// message-provided fallback. Our own id becomes i18n::t(Key::DisplayYou).
     pub fn display_name_or(&self, id: &str, hint: Option<&str>) -> String {
         if self.me.as_deref() == Some(id) {
-            return "You".to_owned();
+            return i18n::t(Key::DisplayYou).to_owned();
         }
         self.person_name(id, hint)
     }
 
-    /// Resolves a mention name without replacing our own name with "You".
+    /// Resolves a mention name without replacing our own name with i18n::t(Key::DisplayYou).
     pub fn mention_name(&self, id: &str) -> String {
         if self.me.as_deref() == Some(id) {
             return self
                 .me_name
                 .clone()
                 .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| "You".to_owned());
+                .unwrap_or_else(|| i18n::t(Key::DisplayYou).to_owned());
         }
         self.person_name(id, None)
     }
@@ -765,7 +766,7 @@ impl App {
         }
         match crate::model::phone_of(id) {
             Some(digits) => crate::util::phone(digits),
-            None => "Unknown".to_owned(),
+            None => i18n::t(Key::DisplayUnknown).to_owned(),
         }
     }
 
@@ -838,7 +839,7 @@ impl App {
             .filter(|id| Some(id.as_str()) != me)
         {
             let name = self.display_name(id);
-            if name.starts_with('+') || name == "Unknown" {
+            if name.starts_with('+') || name == i18n::t(Key::DisplayUnknown) {
                 numbers.push((id.clone(), name));
             } else {
                 named.push((id.clone(), name));
@@ -850,7 +851,7 @@ impl App {
         if let Some(me) = me
             && chat.participants.iter().any(|id| id == me)
         {
-            named.push((me.to_owned(), "You".to_owned()));
+            named.push((me.to_owned(), i18n::t(Key::DisplayYou).to_owned()));
         }
         named
     }
@@ -893,7 +894,7 @@ impl App {
             .filter(|id| Some(id.as_str()) != me)
         {
             let name = self.display_name(id);
-            if name.starts_with('+') || name == "Unknown" {
+            if name.starts_with('+') || name == i18n::t(Key::DisplayUnknown) {
                 numbers.push(name);
             } else {
                 let name = name.trim_start_matches('~');
@@ -906,7 +907,7 @@ impl App {
         numbers.dedup();
         names.extend(numbers);
         if chat.participants.iter().any(|id| Some(id.as_str()) == me) {
-            names.push("You".to_owned());
+            names.push(i18n::t(Key::DisplayYou).to_owned());
         }
         names.join(", ")
     }
@@ -1341,7 +1342,7 @@ impl App {
                 } => self.handle_media(&chat, &message, result),
                 Event::Syncing(syncing) => {
                     if self.syncing && !syncing {
-                        self.toast("History loaded");
+                        self.toast(i18n::t(Key::ToastHistoryLoaded));
                     }
                     self.syncing = syncing;
                     if !syncing {
@@ -1488,7 +1489,7 @@ impl App {
                     }
                 }
                 if matches!(self.link, LinkStatus::Disconnected { .. }) {
-                    self.toast("Back online");
+                    self.toast(i18n::t(Key::ToastBackOnline));
                 }
                 self.dialog = match self.dialog.take() {
                     Some(Dialog::PairWithPhone) => None,
@@ -1510,7 +1511,7 @@ impl App {
                 self.account_privacy = crate::privacy::Snapshot::default();
                 self.account_receipts_off = false;
                 self.open_chat = None;
-                self.toast_error("This device was unlinked from your phone");
+                self.toast_error(i18n::t(Key::ToastUnlinked));
             }
             LinkStatus::Failed(message) => self.toast_error(message.clone()),
             _ => {}
@@ -1863,7 +1864,7 @@ impl App {
     /// Adds files to the open chat's composer.
     fn stage_files(&mut self, paths: Vec<PathBuf>) {
         if self.open_chat.is_none() {
-            self.toast_error("Open a chat first");
+            self.toast_error(i18n::t(Key::ToastOpenChatFirst));
             return;
         }
         for path in paths {
@@ -1918,16 +1919,16 @@ impl App {
     #[allow(dead_code)]
     fn send_files(&mut self, paths: Vec<PathBuf>) {
         let Some(chat) = self.open_chat.clone() else {
-            self.toast_error("Open a chat first");
+            self.toast_error(i18n::t(Key::ToastOpenChatFirst));
             return;
         };
         if paths.is_empty() {
             return;
         }
-        self.toast(format!(
-            "Sending {} file{}…",
+        self.toast(i18n::count(
+            Key::ToastSendingFilesOne,
+            Key::ToastSendingFilesMany,
             paths.len(),
-            if paths.len() == 1 { "" } else { "s" }
         ));
         self.backend.send(Command::SendFiles {
             chat,
@@ -2309,7 +2310,13 @@ impl App {
             }
             Action::OpenFile(path) => {
                 if let Err(error) = open::that_detached(&path) {
-                    self.toast_error(format!("Could not open {}: {error}", path.display()));
+                    self.toast_error(i18n::f(
+                        Key::ToastCouldNotOpen,
+                        &[
+                            ("what", &path.display().to_string()),
+                            ("error", &error.to_string()),
+                        ],
+                    ));
                 }
             }
             Action::ViewImage { chat, message } => {
@@ -2344,7 +2351,7 @@ impl App {
             Action::OpenUrl(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
             Action::CopyText(text) => {
                 ctx.copy_text(text);
-                self.toast("Copied");
+                self.toast(i18n::t(Key::ToastCopied));
             }
             Action::Reply(id) => {
                 self.reply_to = Some(id.clone());
@@ -2707,7 +2714,7 @@ impl App {
             Action::CloseMentions => self.mention_start = None,
             Action::SaveSticker(path) => {
                 self.backend.send(Command::SaveSticker { path });
-                self.toast("Sticker saved");
+                self.toast(i18n::t(Key::ToastStickerSaved));
             }
             Action::ForgetSticker(path) => {
                 self.backend.send(Command::ForgetSticker { path });
@@ -2744,7 +2751,7 @@ impl App {
             }
             Action::SendGif(gif) => {
                 if let Some(chat) = self.open_chat.clone() {
-                    self.toast("Sending GIF…");
+                    self.toast(i18n::t(Key::ToastSendingGif));
                     self.backend.send(Command::SendGif { chat, gif });
                     self.picker = None;
                     self.scroll_to_bottom = true;
@@ -3132,9 +3139,7 @@ impl App {
             Action::PairWithPhone(phone) => {
                 let digits: String = phone.chars().filter(char::is_ascii_digit).collect();
                 if digits.len() < 7 {
-                    self.toast_error(
-                        "Enter the phone number with its country code, using digits only",
-                    );
+                    self.toast_error(i18n::t(Key::DialogDigitsOnly));
                 } else {
                     self.backend.send(Command::PairWithPhone(digits));
                 }
@@ -3257,7 +3262,10 @@ impl App {
         }
         if let Some(error) = self.recording.as_ref().and_then(Recorder::failure) {
             self.recording = None;
-            self.toast_error(format!("Could not record: {error}"));
+            self.toast_error(i18n::f(
+                Key::ToastCouldNotRecord,
+                &[("error", &error.to_string())],
+            ));
         }
         if self.player.is_playing() || self.recording.is_some() {
             self.waker.wake_after(Duration::from_millis(40));
@@ -3318,7 +3326,10 @@ impl App {
                     quoting,
                 });
             }
-            Err(error) => self.toast_error(format!("Could not record: {error}")),
+            Err(error) => self.toast_error(i18n::f(
+                Key::ToastCouldNotRecord,
+                &[("error", &error.to_string())],
+            )),
         }
     }
 
@@ -4547,7 +4558,7 @@ mod tests {
             app.display_name("393331234567@s.whatsapp.net"),
             "+39 333 123 456 7"
         );
-        assert_eq!(app.display_name("42@lid"), "Unknown");
+        assert_eq!(app.display_name("42@lid"), i18n::t(Key::DisplayUnknown));
         app.contacts.insert(
             "42@lid".into(),
             Contact {
@@ -4558,7 +4569,7 @@ mod tests {
         );
         assert_eq!(app.display_name("42@lid"), "~Bob");
         app.me = Some("42@lid".into());
-        assert_eq!(app.display_name("42@lid"), "You");
+        assert_eq!(app.display_name("42@lid"), i18n::t(Key::DisplayYou));
     }
 }
 
@@ -4610,7 +4621,10 @@ mod name_tests {
     fn mentions_use_our_own_name_and_previews_resolve_tokens() {
         let app = app();
         assert_eq!(app.mention_name("15550001111@s.whatsapp.net"), "Carmine");
-        assert_eq!(app.display_name("15550001111@s.whatsapp.net"), "You");
+        assert_eq!(
+            app.display_name("15550001111@s.whatsapp.net"),
+            i18n::t(Key::DisplayYou)
+        );
         assert_eq!(
             app.resolve_mention_tokens("palestra oggi? @15550001111 e @1 ?"),
             "palestra oggi? @Carmine e @1 ?",

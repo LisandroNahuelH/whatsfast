@@ -41,6 +41,7 @@ mod prefetch;
 use super::{Command, Event, LinkStatus, Waker, read_sync::ReadSync};
 use crate::app::PAGE;
 use crate::archive::Archive;
+use crate::i18n::{self, Key};
 use crate::model::{
     Chat, ChatId, ChatKind, Contact, Content, Delivery, Gif, GifError, LinkPreview,
     MEDIA_STILL_TRYING, Media, MentionRef, Message, Quoted, Reaction, StorageStats,
@@ -800,8 +801,9 @@ impl Worker {
         let store = match SqliteStore::new(&path.to_string_lossy()).await {
             Ok(store) => store,
             Err(error) => {
-                self.set_status(LinkStatus::Failed(format!(
-                    "Could not open the device store: {error}"
+                self.set_status(LinkStatus::Failed(i18n::f(
+                    Key::ToastDeviceStoreFailed,
+                    &[("error", &error.to_string())],
                 )));
                 return;
             }
@@ -831,8 +833,9 @@ impl Worker {
                 self.handle = Some(handle);
                 self.set_status(LinkStatus::Connecting);
             }
-            Err(error) => self.set_status(LinkStatus::Failed(format!(
-                "Could not start WhatsApp: {error}"
+            Err(error) => self.set_status(LinkStatus::Failed(i18n::f(
+                Key::ToastStartFailed,
+                &[("error", &error.to_string())],
             ))),
         }
     }
@@ -945,7 +948,7 @@ impl Worker {
             return;
         };
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".into()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).into()));
             let _ = self.commands.send(Command::AccountPrivacyFailed { kind });
             return;
         };
@@ -1006,7 +1009,7 @@ impl Worker {
             return;
         }
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".into()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).into()));
             let _ = self.commands.send(Command::AccountPrivacyFailed { kind });
             return;
         };
@@ -1075,7 +1078,7 @@ impl Worker {
     /// Resolves a name for a quote or mention.
     fn name_for(&self, id: &str) -> Option<String> {
         if self.is_me(id) || id == self.me() {
-            return Some("You".to_owned());
+            return Some(i18n::t(Key::DisplayYou).to_owned());
         }
         if let Some(name) = self.contact_name(id) {
             return Some(name);
@@ -1086,7 +1089,7 @@ impl Worker {
     /// Returns the best current chat name.
     fn chat_name(&self, id: &str, push_name: Option<&str>) -> String {
         if id == self.me() {
-            return "You".to_owned();
+            return i18n::t(Key::DisplayYou).to_owned();
         }
         if let Some(name) = self
             .contacts
@@ -1333,9 +1336,9 @@ impl Worker {
             E::PairingCodeError(error) => {
                 self.pair_code = None;
                 self.pairing_phone = None;
-                self.emit(Event::Error(format!(
-                    "Could not link by phone number: {}",
-                    error.error
+                self.emit(Event::Error(i18n::f(
+                    Key::ToastLinkPhoneFailed,
+                    &[("error", &error.error.to_string())],
                 )));
                 let status = self.unlinked();
                 self.set_status(status);
@@ -1412,28 +1415,29 @@ impl Worker {
                     let detail = failure
                         .message
                         .as_ref()
-                        .map(|message| format!(": {message}"))
+                        .map(|message| i18n::f(Key::ErrDetail, &[("message", message)]))
                         .unwrap_or_default();
-                    self.emit(Event::Error(format!(
-                        "WhatsApp connection failed ({:?}){detail}",
-                        failure.reason
+                    self.emit(Event::Error(i18n::f(
+                        Key::ErrConnectFailed,
+                        &[
+                            ("reason", &format!("{:?}", failure.reason)),
+                            ("detail", &detail),
+                        ],
                     )));
                 }
             }
             E::StreamReplaced(_) => {
-                self.emit(Event::Error(
-                    "Another WhatsApp Web session replaced this one".to_owned(),
-                ));
+                self.emit(Event::Error(i18n::t(Key::ErrStreamReplaced).to_owned()));
             }
             E::TemporaryBan(ban) => {
-                self.set_status(LinkStatus::Failed(format!(
-                    "WhatsApp has temporarily blocked this account ({:?})",
-                    ban.code
+                self.set_status(LinkStatus::Failed(i18n::f(
+                    Key::ErrTemporaryBan,
+                    &[("code", &format!("{:?}", ban.code))],
                 )));
             }
             E::ClientOutdated(_) => {
                 self.set_status(LinkStatus::Failed(
-                    "WhatsApp rejected this version of WhatsFast. Update the app".to_owned(),
+                    i18n::t(Key::ErrClientOutdated).to_owned(),
                 ));
             }
             E::Messages(batch) => {
@@ -2139,7 +2143,7 @@ impl Worker {
             from_me: false,
             timestamp: info.timestamp.timestamp(),
             content: Content::Unsupported {
-                what: "Waiting for this message. Open WhatsApp on your phone".to_owned(),
+                what: i18n::t(Key::ChatWaitingMessage).to_owned(),
             },
             status: Delivery::None,
             delivered_at: None,
@@ -2349,8 +2353,9 @@ impl Worker {
             }
             Ok(Err(error)) => {
                 log::warn!("a history chunk could not be read: {error}");
-                self.emit(Event::Error(format!(
-                    "Could not read part of the chat history: {error}"
+                self.emit(Event::Error(i18n::f(
+                    Key::ToastHistoryPartFailed,
+                    &[("error", &error.to_string())],
                 )));
             }
             Err(error) => log::warn!("history parsing panicked: {error}"),
@@ -2667,9 +2672,7 @@ impl Worker {
             });
             // Report the timeout once per chat; later retries back off silently.
             if !silent && self.older_warned.insert(chat) {
-                self.emit(Event::Error(
-                    "Your phone did not send older messages. Check that it is online".to_owned(),
-                ));
+                self.emit(Event::Error(i18n::t(Key::ToastNoOlder).to_owned()));
             }
         }
     }
@@ -2707,7 +2710,7 @@ impl Worker {
                 log::warn!("older messages not requested: {error}");
                 let _ = commands.send(Command::OlderFailed {
                     chat: chat.clone(),
-                    error: format!("Could not request older messages from your phone: {error}"),
+                    error: i18n::f(Key::ToastOlderFailed, &[("error", &error.to_string())]),
                 });
             }
         });
@@ -2890,12 +2893,15 @@ impl Worker {
                     let finished = done >= total;
                     let message = if total == 1 {
                         if starred {
-                            "Starred".to_owned()
+                            i18n::t(Key::ToastStarred).to_owned()
                         } else {
-                            "Star removed".to_owned()
+                            i18n::t(Key::ToastStarRemoved).to_owned()
                         }
                     } else {
-                        format!("Starred {done} of {total}")
+                        i18n::f(
+                            Key::ToastStarredProgress,
+                            &[("done", &done.to_string()), ("total", &total.to_string())],
+                        )
                     };
                     self.emit(Event::Progress {
                         key: "star",
@@ -3006,7 +3012,7 @@ impl Worker {
                 let commands = self.commands.clone();
                 tokio::task::spawn_blocking(move || {
                     let paths = rfd::FileDialog::new()
-                        .set_title("Send to WhatsApp")
+                        .set_title(i18n::t(Key::ChatSendToWhatsApp))
                         .pick_files()
                         .unwrap_or_default();
                     let _ = commands.send(Command::Picked { chat, paths });
@@ -3033,7 +3039,10 @@ impl Worker {
             Command::SendSticker { chat, path } => self.send_sticker(chat, path),
             Command::SaveSticker { path } => match self.save_sticker(&path) {
                 Ok(()) => self.emit_stickers(),
-                Err(error) => self.emit(Event::Error(format!("Could not save sticker: {error}"))),
+                Err(error) => self.emit(Event::Error(i18n::f(
+                    Key::ToastStickerSaveFailed,
+                    &[("error", &error.to_string())],
+                ))),
             },
             Command::ForgetSticker { path } => {
                 // Restrict deletion to files in the saved-sticker directory.
@@ -3056,8 +3065,8 @@ impl Worker {
                 let packs = self.packs_dir();
                 tokio::task::spawn_blocking(move || {
                     let result = match rfd::FileDialog::new()
-                        .set_title("Add a sticker pack")
-                        .add_filter("Sticker packs", &["wastickers", "zip"])
+                        .set_title(i18n::t(Key::DialogAddPack))
+                        .add_filter(i18n::t(Key::DialogStickerPacks), &["wastickers", "zip"])
                         .pick_file()
                     {
                         Some(path) => super::sticker_import::import_archive(&path, &packs),
@@ -3074,7 +3083,7 @@ impl Worker {
                 to_phone,
             } => {
                 let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&id)) else {
-                    self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+                    self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
                     return;
                 };
                 let commands = self.commands.clone();
@@ -3094,7 +3103,10 @@ impl Worker {
             }
             Command::ContactSaved { id, name, error } => {
                 if let Some(error) = error {
-                    self.emit(Event::Error(format!("Could not save contact: {error}")));
+                    self.emit(Event::Error(i18n::f(
+                        Key::ToastContactSaveFailed,
+                        &[("error", &error.to_string())],
+                    )));
                     return;
                 }
                 let contact = Contact {
@@ -3108,7 +3120,10 @@ impl Worker {
                 // Preserve the stored push name during contact updates.
                 let stored = self.archive.contact(&id).ok().flatten().unwrap_or(contact);
                 self.emit(Event::Contacts(vec![stored]));
-                self.emit(Event::Info(format!("Added {name} to contacts")));
+                self.emit(Event::Info(i18n::f(
+                    Key::ToastContactAdded,
+                    &[("name", &name)],
+                )));
                 self.emit_chat(&id);
             }
             Command::NewContact {
@@ -3118,7 +3133,7 @@ impl Worker {
                 to_phone,
             } => {
                 let Some(client) = self.client.clone() else {
-                    self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+                    self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
                     return;
                 };
                 let commands = self.commands.clone();
@@ -3149,9 +3164,9 @@ impl Worker {
                 registered,
             } => {
                 if !registered {
-                    self.emit(Event::Error(format!(
-                        "{} is not on WhatsApp",
-                        crate::util::phone(&phone)
+                    self.emit(Event::Error(i18n::f(
+                        Key::ToastNotOnWhatsApp,
+                        &[("name", &crate::util::phone(&phone))],
                     )));
                     return;
                 }
@@ -3172,12 +3187,16 @@ impl Worker {
             Command::StickerPackImported { result } => match result {
                 Ok(name) => {
                     self.emit_stickers();
-                    self.emit(Event::Info(format!("Added sticker pack \"{name}\"")));
+                    self.emit(Event::Info(i18n::f(
+                        Key::ToastPackAdded,
+                        &[("name", &name)],
+                    )));
                 }
                 Err(error) if error.is_empty() => self.emit_stickers(),
-                Err(error) => {
-                    self.emit(Event::Error(format!("Could not add sticker pack: {error}")))
-                }
+                Err(error) => self.emit(Event::Error(i18n::f(
+                    Key::ToastPackFailed,
+                    &[("error", &error.to_string())],
+                ))),
             },
             Command::DeleteStickerPack { dir } => {
                 let root = self.packs_dir();
@@ -3247,7 +3266,7 @@ impl Worker {
             }
             Command::AccountPrivacyFailed { kind } => {
                 self.emit(Event::AccountPrivacyFailed { kind });
-                self.emit(Event::Error("Could not update privacy settings.".into()));
+                self.emit(Event::Error(i18n::t(Key::ToastPrivacyFailed).into()));
             }
             Command::InspectUpdate => {
                 let events = self.events.clone();
@@ -3421,7 +3440,7 @@ impl Worker {
             }
             Command::PairWithPhone(phone) => {
                 let Some(client) = self.client.clone() else {
-                    self.emit(Event::Error("Not connected to WhatsApp yet".to_owned()));
+                    self.emit(Event::Error(i18n::t(Key::ToastNotConnectedYet).to_owned()));
                     return;
                 };
                 self.pairing_phone = Some(phone.clone());
@@ -3448,8 +3467,9 @@ impl Worker {
                 }
                 Err(error) => {
                     self.pairing_phone = None;
-                    self.emit(Event::Error(format!(
-                        "Could not link by phone number: {error}"
+                    self.emit(Event::Error(i18n::f(
+                        Key::ToastLinkPhoneFailed,
+                        &[("error", &error.to_string())],
                     )));
                     let status = self.unlinked();
                     self.set_status(status);
@@ -3506,7 +3526,10 @@ impl Worker {
                     self.close_scheduled(&entry, error, crate::util::now());
                 }
                 if let Some(error) = error {
-                    self.emit(Event::Error(format!("Message not sent: {error}")));
+                    self.emit(Event::Error(i18n::f(
+                        Key::ToastMessageNotSent,
+                        &[("error", &error.to_string())],
+                    )));
                 }
                 if let Some((done, total, finished)) = self.advance_serial_forward(&id) {
                     self.emit_forward_progress(done, total, finished);
@@ -3547,13 +3570,16 @@ impl Worker {
                     match &result {
                         Ok(source) => match self.copy_to(source, &target) {
                             Ok(saved) => {
-                                self.emit(Event::Info(format!("Saved to {}", saved.display())));
+                                self.emit(Event::Info(i18n::f(
+                                    Key::ToastSavedTo,
+                                    &[("path", &saved.display().to_string())],
+                                )));
                             }
                             Err(error) => self.emit(Event::Error(error)),
                         },
-                        Err(_) => self.emit(Event::Error(
-                            "The download failed, so it was not saved".to_owned(),
-                        )),
+                        Err(_) => {
+                            self.emit(Event::Error(i18n::t(Key::ToastDownloadNotSaved).to_owned()))
+                        }
                     }
                     self.bump_save_progress();
                 }
@@ -3632,10 +3658,10 @@ impl Worker {
             if let Err(error) = result {
                 if channel {
                     log::warn!("could not leave channel: {error}");
-                    self.emit(Event::Error("Could not leave the channel.".into()));
+                    self.emit(Event::Error(i18n::t(Key::ToastLeaveChannelFailed).into()));
                 } else {
                     log::warn!("could not leave group: {error}");
-                    self.emit(Event::Error("Could not leave the group.".into()));
+                    self.emit(Event::Error(i18n::t(Key::ToastLeaveGroupFailed).into()));
                 }
                 self.emit_chat(&chat);
                 return;
@@ -3723,7 +3749,7 @@ impl Worker {
             self.emit(Event::Error(error.to_string()));
             return;
         }
-        self.emit(Event::Info("Message scheduled".to_owned()));
+        self.emit(Event::Info(i18n::t(Key::ToastScheduled).to_owned()));
         self.emit_scheduled();
     }
 
@@ -3893,7 +3919,7 @@ impl Worker {
         mentions: Vec<String>,
     ) -> Option<String> {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return None;
         };
         let mut quoted_row = None;
@@ -3931,7 +3957,7 @@ impl Worker {
                 mentions: row.mentions.clone(),
                 id: row.id,
                 sender_name: if row.from_me {
-                    Some("You".to_owned())
+                    Some(i18n::t(Key::DisplayYou).to_owned())
                 } else {
                     row.sender_name
                         .clone()
@@ -3972,7 +3998,7 @@ impl Worker {
         in_order: bool,
     ) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&to_chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let jobs: Vec<_> = messages
@@ -3999,9 +4025,7 @@ impl Worker {
             return;
         }
         if self.forward_serial.is_some() {
-            self.emit(Event::Error(
-                "Wait for the current forward to finish".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastForwardBusy).to_owned()));
             return;
         }
         let jobs: Vec<_> = jobs
@@ -4038,7 +4062,10 @@ impl Worker {
     fn emit_forward_progress(&self, done: usize, total: usize, finished: bool) {
         self.emit(Event::Progress {
             key: "forward",
-            message: format!("Forwarded {done} of {total}"),
+            message: i18n::f(
+                Key::ToastForwardedProgress,
+                &[("done", &done.to_string()), ("total", &total.to_string())],
+            ),
             finished,
         });
     }
@@ -4081,27 +4108,23 @@ impl Worker {
         to_chat: &ChatId,
     ) -> Option<(String, wa::Message, Option<u32>)> {
         let Ok(Some(source)) = self.archive.message(from_chat, message_id) else {
-            self.emit(Event::Error(
-                "This message is not stored on this computer".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastNotStored).to_owned()));
             return None;
         };
         if matches!(
             source.content,
             Content::Revoked | Content::Unsupported { .. } | Content::Poll { .. }
         ) {
-            self.emit(Event::Error("This message cannot be forwarded".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastCannotForward).to_owned()));
             return None;
         }
         let Ok(Some(raw)) = self.archive.raw(from_chat, message_id) else {
-            self.emit(Event::Error(
-                "The original message data is not available to forward".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastForwardNoData).to_owned()));
             return None;
         };
         let Ok(original) = wa::Message::decode_from_slice(&raw) else {
             self.emit(Event::Error(
-                "The original message data could not be read".to_owned(),
+                i18n::t(Key::ToastForwardUnreadable).to_owned(),
             ));
             return None;
         };
@@ -4259,7 +4282,10 @@ impl Worker {
                     complete,
                 });
             }
-            Err(error) => self.emit(Event::Error(format!("Could not read the chat: {error}"))),
+            Err(error) => self.emit(Event::Error(i18n::f(
+                Key::ToastReadChatFailed,
+                &[("error", &error.to_string())],
+            ))),
         }
         if before.is_none()
             && let Ok(ids) = self.archive.starred_ids(&chat)
@@ -4292,7 +4318,7 @@ impl Worker {
             self.emit(Event::Media {
                 chat,
                 message: id,
-                result: Err("Not connected to WhatsApp".to_owned()),
+                result: Err(i18n::t(Key::ToastNotConnected).to_owned()),
             });
             return false;
         };
@@ -4301,7 +4327,7 @@ impl Worker {
             self.emit(Event::Media {
                 chat,
                 message: id,
-                result: Err("Attachment download keys are missing".to_owned()),
+                result: Err(i18n::t(Key::ToastKeysMissing).to_owned()),
             });
             return false;
         };
@@ -4345,7 +4371,7 @@ impl Worker {
                 self.emit(Event::Media {
                     chat,
                     message: id,
-                    result: Err("This message has no downloadable file".to_owned()),
+                    result: Err(i18n::t(Key::ToastNoFile).to_owned()),
                 });
                 return false;
             };
@@ -4457,12 +4483,10 @@ impl Worker {
                                         None => Err(text),
                                     }
                                 }
-                                Ok(_) => {
-                                    Err("No longer available on WhatsApp's servers".to_owned())
-                                }
+                                Ok(_) => Err(i18n::t(Key::ChatFileGone).to_owned()),
                                 Err(error) => {
                                     log::info!("media re-upload was not granted: {error}");
-                                    Err("No longer available on WhatsApp's servers".to_owned())
+                                    Err(i18n::t(Key::ChatFileGone).to_owned())
                                 }
                             }
                         }
@@ -4479,9 +4503,7 @@ impl Worker {
     /// the system save dialog sends them when the setting is on.
     fn save_media(&mut self, chat: ChatId, ids: Vec<String>, ask: bool) {
         let Some(downloads) = self.dirs.downloads_dir() else {
-            self.emit(Event::Error(
-                "No Downloads folder on this computer".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastNoDownloads).to_owned()));
             return;
         };
         let dir = self.dirs.media_cache_dir();
@@ -4513,13 +4535,11 @@ impl Worker {
     /// blocking thread so the worker keeps answering commands meanwhile.
     fn ask_where_to_save(&mut self, chat: ChatId, files: Vec<(String, PathBuf, String)>) {
         if self.save_dialog_open {
-            self.emit(Event::Info("A save dialog is already open".to_owned()));
+            self.emit(Event::Info(i18n::t(Key::ToastSaveDialogOpen).to_owned()));
             return;
         }
         let Some(downloads) = self.dirs.downloads_dir() else {
-            self.emit(Event::Error(
-                "No Downloads folder on this computer".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastNoDownloads).to_owned()));
             return;
         };
         self.save_dialog_open = true;
@@ -4527,7 +4547,7 @@ impl Worker {
         let single = files.len() == 1;
         tokio::task::spawn_blocking(move || {
             let dialog = rfd::FileDialog::new()
-                .set_title("Save attachment")
+                .set_title(i18n::t(Key::DialogSaveAttachment))
                 .set_directory(&downloads);
             let targets = if single {
                 let (id, _, name) = files.into_iter().next().expect("a single file");
@@ -4560,7 +4580,7 @@ impl Worker {
     ) {
         self.save_dialog_open = false;
         if cancelled || targets.is_empty() {
-            self.emit(Event::Info("Save cancelled".to_owned()));
+            self.emit(Event::Info(i18n::t(Key::ToastSaveCancelled).to_owned()));
             return;
         }
         self.save_to_targets(chat, targets);
@@ -4579,7 +4599,10 @@ impl Worker {
             let source = media_path(&dir, &chat, &id, &mime, file_name.as_deref());
             if source.exists() {
                 match self.copy_to(&source, &target) {
-                    Ok(saved) => self.emit(Event::Info(format!("Saved to {}", saved.display()))),
+                    Ok(saved) => self.emit(Event::Info(i18n::f(
+                        Key::ToastSavedTo,
+                        &[("path", &saved.display().to_string())],
+                    ))),
                     Err(error) => self.emit(Event::Error(error)),
                 }
                 self.bump_save_progress();
@@ -4600,7 +4623,10 @@ impl Worker {
         let finished = done >= total;
         self.emit(Event::Progress {
             key: "download",
-            message: format!("Saving {done} of {total}"),
+            message: i18n::f(
+                Key::ToastSavingProgress,
+                &[("done", &done.to_string()), ("total", &total.to_string())],
+            ),
             finished,
         });
         self.save_batch = (!finished).then_some((done, total));
@@ -4653,7 +4679,7 @@ impl Worker {
                 chat,
                 message: id,
                 starred,
-                result: Err("Not connected to WhatsApp".to_owned()),
+                result: Err(i18n::t(Key::ToastNotConnected).to_owned()),
             });
             return;
         };
@@ -4662,7 +4688,7 @@ impl Worker {
                 chat,
                 message: id,
                 starred,
-                result: Err("This message is not on this computer".to_owned()),
+                result: Err(i18n::t(Key::ToastNotOnComputer).to_owned()),
             });
             return;
         };
@@ -5019,7 +5045,10 @@ impl Worker {
                 }
                 self.emit(Event::SearchHits { query, messages });
             }
-            Err(error) => self.emit(Event::Error(format!("Could not search: {error}"))),
+            Err(error) => self.emit(Event::Error(i18n::f(
+                Key::ToastSearchFailed,
+                &[("error", &error.to_string())],
+            ))),
         }
     }
 
@@ -5046,7 +5075,10 @@ impl Worker {
                     messages,
                 });
             }
-            Err(error) => self.emit(Event::Error(format!("Could not search: {error}"))),
+            Err(error) => self.emit(Event::Error(i18n::f(
+                Key::ToastSearchFailed,
+                &[("error", &error.to_string())],
+            ))),
         }
     }
 
@@ -5058,9 +5090,7 @@ impl Worker {
                 older: true,
                 complete: false,
             });
-            self.emit(Event::Error(
-                "This message is not stored on this computer".to_owned(),
-            ));
+            self.emit(Event::Error(i18n::t(Key::ToastNotStored).to_owned()));
             return;
         };
         match self
@@ -5078,13 +5108,16 @@ impl Worker {
                     complete: false,
                 });
             }
-            Err(error) => self.emit(Event::Error(format!("Could not read the chat: {error}"))),
+            Err(error) => self.emit(Event::Error(i18n::f(
+                Key::ToastReadChatFailed,
+                &[("error", &error.to_string())],
+            ))),
         }
     }
 
     fn edit_text(&mut self, chat: ChatId, id: String, text: String, mentions: Vec<String>) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let content = Content::text(text.clone());
@@ -5104,7 +5137,10 @@ impl Worker {
                 let _ = commands.send(Command::Sent {
                     chat,
                     id: String::new(),
-                    error: Some(format!("Could not send the edit: {error}")),
+                    error: Some(i18n::f(
+                        Key::ToastEditFailed,
+                        &[("error", &error.to_string())],
+                    )),
                 });
             }
         });
@@ -5112,7 +5148,7 @@ impl Worker {
 
     fn revoke(&mut self, chat: ChatId, id: String) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         if let Ok(true) = self
@@ -5128,8 +5164,9 @@ impl Worker {
                 let _ = commands.send(Command::Sent {
                     chat,
                     id: String::new(),
-                    error: Some(format!(
-                        "Could not delete the message for everyone: {error}"
+                    error: Some(i18n::f(
+                        Key::ToastDeleteFailed,
+                        &[("error", &error.to_string())],
                     )),
                 });
             }
@@ -5145,7 +5182,7 @@ impl Worker {
     ) {
         for (index, path) in paths.into_iter().enumerate() {
             let Some(client) = self.client.clone() else {
-                self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+                self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
                 return;
             };
             let commands = self.commands.clone();
@@ -5187,7 +5224,10 @@ impl Worker {
                         let _ = commands.send(Command::Sent {
                             chat,
                             id: String::new(),
-                            error: Some(format!("Could not send the file: {error}")),
+                            error: Some(i18n::f(
+                                Key::ToastFileFailed,
+                                &[("error", &error.to_string())],
+                            )),
                         });
                     }
                 }
@@ -5205,7 +5245,7 @@ impl Worker {
         mentions: Vec<String>,
     ) {
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let commands = self.commands.clone();
@@ -5215,7 +5255,7 @@ impl Worker {
             let outcome = async {
                 let encoded = tokio::task::spawn_blocking(move || {
                     let image = image::RgbaImage::from_raw(width, height, rgba)
-                        .ok_or_else(|| "Clipboard image data is invalid".to_owned())?;
+                        .ok_or_else(|| i18n::t(Key::ToastClipboardInvalid).to_owned())?;
                     encode_jpeg(&image::DynamicImage::ImageRgba8(image), 88)
                 })
                 .await
@@ -5236,7 +5276,10 @@ impl Worker {
                     let _ = commands.send(Command::Sent {
                         chat,
                         id: String::new(),
-                        error: Some(format!("Could not send the picture: {error}")),
+                        error: Some(i18n::f(
+                            Key::ToastPictureFailed,
+                            &[("error", &error.to_string())],
+                        )),
                     });
                 }
             }
@@ -5246,7 +5289,7 @@ impl Worker {
     /// Encodes and sends an OGG/Opus voice message with optional quote.
     fn send_voice(&mut self, chat: ChatId, samples: Vec<f32>, quoting: Option<String>) {
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let quote = quoting.as_deref().and_then(|id| {
@@ -5266,7 +5309,7 @@ impl Worker {
                 mentions: row.mentions.clone(),
                 id: row.id,
                 sender_name: if row.from_me {
-                    Some("You".to_owned())
+                    Some(i18n::t(Key::DisplayYou).to_owned())
                 } else {
                     row.sender_name
                         .clone()
@@ -5314,7 +5357,10 @@ impl Worker {
                     let _ = commands.send(Command::Sent {
                         chat,
                         id: String::new(),
-                        error: Some(format!("Could not send the voice message: {error}")),
+                        error: Some(i18n::f(
+                            Key::ToastVoiceFailed,
+                            &[("error", &error.to_string())],
+                        )),
                     });
                 }
             }
@@ -5347,7 +5393,7 @@ impl Worker {
 
     fn send_sticker(&mut self, chat: ChatId, path: PathBuf) {
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let commands = self.commands.clone();
@@ -5374,7 +5420,10 @@ impl Worker {
                     let _ = commands.send(Command::Sent {
                         chat,
                         id: String::new(),
-                        error: Some(format!("Could not send the sticker: {error}")),
+                        error: Some(i18n::f(
+                            Key::ToastStickerSendFailed,
+                            &[("error", &error.to_string())],
+                        )),
                     });
                 }
             }
@@ -5383,7 +5432,7 @@ impl Worker {
 
     fn send_gif(&mut self, chat: ChatId, gif: Gif) {
         let Some(client) = self.client.clone() else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let commands = self.commands.clone();
@@ -5424,7 +5473,10 @@ impl Worker {
                     let _ = commands.send(Command::Sent {
                         chat,
                         id: String::new(),
-                        error: Some(format!("Could not send the GIF: {error}")),
+                        error: Some(i18n::f(
+                            Key::ToastGifFailed,
+                            &[("error", &error.to_string())],
+                        )),
                     });
                 }
             }
@@ -5434,11 +5486,11 @@ impl Worker {
     /// Archives and sends an uploaded attachment message.
     fn outbound(&mut self, chat: ChatId, row: Message, raw: Vec<u8>) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let Ok(mut message) = wa::Message::decode_from_slice(&raw) else {
-            self.emit(Event::Error("Could not encode the attachment".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastEncodeFailed).to_owned()));
             return;
         };
         let expiration = self.apply_ephemeral(&chat, &mut message);
@@ -5458,7 +5510,7 @@ impl Worker {
 
     fn react(&mut self, chat: ChatId, id: String, emoji: String) {
         let (Some(client), Some(jid)) = (self.client.clone(), Self::jid_of(&chat)) else {
-            self.emit(Event::Error("Not connected to WhatsApp".to_owned()));
+            self.emit(Event::Error(i18n::t(Key::ToastNotConnected).to_owned()));
             return;
         };
         let Ok(Some(target)) = self.archive.message(&chat, &id) else {
@@ -5547,9 +5599,9 @@ async fn send_outgoing(
                     lids,
                     stored,
                 })
-                .map_err(|_| "The application is shutting down".to_owned())?;
+                .map_err(|_| i18n::t(Key::ToastShuttingDown).to_owned())?;
             if saved.recv().await != Some(true) {
-                return Err("Could not save the group message recipients".to_owned());
+                return Err(i18n::t(Key::ToastRecipientsSaveFailed).to_owned());
             }
         }
         let mut options = SendOptions::default().with_message_id(id.clone());
@@ -5601,7 +5653,7 @@ fn forwarded_row(
 fn fallback_name(id: &str) -> String {
     match crate::model::phone_of(id) {
         Some(digits) => crate::util::phone(digits),
-        None if ChatKind::from_id(id) == ChatKind::Group => "Group".to_owned(),
+        None if ChatKind::from_id(id) == ChatKind::Group => i18n::t(Key::KindGroup).to_owned(),
         None => id.split('@').next().unwrap_or(id).to_owned(),
     }
 }
@@ -5896,7 +5948,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
     if let Some(document) = base.document_message.as_option() {
         let file_name = non_empty(&document.file_name)
             .or_else(|| non_empty(&document.title))
-            .unwrap_or_else(|| "Document".to_owned());
+            .unwrap_or_else(|| i18n::t(Key::KindDocument).to_owned());
         return Some(Content::Document {
             media: media(document.mimetype.as_ref(), document.file_length, None, None),
             file_name,
@@ -5927,13 +5979,14 @@ fn classify(base: &wa::Message) -> Option<Content> {
         return Some(Content::Location {
             latitude: live.degrees_latitude.unwrap_or(0.0),
             longitude: live.degrees_longitude.unwrap_or(0.0),
-            name: Some("Live location".to_owned()),
+            name: Some(i18n::t(Key::KindLiveLocation).to_owned()),
             address: None,
         });
     }
     if let Some(contact) = base.contact_message.as_option() {
         return Some(Content::Contact {
-            display_name: non_empty(&contact.display_name).unwrap_or_else(|| "Contact".to_owned()),
+            display_name: non_empty(&contact.display_name)
+                .unwrap_or_else(|| i18n::t(Key::KindContact).to_owned()),
             vcard: contact.vcard.clone().unwrap_or_default(),
         });
     }
@@ -5941,7 +5994,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
         let count = contacts.contacts.len();
         return Some(Content::Contact {
             display_name: non_empty(&contacts.display_name)
-                .unwrap_or_else(|| format!("{count} contacts")),
+                .unwrap_or_else(|| i18n::count(Key::KindContactsOne, Key::KindContactsMany, count)),
             vcard: contacts
                 .contacts
                 .iter()
@@ -5957,7 +6010,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
         .or(base.poll_creation_message_v3.as_option())
     {
         return Some(Content::Poll {
-            question: non_empty(&poll.name).unwrap_or_else(|| "Poll".to_owned()),
+            question: non_empty(&poll.name).unwrap_or_else(|| i18n::t(Key::KindPoll).to_owned()),
             state: crate::model::PollState {
                 selectable: poll.selectable_options_count.unwrap_or(0) as usize,
                 ..Default::default()
@@ -5978,13 +6031,13 @@ fn classify(base: &wa::Message) -> Option<Content> {
         return None;
     }
     if base.group_invite_message.is_set() {
-        return unsupported("group invite");
+        return unsupported(i18n::t(Key::KindGroupInvite));
     }
     if base.event_message.is_set() {
         return unsupported("event");
     }
     if base.sticker_pack_message.is_set() {
-        return unsupported("sticker pack");
+        return unsupported(i18n::t(Key::KindStickerPack));
     }
     if base.interactive_message.is_set()
         || base.buttons_message.is_set()
@@ -5995,7 +6048,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
         || base.interactive_response_message.is_set()
         || base.template_button_reply_message.is_set()
     {
-        return unsupported("interactive message");
+        return unsupported(i18n::t(Key::KindInteractive));
     }
     if base.product_message.is_set() || base.order_message.is_set() {
         return unsupported("product");
@@ -6011,7 +6064,7 @@ fn classify(base: &wa::Message) -> Option<Content> {
         return unsupported("call");
     }
     if base.lottie_sticker_message.is_set() {
-        return unsupported("animated sticker");
+        return unsupported(i18n::t(Key::KindAnimatedSticker));
     }
     if base.poll_update_message.is_set()
         || base.enc_reaction_message.is_set()
@@ -6324,7 +6377,7 @@ fn search_gifs(query: &str, key: &str, dir: &Path) -> Result<Vec<Gif>, GifError>
     };
     if key.is_empty() {
         return Err(GifError {
-            message: "GIF search needs a GIPHY API key.".to_owned(),
+            message: i18n::t(Key::GifErrNoKey).to_owned(),
             bad_key: true,
         });
     }
@@ -6337,34 +6390,45 @@ fn search_gifs(query: &str, key: &str, dir: &Path) -> Result<Vec<Gif>, GifError>
         )
     };
     let body = match ureq::get(&url).call() {
-        Ok(mut response) => response
-            .body_mut()
-            .read_to_string()
-            .map_err(|error| plain(format!("GIPHY request failed: {error}")))?,
+        Ok(mut response) => response.body_mut().read_to_string().map_err(|error| {
+            plain(i18n::f(
+                Key::GifErrRequest,
+                &[("error", &error.to_string())],
+            ))
+        })?,
         // Treat 401 and 403 as API-key failures for the picker.
         Err(ureq::Error::StatusCode(code @ (401 | 403))) => {
             return Err(GifError {
-                message: format!("GIPHY rejected the API key (error {code})."),
+                message: i18n::f(Key::GifErrKeyRejected, &[("code", &code.to_string())]),
                 bad_key: true,
             });
         }
-        Err(error) => return Err(plain(format!("GIPHY request failed: {error}"))),
+        Err(error) => {
+            return Err(plain(i18n::f(
+                Key::GifErrRequest,
+                &[("error", &error.to_string())],
+            )));
+        }
     };
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|error| plain(format!("Invalid GIPHY response: {error}")))?;
+    let json: serde_json::Value = serde_json::from_str(&body).map_err(|error| {
+        plain(i18n::f(
+            Key::GifErrResponse,
+            &[("error", &error.to_string())],
+        ))
+    })?;
     if let Some(message) = json["meta"]["msg"].as_str()
         && let Some(status) = json["meta"]["status"]
             .as_u64()
             .filter(|status| *status >= 400)
     {
         return Err(GifError {
-            message: format!("GIPHY: {message}"),
+            message: i18n::f(Key::GifErrMessage, &[("message", message)]),
             bad_key: status == 401 || status == 403,
         });
     }
     let data = json["data"]
         .as_array()
-        .ok_or_else(|| plain("GIPHY response contained no results".to_owned()))?;
+        .ok_or_else(|| plain(i18n::t(Key::GifErrNoResults).to_owned()))?;
     std::fs::create_dir_all(dir).map_err(|error| plain(error.to_string()))?;
     let mut gifs: Vec<(Gif, Option<String>)> = data
         .iter()
@@ -6794,7 +6858,7 @@ mod tests {
             fallback_name("393331234567@s.whatsapp.net"),
             "+39 333 123 456 7"
         );
-        assert_eq!(fallback_name("1-2@g.us"), "Group");
+        assert_eq!(fallback_name("1-2@g.us"), i18n::t(Key::KindGroup));
         assert_eq!(fallback_name("42@lid"), "42");
     }
 
@@ -7301,7 +7365,10 @@ mod receipt_tests {
         let (mut worker, _events, _inbox, _wa) = worker();
         let group = "123-456@g.us";
         let other = "12025550123@s.whatsapp.net";
-        worker.archive.ensure_chat(group, "Group").unwrap();
+        worker
+            .archive
+            .ensure_chat(group, i18n::t(Key::KindGroup))
+            .unwrap();
         worker
             .archive
             .set_group_info(

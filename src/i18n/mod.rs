@@ -271,8 +271,7 @@ mod tests {
             .iter()
             .copied()
             .filter(|key| {
-                text(Locale::En, *key) == text(Locale::Es, *key)
-                    && !ALLOWED_IDENTICAL.contains(key)
+                text(Locale::En, *key) == text(Locale::Es, *key) && !ALLOWED_IDENTICAL.contains(key)
             })
             .collect();
         assert!(

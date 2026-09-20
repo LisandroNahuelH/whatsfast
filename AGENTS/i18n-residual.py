@@ -18,8 +18,25 @@ SKIP_FILES = {
     "src/i18n/en.rs",
     "src/i18n/es.rs",
     "src/i18n/mod.rs",
+    # Sample content and the tour script stay in English: the tour clicks its
+    # own labels and the recording runs on an English build.
     "src/demo.rs",
+    "src/demo/tour.rs",
+    "src/demo/tour/media.rs",
+    "src/demo/tour/session.rs",
 }
+
+
+def safe_literal(text: str, position: int) -> bool:
+    """False for byte strings, raw strings, and const/static initializers."""
+    prefix = text[max(0, position - 3) : position]
+    if prefix.endswith(("b", "r", "br", "rb")):
+        return False
+    window = text[max(0, position - 4000) : position]
+    const_at = max(window.rfind("const "), window.rfind("static "))
+    if const_at >= 0 and "}" not in window[const_at:]:
+        return False
+    return True
 
 
 def unescape(s: str) -> str:
@@ -62,13 +79,27 @@ def main() -> int:
                 else:
                     continue
                 break
+        offset = 0
+        in_test = False
+        depth = 0
         for line_no, line in enumerate(lines[:cutoff], start=1):
             stripped = line.strip()
-            if stripped.startswith("//") or stripped.startswith("///"):
+            if stripped == "#[test]":
+                in_test = True
+                depth = 0
+            elif in_test:
+                depth += line.count("{") - line.count("}")
+                if depth <= 0:
+                    in_test = False
+            line_offset = offset
+            offset += len(line) + 1
+            if in_test or stripped.startswith("//") or stripped.startswith("///"):
                 continue
             for m in re.finditer(r'"((?:[^"\\]|\\.)*)"', line):
                 content = unescape(m.group(1))
                 if content not in english:
+                    continue
+                if not safe_literal(text, line_offset + m.start()):
                     continue
                 before = line[: m.start()]
                 if "i18n::" in before or "Key::" in before:

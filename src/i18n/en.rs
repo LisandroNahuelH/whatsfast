@@ -12,7 +12,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsHistoryRecent => "Recent and pinned",
         Key::SettingsHistoryOffHint => "Do not fetch older messages in the background.",
         Key::SettingsHistoryCurrentHint => "Fetch older messages and files for the open chat only.",
-        Key::SettingsHistoryRecentHint => "Fetch older history for pinned chats and the ten most recent chats.",
+        Key::SettingsHistoryRecentHint => {
+            "Fetch older history for pinned chats and the ten most recent chats."
+        }
         Key::SettingsWallpaperBlack => "Black",
         Key::SettingsWallpaperGray => "Gray",
         Key::SettingsWallpaperGreen => "Green",
@@ -23,7 +25,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsLanguageSystem => "System language",
         Key::SettingsLanguageEnglish => "English",
         Key::SettingsLanguageSpanish => "Español",
-        Key::SettingsLanguageHint => "Applies to the whole interface. Menus in the system tray change on restart.",
+        Key::SettingsLanguageHint => {
+            "Applies to the whole interface. Menus in the system tray change on restart."
+        }
         Key::DateWeekdayMonday => "Monday",
         Key::DateWeekdayTuesday => "Tuesday",
         Key::DateWeekdayWednesday => "Wednesday",
@@ -102,10 +106,14 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsSectionAppearance => "Appearance",
         Key::SettingsThemeLabel => "Theme",
         Key::SettingsThemeOmarchyHint => "Follow system uses your Omarchy colours.",
-        Key::SettingsThemeSystemHint => "Follow system uses your desktop's light or dark appearance.",
+        Key::SettingsThemeSystemHint => {
+            "Follow system uses your desktop's light or dark appearance."
+        }
         Key::SettingsOpenThemesFolder => "Open themes folder",
         Key::SettingsWallpaperLabel => "Chat wallpaper",
-        Key::SettingsWallpaperHint => "Auto picks a doodle from the theme colours. You can force Black 1 to White 3. Right-click the open chat and choose Next wallpaper to step through the three doodles for that family.",
+        Key::SettingsWallpaperHint => {
+            "Auto picks a doodle from the theme colours. You can force Black 1 to White 3. Right-click the open chat and choose Next wallpaper to step through the three doodles for that family."
+        }
         Key::SettingsZoomLabel => "Zoom",
         Key::SettingsZoomHint => "You can also use Ctrl+plus and Ctrl+minus.",
         Key::SettingsZoomLarger => "Larger",
@@ -113,27 +121,45 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsSectionChats => "Chats",
         Key::SettingsEnterSends => "Enter sends",
         Key::SettingsEnterSendsHint => "When off, Enter adds a line and Ctrl+Enter sends.",
-        Key::SettingsReceiptsOffNote => "Read receipts are disabled for your WhatsApp account (Settings Privacy). Direct chats will not send them. When this switch is on, groups still do. Read state syncs between your devices either way.",
-        Key::SettingsReceiptsOnNote => "Let people see when you read messages or play voice messages on this copy. Your WhatsApp account setting in Privacy still applies. Read state syncs between your devices either way.",
+        Key::SettingsReceiptsOffNote => {
+            "Read receipts are disabled for your WhatsApp account (Settings Privacy). Direct chats will not send them. When this switch is on, groups still do. Read state syncs between your devices either way."
+        }
+        Key::SettingsReceiptsOnNote => {
+            "Let people see when you read messages or play voice messages on this copy. Your WhatsApp account setting in Privacy still applies. Read state syncs between your devices either way."
+        }
         Key::SettingsSendReceipts => "Send read receipts",
         Key::SettingsSendTyping => "Show when you are typing",
         Key::SettingsAutoDownload => "Download attachments automatically",
-        Key::SettingsAutoDownloadHint => "Download pictures, videos, voice messages, and documents up to 64 MB when they enter view. When off, click a file to download it.",
+        Key::SettingsAutoDownloadHint => {
+            "Download pictures, videos, voice messages, and documents up to 64 MB when they enter view. When off, click a file to download it."
+        }
         Key::SettingsHistoryLabel => "Download older history in the background",
-        Key::SettingsHistoryHint => "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Failed files are asked again with a long wait, for up to 30 days. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned.",
+        Key::SettingsHistoryHint => {
+            "Slowly fetch older messages and their files (up to 64 MB) so scrolling up does not hit WhatsApp's rate limit. Failed files are asked again with a long wait, for up to 30 days. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned."
+        }
         Key::SettingsShowSenderPictures => "Show sender pictures in every chat",
         Key::SettingsShowSenderPicturesHint => "WhatsApp shows them in groups only.",
         Key::SettingsNamesFromContacts => "Names from your address book",
-        Key::SettingsNamesFromContactsHint => "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app.",
+        Key::SettingsNamesFromContactsHint => {
+            "Prefer saved contact names. When off, prefer public WhatsApp profile names. This applies throughout the app."
+        }
         Key::SettingsSaveContacts => "Save contacts to the phone's address book",
-        Key::SettingsSaveContactsHint => "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way.",
+        Key::SettingsSaveContactsHint => {
+            "Also add contacts saved here to your phone's address book. When off, they remain WhatsApp contacts. Names sync to linked devices either way."
+        }
         Key::SettingsForwardInOrder => "Forward messages in order",
-        Key::SettingsForwardInOrderHint => "Send a forwarded batch one message at a time, starting each one when the message before it shows its first tick. Mixed text, pictures, and videos then arrive in their original order. When off, they send together and may arrive out of order.",
+        Key::SettingsForwardInOrderHint => {
+            "Send a forwarded batch one message at a time, starting each one when the message before it shows its first tick. Mixed text, pictures, and videos then arrive in their original order. When off, they send together and may arrive out of order."
+        }
         Key::SettingsShowPollButton => "Show the create poll button",
-        Key::SettingsShowPollButtonHint => "Add the Create poll button beside the composer. When off, the button is hidden and the polls already in a chat keep working.",
+        Key::SettingsShowPollButtonHint => {
+            "Add the Create poll button beside the composer. When off, the button is hidden and the polls already in a chat keep working."
+        }
         Key::SettingsShowShortcutHints => "Show shortcut hints",
         Key::SettingsSectionDownloads => "Downloads",
-        Key::SettingsStorageHint => "Weight of pictures, videos, stickers, and GIFs already on this computer. The message count includes text.",
+        Key::SettingsStorageHint => {
+            "Weight of pictures, videos, stickers, and GIFs already on this computer. The message count includes text."
+        }
         Key::SettingsStorageImages => "Images",
         Key::SettingsStorageVideos => "Videos",
         Key::SettingsStorageStickersGifs => "Stickers and GIFs",
@@ -141,17 +167,29 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsStorageMessagesOne => "1 message",
         Key::SettingsStorageMessagesMany => "{count} messages",
         Key::SettingsSectionPrivacy => "Privacy",
-        Key::SettingsPrivacyLoadFailed => "Could not load privacy settings. They load again when WhatsFast reconnects.",
+        Key::SettingsPrivacyLoadFailed => {
+            "Could not load privacy settings. They load again when WhatsFast reconnects."
+        }
         Key::SettingsSectionWindow => "Window",
         Key::SettingsKeepRunning => "Keep running when the window closes",
-        Key::SettingsKeepRunningHint => "Keep WhatsFast linked in the system tray. Quit from the tray menu or with Ctrl+Q.",
+        Key::SettingsKeepRunningHint => {
+            "Keep WhatsFast linked in the system tray. Quit from the tray menu or with Ctrl+Q."
+        }
         Key::SettingsNotify => "Notify about new messages",
-        Key::SettingsNotifyHint => "Show desktop notifications when the window is hidden, in the background, or showing another chat. Muted chats do not notify you.",
+        Key::SettingsNotifyHint => {
+            "Show desktop notifications when the window is hidden, in the background, or showing another chat. Muted chats do not notify you."
+        }
         Key::SettingsHideSidebar => "Hide the sidebar completely",
-        Key::SettingsHideSidebarHint => "On: hiding the sidebar (Ctrl+B) leaves nothing behind. Off: it narrows to the chat pictures, so search, archived chats, and settings stay one click away.",
+        Key::SettingsHideSidebarHint => {
+            "On: hiding the sidebar (Ctrl+B) leaves nothing behind. Off: it narrows to the chat pictures, so search, archived chats, and settings stay one click away."
+        }
         Key::SettingsGiphyKey => "GIPHY API key",
-        Key::SettingsGiphyKeyHintBuiltIn => "Used for GIF search. This build includes a key. Enter a key from developers.giphy.com to replace it.",
-        Key::SettingsGiphyKeyHintRequired => "Required for GIF search. Get a free key from developers.giphy.com.",
+        Key::SettingsGiphyKeyHintBuiltIn => {
+            "Used for GIF search. This build includes a key. Enter a key from developers.giphy.com to replace it."
+        }
+        Key::SettingsGiphyKeyHintRequired => {
+            "Required for GIF search. Get a free key from developers.giphy.com."
+        }
         Key::SettingsSectionAccount => "Account",
         Key::SettingsLinkedDevice => "Linked device",
         Key::SettingsUnlink => "Unlink this computer",
@@ -160,14 +198,22 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::SettingsOpenFolder => "Open folder",
         Key::SettingsDownloadedAttachments => "Downloaded attachments",
         Key::SettingsAskWhereToSave => "Ask where to save each file",
-        Key::SettingsAskWhereToSaveHint => "Open the system save dialog for every attachment you save from the selection bar, so you choose the folder and the file name. When off, saved files go to your Downloads folder.",
+        Key::SettingsAskWhereToSaveHint => {
+            "Open the system save dialog for every attachment you save from the selection bar, so you choose the folder and the file name. When off, saved files go to your Downloads folder."
+        }
         Key::SettingsLogOfRun => "Log of this run",
         Key::SettingsSectionAbout => "About",
-        Key::SettingsAboutLine => "A native WhatsApp client built with Rust, egui, and whatsapp-rust.",
+        Key::SettingsAboutLine => {
+            "A native WhatsApp client built with Rust, egui, and whatsapp-rust."
+        }
         Key::SettingsCheckUpdates => "Check for updates",
-        Key::SettingsCheckUpdatesHint => "Ask GitHub once a day whether a newer WhatsFast release exists. The request identifies only WhatsFast and its version.",
+        Key::SettingsCheckUpdatesHint => {
+            "Ask GitHub once a day whether a newer WhatsFast release exists. The request identifies only WhatsFast and its version."
+        }
         Key::SettingsDownloadUpdates => "Download updates automatically",
-        Key::SettingsDownloadUpdatesHint => "Download and verify new releases in the background. A toast offers Update; one click installs and restarts. If you skip the toast, the next start of WhatsFast installs the verified file. Native packages and Flatpak update through their package manager.",
+        Key::SettingsDownloadUpdatesHint => {
+            "Download and verify new releases in the background. A toast offers Update; one click installs and restarts. If you skip the toast, the next start of WhatsFast installs the verified file. Native packages and Flatpak update through their package manager."
+        }
         Key::SettingsLanguageLabel => "Interface language",
         Key::ShortcutSearchChats => "Search chats",
         Key::ShortcutSearchMessages => "Search messages in the open chat",
@@ -187,12 +233,16 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::LoginTagline => "A native WhatsApp client.",
         Key::LoginConnecting => "Connecting to WhatsApp…",
         Key::LoginLinkedWaiting => "Linked. Waiting for your chats…",
-        Key::LoginUnlinkedRequestingCode => "This computer was unlinked from your phone. Requesting a new code.",
+        Key::LoginUnlinkedRequestingCode => {
+            "This computer was unlinked from your phone. Requesting a new code."
+        }
         Key::LoginRequestingNewCode => "Requesting a new code…",
         Key::LoginTryAgain => "Try again",
         Key::LoginRequestingCodeFor => "Requesting a code for +{phone}…",
         Key::LoginWaitingForCode => "Waiting for a code from WhatsApp…",
-        Key::LoginUnofficialWarning => "Unofficial client. Using it may be against WhatsApp's terms of service.",
+        Key::LoginUnofficialWarning => {
+            "Unofficial client. Using it may be against WhatsApp's terms of service."
+        }
         Key::LoginLinkThisComputer => "Link this computer",
         Key::LoginOpenWhatsApp => "Open WhatsApp on your phone",
         Key::LoginTapMenu => "Tap Menu or Settings, then Linked devices",
@@ -260,10 +310,16 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::PickerSearchGifs => "Search GIFs via GIPHY",
         Key::PickerSearching => "Searching…",
         Key::PickerGifEmpty => "Search for a GIF or browse trending results.",
-        Key::PickerGiphyKeyRejected => "This GIPHY API key was rejected. Create a free key at developers.giphy.com and paste it here. It is saved in your settings.",
-        Key::PickerGiphyKeyNeeded => "GIF search needs a GIPHY API key. Create a free key at developers.giphy.com and paste it here. It is saved in your settings.",
+        Key::PickerGiphyKeyRejected => {
+            "This GIPHY API key was rejected. Create a free key at developers.giphy.com and paste it here. It is saved in your settings."
+        }
+        Key::PickerGiphyKeyNeeded => {
+            "GIF search needs a GIPHY API key. Create a free key at developers.giphy.com and paste it here. It is saved in your settings."
+        }
         Key::PickerStickersLoading => "Loading your stickers…",
-        Key::PickerStickersEmpty => "Recent stickers appear here. Right-click one to save it. To import a pack, paste a signal.art link or open a .wastickers file.",
+        Key::PickerStickersEmpty => {
+            "Recent stickers appear here. Right-click one to save it. To import a pack, paste a signal.art link or open a .wastickers file."
+        }
         Key::PickerStickersSaved => "Saved",
         Key::PickerStickerRemovePack => "Remove this pack",
         Key::PickerFindPacks => "Find packs",
@@ -282,25 +338,37 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::DialogSave => "Save",
         Key::DialogCreate => "Create",
         Key::DialogShortcutsTitle => "Keyboard shortcuts",
-        Key::DialogAboutLine => "A native WhatsApp client written in Rust with egui. It connects through whatsapp-rust. Messages are end-to-end encrypted on this device.",
-        Key::DialogUnofficialWarning => "This is an unofficial client. Using it may be against WhatsApp's terms of service and could get an account suspended.",
+        Key::DialogAboutLine => {
+            "A native WhatsApp client written in Rust with egui. It connects through whatsapp-rust. Messages are end-to-end encrypted on this device."
+        }
+        Key::DialogUnofficialWarning => {
+            "This is an unofficial client. Using it may be against WhatsApp's terms of service and could get an account suspended."
+        }
         Key::DialogSourceCode => "Source code",
         Key::DialogVersion => "Version {version}",
         Key::DialogUnlinkTitle => "Unlink this computer?",
-        Key::DialogUnlinkBody => "This removes the device from WhatsApp and deletes the chats stored here. You can link again with a new code.",
+        Key::DialogUnlinkBody => {
+            "This removes the device from WhatsApp and deletes the chats stored here. You can link again with a new code."
+        }
         Key::DialogUnlinkButton => "Unlink",
         Key::DialogLeaveChannelTitle => "Leave this channel?",
         Key::DialogLeaveGroupTitle => "Leave this group?",
-        Key::DialogLeaveBody => "You will not receive new messages. The local history stays on this computer.",
+        Key::DialogLeaveBody => {
+            "You will not receive new messages. The local history stays on this computer."
+        }
         Key::DialogLeaveChannelAction => "Leave channel",
         Key::DialogLeaveGroupAction => "Leave group",
         Key::DialogLeaveChannelArchive => "Leave channel and archive",
         Key::DialogLeaveGroupArchive => "Leave group and archive",
         Key::DialogLinkPhoneTitle => "Link with a phone number",
-        Key::DialogPhoneInstructions => "Enter the WhatsApp phone number with its country code. Do not include a plus sign or leading zero. You will get a code to enter on the phone.",
+        Key::DialogPhoneInstructions => {
+            "Enter the WhatsApp phone number with its country code. Do not include a plus sign or leading zero. You will get a code to enter on the phone."
+        }
         Key::DialogGetCode => "Get a code",
         Key::DialogNewContactTitle => "New contact",
-        Key::DialogNewContactBody => "Enter a phone number with its country code, without a plus sign or leading zero. Add a name to save the contact, or leave it blank to open the chat. WhatsApp uses the first name as the display name.",
+        Key::DialogNewContactBody => {
+            "Enter a phone number with its country code, without a plus sign or leading zero. Add a name to save the contact, or leave it blank to open the chat. WhatsApp uses the first name as the display name."
+        }
         Key::DialogFirstName => "First name",
         Key::DialogSurname => "Surname",
         Key::DialogCheckingNumber => "Checking the number…",
@@ -352,7 +420,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::CommonEdit => "Edit",
         Key::CommonDelete => "Delete",
         Key::ChatListNoScheduled => "No scheduled messages",
-        Key::ChatListNoScheduledHint => "Write a message and pick a time with the clock beside the send button.",
+        Key::ChatListNoScheduledHint => {
+            "Write a message and pick a time with the clock beside the send button."
+        }
         Key::ChatListNoStarred => "No starred messages",
         Key::ChatListNoStarredHint => "Pick messages in a chat and press Star to keep them here.",
         Key::ChatListNothingArchived => "Nothing archived",
@@ -411,8 +481,12 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ChatAddCaption => "Add a caption",
         Key::ChatRecordVoice => "Record a voice message",
         Key::ChatScheduleMessage => "Schedule this message",
-        Key::ChatHintsEnter => "Enter sends · Shift+Enter for a new line · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture",
-        Key::ChatHintsCtrlEnter => "Ctrl+Enter sends · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture",
+        Key::ChatHintsEnter => {
+            "Enter sends · Shift+Enter for a new line · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture"
+        }
+        Key::ChatHintsCtrlEnter => {
+            "Ctrl+Enter sends · *bold* _italic_ ~strike~ · Ctrl+V pastes a picture"
+        }
         Key::ChatHideHints => "Hide shortcut hints (restore in Settings)",
         Key::ChatAllShortcuts => "All shortcuts ({keys})",
         Key::ChatEditingMessage => "Editing message",
@@ -487,7 +561,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::KindContactWith => "Contact: {name}",
         Key::KindPollWith => "Poll: {question}",
         Key::ChatUnsupportedMessage => "Unsupported message ({what})",
-        Key::ChatRetryFile => "We are still trying to get this file automatically. Click to retry manually.",
+        Key::ChatRetryFile => {
+            "We are still trying to get this file automatically. Click to retry manually."
+        }
         Key::ChatFileGone => "No longer available on WhatsApp's servers",
         Key::PrivacyLastSeen => "Last seen",
         Key::PrivacyOnline => "Online",
@@ -502,7 +578,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::PrivacyProfilePhotoHint => "Who can see your profile photo.",
         Key::PrivacyAboutHint => "Who can see your About text. This is not the Status tab.",
         Key::PrivacyGroupsHint => "Who can add you to a group.",
-        Key::PrivacyReceiptsHint => "Everyone or nobody on this WhatsApp account. The Chats switch still applies to this copy.",
+        Key::PrivacyReceiptsHint => {
+            "Everyone or nobody on this WhatsApp account. The Chats switch still applies to this copy."
+        }
         Key::PrivacyCallsHint => "Who can call you on WhatsApp.",
         Key::PrivacyMessagesHint => "Who can start a chat with you.",
         Key::PrivacyHideLastSeen => "Hide last seen from",
@@ -519,7 +597,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ToastNotConnected => "Not connected to WhatsApp",
         Key::ToastNotConnectedYet => "Not connected to WhatsApp yet",
         Key::PollErrCantSendHere => "Polls cannot be sent to this chat.",
-        Key::PollErrDisappearing => "Poll creation in disappearing-message chats is not supported yet.",
+        Key::PollErrDisappearing => {
+            "Poll creation in disappearing-message chats is not supported yet."
+        }
         Key::PollErrRecipients => "Could not load the group recipients",
         Key::PollErrSend => "Could not send the poll. Please try again.",
         Key::PollErrAccountChanged => "The account changed while the poll was being sent.",
@@ -612,7 +692,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ToastMicOpenFailed => "Could not open the microphone: {error}",
         Key::ToastMicEmpty => "The microphone did not record any audio",
         Key::StickerErrMissingPackId => "Missing pack_id. Copy the full signal.art link",
-        Key::StickerErrMissingPackKey => "Missing or invalid pack_key. Copy the full signal.art link",
+        Key::StickerErrMissingPackKey => {
+            "Missing or invalid pack_key. Copy the full signal.art link"
+        }
         Key::StickerErrIncompleteData => "The sticker data is incomplete",
         Key::StickerErrKeyDerive => "Could not derive the sticker key",
         Key::StickerErrKeyMismatch => "The key does not match this pack",
@@ -656,14 +738,22 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::MenuHelp => "Help",
         Key::MenuKeyboardShortcuts => "Keyboard Shortcuts",
         Key::MenuWhatsFastHelp => "WhatsFast Help",
-        Key::UpdFlatpak => "Update this installation through your software center or flatpak update.",
+        Key::UpdFlatpak => {
+            "Update this installation through your software center or flatpak update."
+        }
         Key::UpdSnap => "Update this installation with snap refresh.",
         Key::UpdCargo => "Update this installation with cargo install.",
         Key::UpdNix => "Update this installation with Nix or Homebrew.",
-        Key::UpdThrough => "Update this installation through {instruction} or your software center.",
-        Key::UpdSystemDir => "This installation is in a system directory. Use your package manager or the download page.",
+        Key::UpdThrough => {
+            "Update this installation through {instruction} or your software center."
+        }
+        Key::UpdSystemDir => {
+            "This installation is in a system directory. Use your package manager or the download page."
+        }
         Key::UpdNoInstallDir => "The application has no installation directory",
-        Key::UpdNotPortable => "This installation does not identify itself as a portable download. Use the download page to install an update-enabled build.",
+        Key::UpdNotPortable => {
+            "This installation does not identify itself as a portable download. Use the download page to install an update-enabled build."
+        }
         Key::UpdMissingInstallDir => "Missing installation directory",
         Key::UpdCannotReplaceStaged => "Cannot replace the staged update",
         Key::UpdCannotWriteInstallDir => "Cannot write to the installation directory",
@@ -700,7 +790,9 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::UpdUpdatedAppNoWindow => "The updated app did not open its window within one minute",
         Key::UpdFailedRestored => "Update failed; restored the previous app: {error}",
         Key::UpdUpdatedTo => "Updated to {version}",
-        Key::UpdCouldNotStartRestored => "The update could not start. The previous version has been restored.",
+        Key::UpdCouldNotStartRestored => {
+            "The update could not start. The previous version has been restored."
+        }
         Key::UpdCannotRestartPrevious => "Could not restart the previous app",
         Key::UpdInvalidReceiptDir => "Invalid update receipt directory",
         Key::UpdReceiptOtherInstall => "The receipt belongs to a different installation",
@@ -713,12 +805,16 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::UpdInvalidReleaseVersion => "Invalid release version",
         Key::UpdRedirectNotAllowed => "Update redirect is not allowed",
         Key::UpdReleaseChanged => "The release changed. Check for updates again.",
-        Key::UpdUseDownloadPage => "Use the download page for this operating system or architecture",
+        Key::UpdUseDownloadPage => {
+            "Use the download page for this operating system or architecture"
+        }
         Key::UpdNotOnReleaseHost => "Update download is not on the release host",
         Key::UpdAssetOtherRelease => "Update asset does not belong to this release",
         Key::UpdExceedsSize => "Update download exceeds its published size",
         Key::UpdInterrupted => "The update download was interrupted",
-        Key::UpdCouldNotVerifyDownload => "The download couldn't be verified. Try downloading it again.",
+        Key::UpdCouldNotVerifyDownload => {
+            "The download couldn't be verified. Try downloading it again."
+        }
         Key::UpdMoveToApplications => "Move the app to Applications, then open it to update.",
         Key::UpdBundleMissingKey => "The app bundle is missing {key}",
         Key::UpdNotAnAppBundle => "The download is not a WhatsFast app bundle",
@@ -744,13 +840,25 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ThemeErrRegularFile => "expected a regular file, not a directory or symbolic link",
         Key::ThemeErrTooBig => "theme exceeds the 64 KiB file limit",
         Key::ThemeErrUtf8 => "expected UTF-8 JSON",
-        Key::ThemeErrFolderUnreadable => "The themes folder could not be read. See the log for details.",
-        Key::ThemeErrTooManyEntries => "The themes folder has more than 512 entries. Keep fewer files there to list the custom palettes.",
-        Key::ThemeErrTooManyThemes => "Only 128 custom palettes can be listed. Keep fewer JSON files in the themes folder to see the rest.",
-        Key::ThemeErrOmarchyLoad => "The Omarchy palette could not be loaded. Keeping the last usable appearance. See the log for details.",
-        Key::ThemeErrReload => "Custom themes could not be loaded. Run whatsfast reload-themes to try again.",
+        Key::ThemeErrFolderUnreadable => {
+            "The themes folder could not be read. See the log for details."
+        }
+        Key::ThemeErrTooManyEntries => {
+            "The themes folder has more than 512 entries. Keep fewer files there to list the custom palettes."
+        }
+        Key::ThemeErrTooManyThemes => {
+            "Only 128 custom palettes can be listed. Keep fewer JSON files in the themes folder to see the rest."
+        }
+        Key::ThemeErrOmarchyLoad => {
+            "The Omarchy palette could not be loaded. Keeping the last usable appearance. See the log for details."
+        }
+        Key::ThemeErrReload => {
+            "Custom themes could not be loaded. Run whatsfast reload-themes to try again."
+        }
         Key::ThemeLoadingLocal => "Loading local themes…",
-        Key::ThemeErrSelectedUnavailable => "The selected theme is unavailable. Keeping the last usable appearance. See the log for details.",
+        Key::ThemeErrSelectedUnavailable => {
+            "The selected theme is unavailable. Keeping the last usable appearance. See the log for details."
+        }
         Key::ThemeErrOmarchyColors => "Omarchy's current colors could not be read",
         Key::ThemeErrOmarchyTooBig => "Omarchy theme file exceeds 64 KiB",
         Key::ThemeErrOmarchyIncomplete => "incomplete palette placeholder",
@@ -762,15 +870,21 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ArchiveErrNoParentDir => "Archive has no parent directory",
         Key::ArchiveErrUnlockKeyring => "Unlock your OS keyring and restart WhatsFast",
         Key::ArchiveErrKeyringOpen => "The OS keyring could not open WhatsFast's archive key",
-        Key::ArchiveErrKeySaveMigrated => "Could not save the migrated archive key in the OS keyring",
-        Key::ArchiveErrKeyMissing => "The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed",
+        Key::ArchiveErrKeySaveMigrated => {
+            "Could not save the migrated archive key in the OS keyring"
+        }
+        Key::ArchiveErrKeyMissing => {
+            "The archive is encrypted but its OS keyring key is missing. Restore the original keyring; the archive has not been changed"
+        }
         Key::ArchiveErrKeyGenerate => "Could not generate an archive key",
         Key::ArchiveErrKeySave => "Could not save the archive key in the OS keyring",
         Key::ArchiveErrKeyVerify => "Could not verify the saved archive key",
         Key::ArchiveErrKeyNotRetained => "The OS keyring did not retain the archive key",
         Key::ArchiveErrNoCipher => "This build does not support encrypted archives",
         Key::ArchiveErrUnlockFailed => "The archive could not be unlocked with its OS keyring key",
-        Key::ArchiveErrClosePrograms => "Close other programs using the archive before migrating it",
+        Key::ArchiveErrClosePrograms => {
+            "Close other programs using the archive before migrating it"
+        }
         Key::ArchiveErrPathNotUtf8 => "Archive path is not UTF-8",
         Key::ArchiveErrIntegrity => "The encrypted archive failed its integrity check",
         Key::ArchiveErrReplaceFailed => "Could not replace the archive with its encrypted copy",

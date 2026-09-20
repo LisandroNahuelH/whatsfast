@@ -28,7 +28,10 @@ fn plist(bundle: &Path, key: &str) -> Result<String> {
         .args(["-c", &i18n::f(Key::UpdBundleMissingKey, &[("key", key)])])
         .arg(bundle.join("Contents/Info.plist"))
         .output()?;
-    ensure!(output.status.success(), "The app bundle is missing {key}");
+    ensure!(
+        output.status.success(),
+        i18n::f(Key::UpdBundleMissingKey, &[("key", key)])
+    );
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use whatsapp_rust::wacore::iq::privacy::{PrivacyCategory, PrivacySettingsResponse, PrivacyValue};
 
+use crate::i18n::{self, Key};
 use crate::model::ChatId;
 
 /// Account privacy category shown in Settings.
@@ -59,8 +60,8 @@ impl PrivacyKind {
             Self::ReadReceipts => {
                 "Everyone or nobody on this WhatsApp account. The Chats switch still applies to this copy."
             }
-            Self::CallAdd => "Who can call you on WhatsApp.",
-            Self::Messages => "Who can start a chat with you.",
+            Self::CallAdd => i18n::t(Key::PrivacyCallsHint),
+            Self::Messages => i18n::t(Key::PrivacyMessagesHint),
         }
     }
 
