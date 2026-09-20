@@ -3,7 +3,7 @@
 use egui::{Key, Modifiers};
 
 use crate::app::App;
-use crate::model::{Action, Dialog, Page};
+use crate::model::{Action, Dialog, Page, RightPane};
 
 pub fn handle(app: &mut App, ctx: &egui::Context) {
     let mut actions = Vec::new();
@@ -22,6 +22,11 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
             && app.recording.is_none()
         {
             key(Modifiers::COMMAND, Key::L, Action::FocusComposer);
+            key(
+                Modifiers::COMMAND,
+                Key::G,
+                Action::OpenRightPane(RightPane::Search),
+            );
         }
         key(Modifiers::COMMAND, Key::B, Action::ToggleSidebar);
         key(Modifiers::COMMAND, Key::Comma, Action::Open(Page::Settings));
@@ -72,6 +77,10 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
             actions.push(Action::CancelEdit);
         } else if app.reply_to.is_some() {
             actions.push(Action::CancelReply);
+        } else if app.chat_search_calendar {
+            app.chat_search_calendar = false;
+        } else if app.right_pane.is_some() {
+            actions.push(Action::CloseRightPane);
         } else if app.page == Page::Settings {
             actions.push(Action::Open(Page::Chats));
         } else if search_focused || !app.search.is_empty() {
@@ -123,6 +132,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
 /// Shortcuts shown in the help dialog.
 pub const SHORTCUTS: &[(&str, &str)] = &[
     ("Ctrl+F / Ctrl+K", "Search chats"),
+    ("Ctrl+G", "Search messages in the open chat"),
     ("Ctrl+L", "Focus the message input"),
     ("Alt+↑ / Alt+↓", "Previous / next chat"),
     ("Enter", "Send (Shift+Enter for a new line)"),
@@ -259,5 +269,73 @@ mod tests {
         let ctx = egui::Context::default();
         escape(&mut app, &ctx);
         assert!(matches!(app.actions.as_slice(), [Action::CloseImageViewer]));
+    }
+
+    #[test]
+    fn ctrl_g_opens_chat_search_when_a_chat_is_open() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = App::headless(
+            crate::paths::AppDirs::under(root.path()),
+            crate::settings::Settings::default(),
+        )
+        .0;
+        let ctx = egui::Context::default();
+        app.page = Page::Chats;
+        app.open_chat = Some("fixture".into());
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: Key::G,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                }],
+                ..Default::default()
+            },
+            |ui| handle(&mut app, ui.ctx()),
+        );
+        output.textures_delta.clear();
+        assert!(matches!(
+            app.actions.as_slice(),
+            [Action::OpenRightPane(RightPane::Search)]
+        ));
+        app.actions.clear();
+        app.open_chat = None;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: Key::G,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::COMMAND,
+                }],
+                ..Default::default()
+            },
+            |ui| handle(&mut app, ui.ctx()),
+        );
+        output.textures_delta.clear();
+        assert!(app.actions.is_empty());
+    }
+
+    #[test]
+    fn escape_closes_the_search_calendar_then_the_pane() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = App::headless(
+            crate::paths::AppDirs::under(root.path()),
+            crate::settings::Settings::default(),
+        )
+        .0;
+        app.page = Page::Chats;
+        app.open_chat = Some("fixture".into());
+        app.right_pane = Some(RightPane::Search);
+        app.chat_search_calendar = true;
+        let ctx = egui::Context::default();
+        escape(&mut app, &ctx);
+        assert!(!app.chat_search_calendar);
+        assert!(app.actions.is_empty());
+        escape(&mut app, &ctx);
+        assert!(matches!(app.actions.as_slice(), [Action::CloseRightPane]));
     }
 }

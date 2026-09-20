@@ -1119,6 +1119,22 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                 hits.sort_by_key(|message| std::cmp::Reverse(message.timestamp));
                 app.search_hits = hits;
             }
+            "search-in-chat" => {
+                let chat = SAMPLES[0].id;
+                app.open_chat = Some(chat.into());
+                app.right_pane = Some(crate::model::RightPane::Search);
+                app.chat_search = "engine".into();
+                let mut hits = Vec::new();
+                if let Some(conversation) = app.conversations.get(chat) {
+                    for message in &conversation.messages {
+                        if message.summary().to_lowercase().contains("engine") {
+                            hits.push(message.clone());
+                        }
+                    }
+                }
+                hits.sort_by_key(|message| std::cmp::Reverse(message.timestamp));
+                app.chat_search_hits = hits;
+            }
             "voice" => {
                 // Use a valid clip for playback tests.
                 let tone: Vec<f32> = (0..crate::voice::RATE * 6)
@@ -1441,6 +1457,7 @@ mod tests {
             "typers",
             "nosidebar",
             "search",
+            "search-in-chat",
             "staged",
             "compose-emoji",
             "voice",

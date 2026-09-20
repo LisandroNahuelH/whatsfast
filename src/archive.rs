@@ -802,55 +802,76 @@ impl Archive {
     /// Searches visible message text, filenames, polls, contacts, and places.
     /// ASCII matching is case-insensitive; other text follows SQLite behavior.
     pub fn search_messages(&self, needle: &str, limit: usize) -> Result<Vec<Message>> {
-        let pattern = format!(
-            "%{}%",
-            needle
-                .to_lowercase()
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_")
-        );
+        self.search_chat_messages(None, needle, None, None, limit)
+    }
+
+    /// Restricts [`Self::search_messages`] to one chat and an optional day range.
+    pub fn search_chat_messages(
+        &self,
+        chat: Option<&str>,
+        needle: &str,
+        from: Option<i64>,
+        until: Option<i64>,
+        limit: usize,
+    ) -> Result<Vec<Message>> {
+        let pattern = if needle.trim().is_empty() {
+            None
+        } else {
+            Some(format!(
+                "%{}%",
+                needle
+                    .to_lowercase()
+                    .replace('\\', "\\\\")
+                    .replace('%', "\\%")
+                    .replace('_', "\\_")
+            ))
+        };
         let mut statement = self.connection.prepare(
             "SELECT chat, id, sender, sender_name, from_me, timestamp, content, status, quoted, reactions, edited, thumbnail, mentions, forwarded, delivered_at, read_at
              FROM messages
-             WHERE json_valid(content) AND lower(
+             WHERE json_valid(content)
+             AND (?1 IS NULL OR chat = ?1)
+             AND (?2 IS NULL OR timestamp >= ?2)
+             AND (?3 IS NULL OR timestamp < ?3)
+             AND (?4 IS NULL OR lower(
                      coalesce(json_extract(content, '$.text'), '') || char(10) ||
                      coalesce(json_extract(content, '$.caption'), '') || char(10) ||
                      coalesce(json_extract(content, '$.file_name'), '') || char(10) ||
                      coalesce(json_extract(content, '$.question'), '') || char(10) ||
                      coalesce(json_extract(content, '$.display_name'), '') || char(10) ||
                      coalesce(json_extract(content, '$.name'), '')
-                 ) LIKE ?1 ESCAPE '\\'
+                 ) LIKE ?4 ESCAPE '\\')
              ORDER BY timestamp DESC, rowid DESC
-             LIMIT ?2",
+             LIMIT ?5",
         )?;
-        let rows = statement.query_map(params![pattern, limit as i64], |row| {
-            let chat: String = row.get(0)?;
-            let content: String = row.get(6)?;
-            let quoted: Option<String> = row.get(8)?;
-            let reactions: String = row.get(9)?;
-            let mentions: String = row.get(12)?;
-            Ok(Message {
-                id: row.get(1)?,
-                chat,
-                sender: row.get(2)?,
-                sender_name: row.get(3)?,
-                from_me: row.get(4)?,
-                timestamp: row.get(5)?,
-                content: serde_json::from_str(&content).unwrap_or(Content::Unsupported {
-                    what: "unreadable".into(),
-                }),
-                status: status_from_rank(row.get(7)?),
-                delivered_at: row.get(14)?,
-                read_at: row.get(15)?,
-                quoted: quoted.and_then(|quoted| serde_json::from_str(&quoted).ok()),
-                reactions: serde_json::from_str(&reactions).unwrap_or_default(),
-                edited: row.get(10)?,
-                mentions: serde_json::from_str(&mentions).unwrap_or_default(),
-                forwarded: row.get(13)?,
-                thumbnail: row.get(11)?,
-            })
-        })?;
+        let rows =
+            statement.query_map(params![chat, from, until, pattern, limit as i64], |row| {
+                let chat: String = row.get(0)?;
+                let content: String = row.get(6)?;
+                let quoted: Option<String> = row.get(8)?;
+                let reactions: String = row.get(9)?;
+                let mentions: String = row.get(12)?;
+                Ok(Message {
+                    id: row.get(1)?,
+                    chat,
+                    sender: row.get(2)?,
+                    sender_name: row.get(3)?,
+                    from_me: row.get(4)?,
+                    timestamp: row.get(5)?,
+                    content: serde_json::from_str(&content).unwrap_or(Content::Unsupported {
+                        what: "unreadable".into(),
+                    }),
+                    status: status_from_rank(row.get(7)?),
+                    delivered_at: row.get(14)?,
+                    read_at: row.get(15)?,
+                    quoted: quoted.and_then(|quoted| serde_json::from_str(&quoted).ok()),
+                    reactions: serde_json::from_str(&reactions).unwrap_or_default(),
+                    edited: row.get(10)?,
+                    mentions: serde_json::from_str(&mentions).unwrap_or_default(),
+                    forwarded: row.get(13)?,
+                    thumbnail: row.get(11)?,
+                })
+            })?;
         let messages: Vec<Message> = rows.collect::<Result<_>>()?;
         Ok(messages)
     }
@@ -1391,6 +1412,47 @@ pub(crate) mod tests {
         let hits = archive.search_messages("e", 1).expect("search");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].id, "m3", "newest first");
+    }
+
+    #[test]
+    fn search_can_stay_in_one_chat_and_one_day() {
+        let archive = Archive::in_memory().expect("opens");
+        archive
+            .ensure_chat("1@s.whatsapp.net", "Ada")
+            .expect("chat");
+        archive
+            .ensure_chat("2@s.whatsapp.net", "Grace")
+            .expect("chat");
+        let mut ada = message("1@s.whatsapp.net", "a", 1_000, false);
+        ada.content = Content::text("engine");
+        let mut grace = message("2@s.whatsapp.net", "g", 1_000, false);
+        grace.content = Content::text("engine");
+        let mut later = message("1@s.whatsapp.net", "later", 2_000, false);
+        later.content = Content::text("engine");
+        for row in [&ada, &grace, &later] {
+            archive.insert_message(row, None).expect("insert");
+        }
+        let hits = archive
+            .search_chat_messages(Some("1@s.whatsapp.net"), "engine", None, None, 10)
+            .expect("chat");
+        let ids: Vec<&str> = hits.iter().map(|hit| hit.id.as_str()).collect();
+        assert_eq!(ids, vec!["later", "a"]);
+        let hits = archive
+            .search_chat_messages(
+                Some("1@s.whatsapp.net"),
+                "engine",
+                Some(900),
+                Some(1_500),
+                10,
+            )
+            .expect("day");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "a");
+        let hits = archive
+            .search_chat_messages(Some("1@s.whatsapp.net"), "", Some(900), Some(1_500), 10)
+            .expect("day only");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "a");
     }
 
     #[test]

@@ -15,7 +15,7 @@ use crate::app::{App, Conversation};
 use crate::markup;
 use crate::model::{
     Action, Chat, ChatId, Content, Delivery, Dialog, LinkPreview, Media, MediaState, Message,
-    PickerTab,
+    PickerTab, RightPane,
 };
 use crate::theme::{self, Icon, Palette};
 
@@ -294,13 +294,21 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                         ui,
                         Icon::Search,
                         18.0,
-                        palette.secondary,
+                        if app.right_pane == Some(RightPane::Search) {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
                         palette.text,
-                        "Search (Ctrl+F)",
+                        "Search messages (Ctrl+G)",
                     )
                     .clicked()
                     {
-                        app.actions.push(Action::FocusSearch);
+                        if app.right_pane == Some(RightPane::Search) {
+                            app.actions.push(Action::CloseRightPane);
+                        } else {
+                            app.actions.push(Action::OpenRightPane(RightPane::Search));
+                        }
                     }
                 });
             });
@@ -1523,6 +1531,8 @@ struct View<'a> {
     selecting: Option<&'a HashSet<String>>,
     /// Ids of the starred messages of this chat, for the mark in the footer.
     starred: Option<&'a HashSet<String>>,
+    /// OpenMessage pulse: message id and whether this 200 ms slice is on.
+    highlight: Option<(String, bool)>,
     /// Resolves a name with the message's stored name as fallback.
     names_or: &'a dyn Fn(&str, Option<&str>) -> String,
     /// Resolves mention names without replacing our name with "You".
@@ -1535,6 +1545,18 @@ struct View<'a> {
 
 fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let palette = app.palette;
+    if let Some((_, started)) = &app.highlight {
+        let elapsed = started.elapsed().as_millis() as u64;
+        if crate::util::highlight_flash(elapsed).is_none() {
+            app.highlight = None;
+        } else {
+            ui.ctx().request_repaint_after(Duration::from_millis(200));
+        }
+    }
+    let highlight = app.highlight.as_ref().and_then(|(id, started)| {
+        let elapsed = started.elapsed().as_millis() as u64;
+        crate::util::highlight_flash(elapsed).map(|on| (id.clone(), on))
+    });
     // Check out the conversation while drawing rows and collecting actions.
     let mut conversation = app.conversations.remove(&chat.id).unwrap_or_default();
     let typing = app.typing_in(&chat.id);
@@ -1575,6 +1597,7 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             .filter(|selecting| selecting.chat == chat.id)
             .map(|selecting| &selecting.ids),
         starred: app.stars.get(&chat.id),
+        highlight,
         names_or: &names_or,
         mention_names: &mention_names,
         avatars: &avatars,
@@ -2164,13 +2187,21 @@ fn bubble_frame(
     let palette = view.palette;
     let own = message.from_me;
     // Draw stickers without a bubble.
-    let fill = if matches!(message.content, Content::Sticker { .. }) {
+    let mut fill = if matches!(message.content, Content::Sticker { .. }) {
         Color32::TRANSPARENT
     } else if own {
         palette.bubble_out
     } else {
         palette.bubble_in
     };
+    if fill != Color32::TRANSPARENT
+        && view
+            .highlight
+            .as_ref()
+            .is_some_and(|(id, on)| *on && id == &message.id)
+    {
+        fill = theme::blend(fill, palette.accent, 0.45);
+    }
     // Register the bubble from its previous rect before its contents so inner
     // links, quotes, and attachments win clicks. The bubble handles right-click.
     let bubble_id = bubble_id(&view.chat.id, &message.id);

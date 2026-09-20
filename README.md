@@ -70,7 +70,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 ## What it does
 
 - **Links to your phone.** Scan a QR code or link with your phone number. Recent history is copied to this computer after linking and stored here.
-- **Chats.** See pinned, unread, muted, and archived chats, typing indicators, and message status. Search chats, saved messages, and contacts. Chat and contact name searches ignore accents, so `Angel` finds `Ángel`. Pinned chats stay in pin order (most recently pinned first), regardless of new messages. Typing indicators show other participants, excluding your own linked devices. Filter chips under the search bar are a WhatsFast extra: **All**, **Unread**, **Favorites**, **Groups**, and your own lists. See [WhatsFast extras](#whatsfast-extras).
+- **Chats.** See pinned, unread, muted, and archived chats, typing indicators, and message status. Search chats, saved messages, and contacts. Chat and contact name searches ignore accents, so `Angel` finds `Ángel`. The open-chat Search icon and **Ctrl+G** search this thread in a right pane; **Ctrl+F** still searches the chat list. Pinned chats stay in pin order (most recently pinned first), regardless of new messages. Typing indicators show other participants, excluding your own linked devices. Filter chips under the search bar are a WhatsFast extra: **All**, **Unread**, **Favorites**, **Groups**, and your own lists. See [WhatsFast extras](#whatsfast-extras).
 - **Read state across devices.** Reading a chat syncs its unread badge with your phone and other linked devices, including when read receipts are off. Replies from another device clear preceding unread messages. The read-receipt toggle also controls voice-message played receipts; account privacy is checked before sending receipts in direct chats. A hidden window does not read messages.
 - **Conversations.** See replies, reactions, edits, deleted messages, read receipts, sender names, and group pictures. Older messages load as you scroll up, first from the local archive and then from your phone. Group messages show two gray checks after every recipient has received them, and blue checks after every recipient has read them. The recipient list and individual receipts are saved locally; later membership changes do not change that list. If the original recipients are unknown, WhatsFast waits for the phone's aggregate status instead of guessing from one reader.
 - **WhatsApp formatting.** Bold, italic, strikethrough, code, lists, quotes, mentions, and link previews are supported. Links are clickable. Hebrew and Arabic RTL paragraphs keep logical word order by reordering font runs; this is not a full Unicode Bidirectional Algorithm. Emoji use the desktop's color emoji font, with a bundled fallback, and emoji-only messages are larger.
@@ -158,10 +158,10 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 <tr>
 <td colspan="2" valign="top">
 
-### Search from the open-chat header
+### Search messages in the open chat
 
-- **Technical:** The open chat shows a **Search** icon to the left of **More**. It focuses the existing chat-list search field, the same as **Ctrl+F**.
-- **Daily use:** You can start a search without moving to the left list or remembering the shortcut.
+- **Technical:** The open chat shows a **Search** icon to the left of **More**. It opens a right inspector (**Ctrl+G**) that searches this chat, with an optional day filter. A click on a hit scrolls to the bubble and pulses it three times. **Ctrl+F** / **Ctrl+K** still search the chat list.
+- **Daily use:** You can find a message in the thread you already have open, without leaving that chat or mixing it with results from every other conversation.
 
 </td>
 </tr>

@@ -2759,6 +2759,12 @@ impl Worker {
             }
             Command::LoadUntil { chat, id, before } => self.load_until(chat, id, before),
             Command::SearchMessages { query } => self.search_messages(query),
+            Command::SearchInChat {
+                chat,
+                query,
+                from,
+                until,
+            } => self.search_in_chat(chat, query, from, until),
             Command::EnsureChat { chat, name } => {
                 let is_new = self.archive.chat(&chat).ok().flatten().is_none();
                 if let Err(error) = self.archive.ensure_chat(&chat, &name) {
@@ -4776,6 +4782,33 @@ impl Worker {
                     self.polish(message);
                 }
                 self.emit(Event::SearchHits { query, messages });
+            }
+            Err(error) => self.emit(Event::Error(format!("Could not search: {error}"))),
+        }
+    }
+
+    fn search_in_chat(
+        &mut self,
+        chat: ChatId,
+        query: String,
+        from: Option<i64>,
+        until: Option<i64>,
+    ) {
+        match self
+            .archive
+            .search_chat_messages(Some(&chat), &query, from, until, 80)
+        {
+            Ok(mut messages) => {
+                for message in &mut messages {
+                    self.polish(message);
+                }
+                self.emit(Event::ChatSearchHits {
+                    chat,
+                    query,
+                    from,
+                    until,
+                    messages,
+                });
             }
             Err(error) => self.emit(Event::Error(format!("Could not search: {error}"))),
         }

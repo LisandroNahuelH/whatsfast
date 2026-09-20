@@ -662,6 +662,12 @@ pub struct Gif {
     pub height: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RightPane {
+    /// Search messages in the open chat.
+    Search,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Dialog {
     Shortcuts,
@@ -947,6 +953,9 @@ pub enum Action {
     ShowDialog(Dialog),
     CloseDialog,
     ToggleSidebar,
+    /// Opens or focuses the right inspector. Header Search toggles it.
+    OpenRightPane(RightPane),
+    CloseRightPane,
     FocusSearch,
     FocusComposer,
     HideShortcutHints,
@@ -955,6 +964,10 @@ pub enum Action {
     ScrollTo(String),
     /// Updates chat-list search text.
     Search(String),
+    /// Updates in-chat search text in the right pane.
+    SearchInChat(String),
+    /// Restricts in-chat search to a local calendar day.
+    SetChatSearchDay(Option<jiff::civil::Date>),
     InstallUpdate,
     SetTheme(crate::settings::ThemeChoice),
     SetCustomTheme(String),

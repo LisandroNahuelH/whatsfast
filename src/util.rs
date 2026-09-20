@@ -119,6 +119,22 @@ pub fn day_key(unix_seconds: i64) -> Option<Date> {
     zoned(unix_seconds).map(|when| when.date())
 }
 
+/// Unix-second half-open range for a local calendar day.
+pub fn day_bounds(date: Date) -> Option<(i64, i64)> {
+    let start = crate::schedule::instant_of(date, 0, 0)?;
+    let end = crate::schedule::instant_of(date.tomorrow().ok()?, 0, 0)?;
+    Some((start, end))
+}
+
+/// Three 200 ms on/off flashes. `None` after 1.2 s.
+pub fn highlight_flash(elapsed_ms: u64) -> Option<bool> {
+    if elapsed_ms >= 1200 {
+        None
+    } else {
+        Some((elapsed_ms / 200).is_multiple_of(2))
+    }
+}
+
 fn weekday_name(weekday: jiff::civil::Weekday) -> &'static str {
     match weekday {
         jiff::civil::Weekday::Monday => "Monday",
@@ -431,6 +447,16 @@ mod tests {
             icon[middle] > 180 && icon[middle + 2] < 80,
             "the disc is amber, not WhatsApp green"
         );
+    }
+
+    #[test]
+    fn highlight_flash_is_three_on_slices() {
+        assert_eq!(crate::util::highlight_flash(0), Some(true));
+        assert_eq!(crate::util::highlight_flash(199), Some(true));
+        assert_eq!(crate::util::highlight_flash(200), Some(false));
+        assert_eq!(crate::util::highlight_flash(400), Some(true));
+        assert_eq!(crate::util::highlight_flash(1199), Some(false));
+        assert_eq!(crate::util::highlight_flash(1200), None);
     }
 
     #[test]

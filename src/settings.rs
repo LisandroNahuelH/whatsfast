@@ -147,6 +147,9 @@ pub struct Settings {
     /// egui zoom factor.
     pub zoom: f32,
     pub sidebar_width: f32,
+    /// Width of the right inspector pane.
+    #[serde(default = "default_inspector_width")]
+    pub inspector_width: f32,
     /// Whether Enter sends and Shift+Enter adds a line. Off swaps them.
     pub enter_sends: bool,
     /// Send read receipts, subject to the account privacy setting.
@@ -202,6 +205,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_inspector_width() -> f32 {
+    380.0
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -211,6 +218,7 @@ impl Default for Settings {
             system_theme_cache: None,
             zoom: 1.0,
             sidebar_width: 320.0,
+            inspector_width: default_inspector_width(),
             enter_sends: true,
             send_read_receipts: true,
             send_typing: true,

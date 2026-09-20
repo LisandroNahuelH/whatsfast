@@ -5,6 +5,7 @@ pub mod conversation;
 pub mod dialogs;
 pub mod keys;
 pub mod login;
+pub mod pane;
 pub mod picker;
 pub mod polls;
 pub mod schedule;
@@ -43,6 +44,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     } else if app.compact_sidebar() {
         chats::show_compact(app, ui);
     }
+    pane::show(app, ui);
     let palette = app.palette;
     let wallpaper = app.settings.chat_wallpaper.resolve(&palette);
     let wallpaper_slot = app.settings.wallpaper_slot();

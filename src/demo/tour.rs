@@ -1166,13 +1166,13 @@ mod tests {
     }
 
     #[test]
-    fn the_chat_header_search_focuses_the_sidebar_field() {
+    fn the_chat_header_search_opens_the_right_pane() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
         let ctx = egui::Context::default();
         app.attach(&ctx);
         step_output(&mut app, &ctx, Vec::new(), 0.0, true);
-        assert!(!app.focus_search);
+        assert!(app.right_pane.is_none());
         // More is the rightmost 30px control; Search sits one slot left.
         let search = pos2(1280.0 - 14.0 - 30.0 - 8.0 - 15.0, 8.0 + 22.0);
         step_output(
@@ -1182,9 +1182,81 @@ mod tests {
             0.1,
             true,
         );
-        assert!(app.focus_search, "header Search runs FocusSearch");
+        assert_eq!(
+            app.right_pane,
+            Some(crate::model::RightPane::Search),
+            "header Search opens the inspector"
+        );
+        assert!(!app.focus_search, "Ctrl+F still owns the left list");
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.15, true);
+        assert!(
+            output.shapes.iter().any(|clipped| matches!(
+                &clipped.shape,
+                egui::Shape::Text(text)
+                    if text.galley.text() == "Search messages with Ada Lovelace"
+            )),
+            "empty pane names the open chat"
+        );
         assert!(app.sidebar_visible);
         assert_eq!(app.page, Page::Chats);
+        let search = pos2(
+            1280.0 - app.settings.inspector_width - 14.0 - 30.0 - 8.0 - 15.0,
+            8.0 + 22.0,
+        );
+        step_output(
+            &mut app,
+            &ctx,
+            click_events(search, PointerButton::Primary),
+            0.2,
+            true,
+        );
+        assert!(app.right_pane.is_none(), "a second click closes the pane");
+    }
+
+    #[test]
+    fn clicking_a_chat_search_hit_pulses_the_bubble() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let chat = super::super::SAMPLES[0].id;
+        let hit = app
+            .conversations
+            .get(chat)
+            .and_then(|conversation| {
+                conversation
+                    .messages
+                    .iter()
+                    .find(|message| message.summary().to_lowercase().contains("engine"))
+                    .cloned()
+            })
+            .expect("an engine message");
+        app.right_pane = Some(crate::model::RightPane::Search);
+        app.chat_search = "engine".into();
+        app.chat_search_hits = vec![hit.clone()];
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let id = egui::Id::new(("chat-search-hit", chat, hit.id.as_str()));
+        let target = ctx
+            .read_response(id)
+            .expect("the hit is drawn in the pane")
+            .rect
+            .center();
+        step_output(
+            &mut app,
+            &ctx,
+            {
+                let mut events = vec![Event::PointerMoved(target)];
+                events.extend(click_events(target, PointerButton::Primary));
+                events
+            },
+            0.1,
+            true,
+        );
+        assert_eq!(
+            app.highlight.as_ref().map(|(id, _)| id.as_str()),
+            Some(hit.id.as_str())
+        );
+        assert_eq!(app.scroll_anchor.as_deref(), Some(hit.id.as_str()));
     }
 
     #[test]

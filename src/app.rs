@@ -11,7 +11,7 @@ use crate::audio::{Player, Recorder};
 use crate::backend::{Backend, Command, Event, LinkStatus, Waker};
 use crate::model::{
     Action, Chat, ChatId, ChatList, ChatListId, Contact, Content, Delivery, Dialog, Gif, GifError,
-    Media, MediaState, Message, Page, PickerTab, StickerPack, Toast, ToastKind,
+    Media, MediaState, Message, Page, PickerTab, RightPane, StickerPack, Toast, ToastKind,
 };
 use crate::paths::AppDirs;
 use crate::settings::{Settings, ThemeChoice};
@@ -153,6 +153,16 @@ pub struct App {
     pub search: String,
     /// Message search results, newest first.
     pub search_hits: Vec<Message>,
+    /// Right inspector: search now, other uses later.
+    pub right_pane: Option<RightPane>,
+    pub chat_search: String,
+    pub chat_search_hits: Vec<Message>,
+    pub chat_search_day: Option<jiff::civil::Date>,
+    pub chat_search_month: jiff::civil::Date,
+    pub chat_search_calendar: bool,
+    pub focus_chat_search: bool,
+    /// Bubble pulse after jumping to a search hit.
+    pub highlight: Option<(String, Instant)>,
     /// Active typers and their latest event time by chat.
     pub typing: HashMap<ChatId, Vec<(String, Instant)>>,
     pub presence: HashMap<String, Presence>,
@@ -413,6 +423,14 @@ impl App {
             last_keystroke: None,
             search: String::new(),
             search_hits: Vec::new(),
+            right_pane: None,
+            chat_search: String::new(),
+            chat_search_hits: Vec::new(),
+            chat_search_day: None,
+            chat_search_month: today,
+            chat_search_calendar: false,
+            focus_chat_search: false,
+            highlight: None,
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
@@ -1177,6 +1195,22 @@ impl App {
                         self.search_hits = messages;
                     }
                 }
+                Event::ChatSearchHits {
+                    chat,
+                    query,
+                    from,
+                    until,
+                    messages,
+                } => {
+                    let (want_from, want_until) = self.chat_search_range();
+                    if self.open_chat.as_deref() == Some(chat.as_str())
+                        && query == self.chat_search.trim()
+                        && from == want_from
+                        && until == want_until
+                    {
+                        self.chat_search_hits = messages;
+                    }
+                }
                 Event::Incoming { chat, message } => self.maybe_notify(&chat, &message),
                 Event::Picked { chat, paths } => {
                     if self.open_chat.as_deref() == Some(chat.as_str()) {
@@ -1570,6 +1604,41 @@ impl App {
         });
     }
 
+    fn close_right_pane(&mut self) {
+        self.right_pane = None;
+        self.chat_search.clear();
+        self.chat_search_hits.clear();
+        self.chat_search_day = None;
+        self.chat_search_calendar = false;
+        self.focus_chat_search = false;
+    }
+
+    fn chat_search_range(&self) -> (Option<i64>, Option<i64>) {
+        match self.chat_search_day.and_then(crate::util::day_bounds) {
+            Some((from, until)) => (Some(from), Some(until)),
+            None => (None, None),
+        }
+    }
+
+    fn request_chat_search(&mut self) {
+        let Some(chat) = self.open_chat.clone() else {
+            self.chat_search_hits.clear();
+            return;
+        };
+        let query = self.chat_search.trim().to_owned();
+        let (from, until) = self.chat_search_range();
+        if query.is_empty() && from.is_none() {
+            self.chat_search_hits.clear();
+            return;
+        }
+        self.backend.send(Command::SearchInChat {
+            chat,
+            query,
+            from,
+            until,
+        });
+    }
+
     fn open_chat(&mut self, id: ChatId) {
         if self.open_chat.as_deref() != Some(id.as_str()) {
             self.reaction_target = None;
@@ -1618,6 +1687,9 @@ impl App {
             .is_some_and(|chat| chat.unread > 0 || chat.marked_unread)
         {
             self.mark_read(&id);
+        }
+        if self.right_pane == Some(RightPane::Search) {
+            self.request_chat_search();
         }
         if self.settings.last_chat.as_deref() != Some(id.as_str()) {
             self.settings.last_chat = Some(id);
@@ -2086,6 +2158,8 @@ impl App {
                 self.scroll_to_bottom = false;
                 self.at_bottom = false;
                 self.scroll_anchor = Some(message.clone());
+                self.highlight = Some((message.clone(), Instant::now()));
+                ctx.request_repaint();
                 let conversation = self.conversations.entry(chat.clone()).or_default();
                 if conversation.message(&message).is_none()
                     && !conversation.loading_older
@@ -2119,6 +2193,7 @@ impl App {
                 self.reaction_target = None;
                 self.reaction_anchor = None;
                 self.emoji_jump = None;
+                self.close_right_pane();
                 self.sync_prefetch();
             }
             Action::SendText {
@@ -2825,6 +2900,18 @@ impl App {
                 });
             }
             Action::ToggleSidebar => self.sidebar_visible = !self.sidebar_visible,
+            Action::OpenRightPane(pane) => {
+                let already = self.right_pane == Some(pane);
+                self.right_pane = Some(pane);
+                if pane == RightPane::Search {
+                    self.focus_chat_search = true;
+                    self.chat_search_month = jiff::Zoned::now().date();
+                    if !already {
+                        self.request_chat_search();
+                    }
+                }
+            }
+            Action::CloseRightPane => self.close_right_pane(),
             Action::FocusSearch => {
                 self.sidebar_visible = true;
                 self.page = Page::Chats;
@@ -2866,6 +2953,18 @@ impl App {
                 } else {
                     self.backend.send(Command::SearchMessages { query });
                 }
+            }
+            Action::SearchInChat(text) => {
+                self.chat_search = text;
+                self.request_chat_search();
+            }
+            Action::SetChatSearchDay(day) => {
+                self.chat_search_day = day;
+                self.chat_search_calendar = false;
+                if let Some(day) = day {
+                    self.chat_search_month = day;
+                }
+                self.request_chat_search();
             }
             Action::InstallUpdate => {
                 self.install_when_ready = true;
@@ -3986,6 +4085,28 @@ mod tests {
         assert_eq!(app.open_chat.as_deref(), Some(chat));
         assert_eq!(app.scroll_anchor.as_deref(), Some("old"));
         assert!(!app.scroll_to_bottom, "aims at the hit, not the end");
+        assert_eq!(
+            app.highlight.as_ref().map(|(id, _)| id.as_str()),
+            Some("old")
+        );
+    }
+
+    #[test]
+    fn opening_chat_search_keeps_the_left_list_search() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        let chat = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(chat.into(), "Ada".into()));
+        app.open_chat = Some(chat.into());
+        app.search = "list".into();
+        app.apply(Action::OpenRightPane(crate::model::RightPane::Search), &ctx);
+        assert_eq!(app.right_pane, Some(crate::model::RightPane::Search));
+        assert!(app.focus_chat_search);
+        assert_eq!(app.search, "list");
+        app.apply(Action::CloseRightPane, &ctx);
+        assert!(app.right_pane.is_none());
+        assert!(app.chat_search.is_empty());
+        assert_eq!(app.search, "list");
     }
 
     #[test]
