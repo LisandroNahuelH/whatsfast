@@ -829,6 +829,7 @@ pub fn populate(app: &mut App) {
     if let Some(chat) = app.chats.iter_mut().find(|chat| chat.id == ada) {
         chat.unread = 0;
     }
+    app.account_privacy = crate::privacy::Snapshot::demo(ada.to_owned());
     app.scroll_to_bottom = true;
     app.focus_composer = false;
 }
@@ -1005,6 +1006,18 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     chat,
                     messages: vec!["ada-format".to_owned()],
                 });
+            }
+            "privacy-except" => {
+                app.page = Page::Settings;
+                app.dialog = Some(Dialog::PrivacyExcept {
+                    kind: crate::privacy::PrivacyKind::LastSeen,
+                });
+                app.list_picked = app
+                    .account_privacy
+                    .list(crate::privacy::PrivacyKind::LastSeen)
+                    .ids
+                    .into_iter()
+                    .collect();
             }
             "unlink" => app.dialog = Some(Dialog::ConfirmUnlink),
             "leave-group" => {
@@ -1441,6 +1454,7 @@ mod tests {
             "about",
             "info",
             "forward",
+            "privacy-except",
             "unlink",
             "leave-group",
             "leave-channel",
@@ -1860,6 +1874,98 @@ mod tests {
             "switching chats must drop the previous reaction target"
         );
         assert!(app.reaction_anchor.is_none());
+    }
+
+    #[test]
+    fn settings_ready_does_not_write_account_privacy() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        apply_flags(&mut app, Some("settings"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            !commands.iter().any(|command| matches!(
+                command,
+                crate::backend::Command::SetAccountPrivacy { .. }
+                    | crate::backend::Command::SetPrivacyExcept { .. }
+            )),
+            "opening Settings must not SET privacy"
+        );
+    }
+
+    #[test]
+    fn set_account_privacy_enqueues_the_phone_write() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.actions.push(crate::model::Action::SetAccountPrivacy {
+            kind: crate::privacy::PrivacyKind::Profile,
+            choice: crate::privacy::PrivacyChoice::Nobody,
+        });
+        render(&mut app, &ctx);
+        let commands = app.backend.take_demo_commands();
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(
+            commands[0],
+            crate::backend::Command::SetAccountPrivacy {
+                kind: crate::privacy::PrivacyKind::Profile,
+                choice: crate::privacy::PrivacyChoice::Nobody,
+            }
+        ));
+    }
+
+    #[test]
+    fn account_privacy_fetch_fills_combo_values() {
+        let mut app = app();
+        app.account_privacy = crate::privacy::Snapshot::default();
+        app.account_privacy.apply_fetch(
+            vec![(
+                crate::privacy::PrivacyKind::LastSeen,
+                crate::privacy::PrivacyChoice::Nobody,
+            )],
+            Vec::new(),
+            false,
+        );
+        assert_eq!(
+            app.account_privacy
+                .get(crate::privacy::PrivacyKind::LastSeen),
+            Some(crate::privacy::PrivacyChoice::Nobody)
+        );
+        assert!(app.account_privacy.loaded);
+    }
+
+    #[test]
+    fn privacy_except_save_sends_add_and_dhash() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let ada = sample_ids()[0].to_owned();
+        let grace = sample_ids()[2].to_owned();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        app.actions.push(crate::model::Action::SavePrivacyExcept {
+            kind: crate::privacy::PrivacyKind::LastSeen,
+            ids: vec![ada.clone(), grace.clone()],
+        });
+        render(&mut app, &ctx);
+        let commands = app.backend.take_demo_commands();
+        let Some(crate::backend::Command::SetPrivacyExcept {
+            add,
+            remove,
+            dhash,
+            ids,
+            ..
+        }) = commands.into_iter().next()
+        else {
+            panic!("expected SetPrivacyExcept");
+        };
+        assert_eq!(dhash, "demo");
+        assert_eq!(add, vec![grace]);
+        assert!(remove.is_empty());
+        assert_eq!(ids.len(), 2);
+        assert_eq!(ids[0], ada);
     }
 
     #[test]

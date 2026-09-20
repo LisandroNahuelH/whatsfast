@@ -168,6 +168,8 @@ pub struct App {
     pub presence: HashMap<String, Presence>,
     /// Whether account privacy disables direct-chat read receipts.
     pub account_receipts_off: bool,
+    /// Last account privacy snapshot from the phone.
+    pub account_privacy: crate::privacy::Snapshot,
     avatars: HashMap<String, Option<PathBuf>>,
     avatar_requests: HashSet<String>,
     /// Full-size profile pictures for info dialogs.
@@ -434,6 +436,7 @@ impl App {
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
+            account_privacy: crate::privacy::Snapshot::default(),
             avatars: HashMap::new(),
             avatar_requests: HashSet::new(),
             avatars_full: HashMap::new(),
@@ -1345,6 +1348,30 @@ impl App {
                     conversation.complete = false;
                 }
                 Event::ReceiptsPrivacy { disabled } => self.account_receipts_off = disabled,
+                Event::AccountPrivacy {
+                    values,
+                    lists,
+                    failed,
+                } => {
+                    self.account_privacy.apply_fetch(values, lists, failed);
+                    if let Some(choice) = self
+                        .account_privacy
+                        .get(crate::privacy::PrivacyKind::ReadReceipts)
+                    {
+                        self.account_receipts_off =
+                            choice != crate::privacy::PrivacyChoice::Everyone;
+                    }
+                }
+                Event::AccountPrivacySaved { kind, dhash, ids } => {
+                    self.account_privacy.finish_set(kind, dhash, ids);
+                    if kind == crate::privacy::PrivacyKind::ReadReceipts {
+                        self.account_receipts_off = self.account_privacy.get(kind)
+                            != Some(crate::privacy::PrivacyChoice::Everyone);
+                    }
+                }
+                Event::AccountPrivacyFailed { kind } => {
+                    self.account_privacy.fail_set(kind);
+                }
                 Event::ContactReady { id, name } => {
                     self.new_contact_pending = false;
                     if self.dialog == Some(Dialog::NewContact) {
@@ -1464,6 +1491,8 @@ impl App {
                 self.conversations.clear();
                 self.contacts.clear();
                 self.avatars.clear();
+                self.account_privacy = crate::privacy::Snapshot::default();
+                self.account_receipts_off = false;
                 self.open_chat = None;
                 self.toast_error("This device was unlinked from your phone");
             }
@@ -2845,6 +2874,10 @@ impl App {
                         self.list_picked.clear();
                     }
                 }
+                if let Dialog::PrivacyExcept { kind } = &dialog {
+                    self.forward_search.clear();
+                    self.list_picked = self.account_privacy.list(*kind).ids.into_iter().collect();
+                }
                 if dialog == Dialog::PairWithPhone {
                     self.pair_phone.clear();
                 }
@@ -3021,6 +3054,51 @@ impl App {
                 self.mark_settings_dirty();
             }
             Action::SettingsChanged => self.mark_settings_dirty(),
+            Action::SetAccountPrivacy { kind, choice } => {
+                if !self.is_connected() {
+                    return;
+                }
+                if choice == crate::privacy::PrivacyChoice::Except {
+                    self.actions
+                        .push(Action::ShowDialog(Dialog::PrivacyExcept { kind }));
+                    return;
+                }
+                if self.account_privacy.get(kind) == Some(choice)
+                    || self.account_privacy.pending(kind)
+                {
+                    return;
+                }
+                self.account_privacy.begin_set(kind, choice);
+                self.backend
+                    .send(Command::SetAccountPrivacy { kind, choice });
+            }
+            Action::SavePrivacyExcept { kind, ids } => {
+                self.dialog = None;
+                self.forward_search.clear();
+                if !self.is_connected() || self.account_privacy.pending(kind) {
+                    return;
+                }
+                let current = self.account_privacy.list(kind);
+                let (add, remove) = crate::privacy::except_diff(&current.ids, &ids);
+                let already =
+                    self.account_privacy.get(kind) == Some(crate::privacy::PrivacyChoice::Except);
+                if add.is_empty() && remove.is_empty() && already {
+                    return;
+                }
+                if !already && ids.is_empty() {
+                    return;
+                }
+                self.account_privacy
+                    .begin_set(kind, crate::privacy::PrivacyChoice::Except);
+                self.account_privacy.lists.entry(kind).or_default().ids = ids.clone();
+                self.backend.send(Command::SetPrivacyExcept {
+                    kind,
+                    add,
+                    remove,
+                    dhash: current.dhash,
+                    ids,
+                });
+            }
             Action::ZoomBy(delta) => {
                 self.settings.zoom = (self.settings.zoom + delta).clamp(0.6, 2.0);
                 self.zoom_applied = false;

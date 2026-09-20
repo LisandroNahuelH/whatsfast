@@ -36,6 +36,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Dialog::ChatInfo(_) => 360.0,
                 Dialog::Forward { .. } => 420.0,
                 Dialog::EditChatList { .. } => 420.0,
+                Dialog::PrivacyExcept { .. } => 420.0,
                 Dialog::CreatePoll(_) => 420.0,
                 Dialog::ScheduleMessage(_) => super::schedule::WIDTH,
             };
@@ -64,6 +65,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         Dialog::ChatInfo(id) => chat_info(app, ui, &id),
                         Dialog::Forward { chat, messages } => forward(app, ui, &chat, &messages),
                         Dialog::EditChatList { id } => edit_chat_list(app, ui, id.as_deref()),
+                        Dialog::PrivacyExcept { kind } => privacy_except(app, ui, kind),
                     }
                 },
             );
@@ -348,6 +350,131 @@ fn edit_chat_list(app: &mut App, ui: &mut egui::Ui, id: Option<&str>) {
                 id: id.map(str::to_owned),
                 name: app.list_name.trim().to_owned(),
                 members: app.list_picked.iter().cloned().collect(),
+            });
+        }
+    });
+}
+
+fn privacy_except(app: &mut App, ui: &mut egui::Ui, kind: crate::privacy::PrivacyKind) {
+    let palette = app.palette;
+    title(ui, app, kind.except_title());
+    let width = ui.available_width();
+    let search = super::widgets::search_field(
+        ui,
+        &palette,
+        egui::Id::new("privacy-except-search"),
+        &mut app.forward_search,
+        "Search chats",
+        width,
+    );
+    if ui.memory(|memory| memory.focused().is_none()) {
+        search.request_focus();
+    }
+    ui.add_space(4.0);
+    let needle = app.forward_search.trim().to_lowercase();
+    let mut chats: Vec<_> = app
+        .chats
+        .iter()
+        .filter(|chat| chat.kind == crate::model::ChatKind::Direct && !chat.read_only)
+        .filter(|chat| app.me.as_deref() != Some(chat.id.as_str()))
+        .filter(|chat| {
+            needle.is_empty()
+                || app.chat_title(chat).to_lowercase().contains(&needle)
+                || chat.phone().is_some_and(|phone| phone.contains(&needle))
+        })
+        .cloned()
+        .collect();
+    chats.sort_by_key(|chat| std::cmp::Reverse(chat.last_activity));
+    let row_height = 52.0;
+    let max_height = (ui.ctx().content_rect().height() - 280.0).clamp(row_height * 3.0, 380.0);
+    let mut toggled = None;
+    egui::ScrollArea::vertical()
+        .id_salt("privacy-except")
+        .max_height(max_height)
+        .auto_shrink([false, true])
+        .show_rows(ui, row_height, chats.len(), |ui, range| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for chat in &chats[range] {
+                let title = app.chat_title(chat);
+                let picked = app.list_picked.contains(&chat.id);
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), row_height), Sense::click());
+                if ui.is_rect_visible(rect) {
+                    if picked || response.hovered() {
+                        ui.painter().rect_filled(
+                            rect,
+                            8.0,
+                            if picked {
+                                palette.accent.gamma_multiply(0.16)
+                            } else {
+                                palette.surface_hover
+                            },
+                        );
+                    }
+                    let avatar = egui::Rect::from_center_size(
+                        pos2(rect.left() + 23.0, rect.center().y),
+                        egui::Vec2::splat(38.0),
+                    );
+                    let picture = app.avatar(&chat.id);
+                    super::widgets::paint_avatar(
+                        ui,
+                        &palette,
+                        avatar,
+                        &title,
+                        &chat.id,
+                        picture.as_deref(),
+                    );
+                    let line = super::widgets::line(
+                        ui,
+                        &title,
+                        theme::medium(14.5),
+                        palette.text,
+                        rect.width() - 90.0,
+                        1,
+                    );
+                    line.paint(
+                        ui,
+                        pos2(rect.left() + 50.0, rect.center().y - line.size().y / 2.0),
+                        palette.text,
+                    );
+                    theme::paint_icon(
+                        ui,
+                        if picked {
+                            Icon::SquareCheck
+                        } else {
+                            Icon::Plus
+                        },
+                        egui::Rect::from_center_size(
+                            pos2(rect.right() - 18.0, rect.center().y),
+                            egui::Vec2::splat(18.0),
+                        ),
+                        18.0,
+                        if picked {
+                            palette.accent
+                        } else {
+                            palette.secondary
+                        },
+                    );
+                }
+                if response
+                    .on_hover_cursor(egui::CursorIcon::PointingHand)
+                    .clicked()
+                {
+                    toggled = Some(chat.id.clone());
+                }
+            }
+        });
+    if let Some(id) = toggled
+        && !app.list_picked.remove(&id)
+    {
+        app.list_picked.insert(id);
+    }
+    ui.add_space(8.0);
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        if theme::pill_button(ui, &palette, "Save", true).clicked() {
+            app.actions.push(Action::SavePrivacyExcept {
+                kind,
+                ids: app.list_picked.iter().cloned().collect(),
             });
         }
     });

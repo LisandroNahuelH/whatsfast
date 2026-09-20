@@ -4,6 +4,7 @@ use egui::{CornerRadius, Frame, Margin, Order, Sense, pos2, vec2};
 
 use crate::app::App;
 use crate::model::{Action, Dialog, Page};
+use crate::privacy::{PrivacyChoice, PrivacyKind};
 use crate::settings::{
     ChatWallpaper, HistoryPrefetch, ThemeChoice, WALLPAPER_SLOTS, WallpaperFamily,
 };
@@ -167,9 +168,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     section(ui, app, "Chats");
                     toggle(ui, app, "Enter sends", "When off, Enter adds a line and Ctrl+Enter sends.", |settings| &mut settings.enter_sends);
                     let receipts_note = if app.account_receipts_off {
-                        "Read receipts are disabled for your WhatsApp account. Direct chats will not send them. When this switch is on, groups still do. Read state syncs between your devices either way."
+                        "Read receipts are disabled for your WhatsApp account (Settings Privacy). Direct chats will not send them. When this switch is on, groups still do. Read state syncs between your devices either way."
                     } else {
-                        "Let people see when you read messages or play voice messages. Your WhatsApp privacy setting still applies. Read state syncs between your devices either way."
+                        "Let people see when you read messages or play voice messages on this copy. Your WhatsApp account setting in Privacy still applies. Read state syncs between your devices either way."
                     };
                     toggle(ui, app, "Send read receipts", receipts_note, |settings| &mut settings.send_read_receipts);
                     toggle(ui, app, "Show when you are typing", "", |settings| &mut settings.send_typing);
@@ -220,6 +221,23 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     toggle(ui, app, "Forward messages in order", "Send a forwarded batch one message at a time, starting each one when the message before it shows its first tick. Mixed text, pictures, and videos then arrive in their original order. When off, they send together and may arrive out of order.", |settings| &mut settings.forward_in_order);
                     toggle(ui, app, "Show the create poll button", "Add the Create poll button beside the composer. When off, the button is hidden and the polls already in a chat keep working.", |settings| &mut settings.show_poll_button);
                     toggle(ui, app, "Show shortcut hints", "", |settings| &mut settings.show_shortcut_hints);
+
+                    section(ui, app, "Privacy");
+                    if app.account_privacy.fetch_failed {
+                        widgets::rich_text(
+                            ui,
+                            "Could not load privacy settings. They load again when WhatsFast reconnects.",
+                            theme::regular(12.5),
+                            palette.secondary,
+                        );
+                        ui.add_space(8.0);
+                    }
+                    let privacy_on = app.is_connected() && app.account_privacy.loaded;
+                    ui.add_enabled_ui(privacy_on, |ui| {
+                        for kind in PrivacyKind::ALL {
+                            privacy_row(ui, app, kind);
+                        }
+                    });
 
                     section(ui, app, "Window");
                     toggle(ui, app, "Keep running when the window closes", "Keep WhatsFast linked in the system tray. Quit from the tray menu or with Ctrl+Q.", |settings| &mut settings.keep_running_in_background);
@@ -361,6 +379,63 @@ fn toggle(
         *field(&mut app.settings) = value;
         app.actions.push(Action::SettingsChanged);
     }
+}
+
+fn privacy_row(ui: &mut egui::Ui, app: &mut App, kind: PrivacyKind) {
+    let palette = app.palette;
+    let current = app.account_privacy.get(kind);
+    let selected = current.map(PrivacyChoice::label).unwrap_or("—");
+    let pending = app.account_privacy.pending(kind);
+    widgets::setting_row(ui, &palette, kind.label(), kind.hint(), |ui| {
+        ui.add_enabled_ui(!pending, |ui| {
+            ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
+                let salt = format!("privacy_{}", kind.wire_name());
+                let response = egui::ComboBox::from_id_salt(salt)
+                    .selected_text(" ")
+                    .width(220.0_f32.min(ui.available_width()))
+                    .show_ui(ui, |ui| {
+                        for choice in kind.choices() {
+                            if wallpaper_option(
+                                ui,
+                                &palette,
+                                choice.label(),
+                                current == Some(*choice),
+                            )
+                            .clicked()
+                            {
+                                app.actions.push(Action::SetAccountPrivacy {
+                                    kind,
+                                    choice: *choice,
+                                });
+                            }
+                        }
+                    });
+                let rect = response.response.rect;
+                let text = widgets::line(
+                    ui,
+                    selected,
+                    theme::regular(14.0),
+                    palette.text,
+                    rect.width() - 36.0,
+                    1,
+                );
+                text.paint(
+                    ui,
+                    egui::pos2(rect.left() + 8.0, rect.center().y - text.size().y / 2.0),
+                    palette.text,
+                );
+                response.response.widget_info(|| {
+                    let mut info = egui::WidgetInfo::labeled(
+                        egui::WidgetType::ComboBox,
+                        ui.is_enabled(),
+                        kind.label(),
+                    );
+                    info.current_text_value = Some(selected.to_owned());
+                    info
+                });
+            });
+        });
+    });
 }
 
 /// Theme filenames can contain emoji, so paint them through the shared line renderer.

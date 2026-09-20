@@ -15,6 +15,7 @@ pub mod markup;
 pub mod model;
 pub mod notify;
 pub mod paths;
+pub mod privacy;
 pub mod qr;
 pub mod schedule;
 pub mod settings;

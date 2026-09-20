@@ -86,7 +86,7 @@ On Linux, upstream ZapFast measured about 150 MB of idle RAM against 1.13 GB for
 - **Consistent names.** Use names from your address book or public WhatsApp profile names across chats, replies, mentions, and notifications.
 - **Groups.** See members, sender names, and sender pictures. Announcement groups are read-only for non-admins. Leave a group from the chat list, the chat menu, or the group card. Confirm to leave, or leave and archive the chat. Local history stays.
 - **Channels.** Leave a channel from the chat list, the chat menu, or the channel card. Confirm to leave, or leave and archive. Local history stays.
-- **Presence.** See online, last-seen, and typing status, and send your typing status.
+- **Presence.** See online, last-seen, and typing status, and send your typing status. Settings **Privacy** writes last seen, online, photo, About, groups, account receipts, calls, and who can message on the WhatsApp account.
 - **Idle rendering.** History-sync progress updates when data arrives. Animated stickers and GIFs play only while their message or picker tile is visible.
 - **Sync recovery.** A conflicting app-state collection is recovered through whatsapp-rust, including requesting a fresh snapshot from the paired phone when validation fails. Private read-state updates run one at a time. Failures pause the whole queue with backoff from 30 seconds to 15 minutes; pending reads remain saved and resume automatically. New messages can still arrive.
 - **Runs in the background.** Closing the window keeps WhatsFast linked in the system tray. Reopen it from the tray or by launching it again. Quit from the tray or with `Ctrl+Q`, or disable this behavior in Settings.
@@ -162,6 +162,16 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 - **Technical:** The open chat shows a **Search** icon to the left of **More**. It opens a right inspector (**Ctrl+G**) that searches this chat, with an optional day filter. A click on a hit scrolls to the message and pulses the whole row three times. **Ctrl+F** / **Ctrl+K** still search the chat list.
 - **Daily use:** You can find a message in the thread you already have open, without leaving that chat or mixing it with results from every other conversation.
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+### Account privacy from Settings
+
+- **Technical:** Settings **Privacy** reads last seen, online, profile photo, About, who can add you to groups, account read receipts, who can call you, and who can message you from the linked WhatsApp account, then writes the same values the phone uses. **Except…** picks 1:1 chats to hide that item from. The Chats switches **Send read receipts** and **Show when you are typing** still apply only to this copy.
+- **Daily use:** Hide last seen or your photo on the account, not only in this window. The phone shows the same setting.
 
 </td>
 </tr>
@@ -301,7 +311,7 @@ On first start, scan the QR code from WhatsApp under **Linked devices**, **Link 
 
 WhatsApp then sends your recent history. This can take a few minutes. A banner shows the progress. New messages arrive live, and your phone does not need to stay on the same network.
 
-Right-click a chat or message to open its menu. Double-click beside a message, or on its edge, to reply to it (a double-click on its text still selects the word). Open Settings from the gear or with `Ctrl+,`. Use the pencil to message a new number or save a contact. You can also open a group member's contact card. Saved names sync through WhatsApp to your phone and linked devices.
+Right-click a chat or message to open its menu. Double-click a message bubble or its row to reply (the row flashes once). Open Settings from the gear or with `Ctrl+,`. Use the pencil to message a new number or save a contact. You can also open a group member's contact card. Saved names sync through WhatsApp to your phone and linked devices.
 
 ## Files
 

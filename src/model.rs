@@ -692,6 +692,10 @@ pub enum Dialog {
     EditChatList {
         id: Option<String>,
     },
+    /// Picks 1:1 chats excluded from an account privacy category.
+    PrivacyExcept {
+        kind: crate::privacy::PrivacyKind,
+    },
 }
 
 /// Messages picked in one chat while the selection bar is up.
@@ -980,6 +984,16 @@ pub enum Action {
     ReloadThemes,
     OpenThemesFolder,
     SettingsChanged,
+    /// Writes one WhatsApp account privacy category.
+    SetAccountPrivacy {
+        kind: crate::privacy::PrivacyKind,
+        choice: crate::privacy::PrivacyChoice,
+    },
+    /// Saves the Except list for one account privacy category.
+    SavePrivacyExcept {
+        kind: crate::privacy::PrivacyKind,
+        ids: Vec<ChatId>,
+    },
     ZoomBy(f32),
     ResetZoom,
     /// Requests a pairing code for a phone number.
