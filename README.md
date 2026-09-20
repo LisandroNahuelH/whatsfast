@@ -295,10 +295,10 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 </td>
 <td width="50%" valign="top">
 
-### Multi-select messages for forward, download, and star
+### Multi-select messages for forward, download, star, and delete
 
-- **Technical:** Bubble menu and row actions enter a selection mode across multiple messages; batch forward, save attachments, or star applies to the whole selection with one confirmation path.
-- **Daily use:** Forward a week of updates, save every PDF from a thread, or star a run of messages in one go. Less repetitive right-click work in heavy group chats.
+- **Technical:** Bubble menu and row actions enter a selection mode across multiple messages; batch forward, save attachments, star, or delete-for-me applies to the whole selection with one confirmation path.
+- **Daily use:** Forward a week of updates, save every PDF from a thread, star a run of messages, or remove them from this copy in one go. Less repetitive right-click work in heavy group chats.
 
 </td>
 </tr>
