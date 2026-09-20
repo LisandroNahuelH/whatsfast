@@ -14,7 +14,7 @@ Chat wallpaper names in Settings are Auto or `Black 1` to `White 3`. Hover a nam
 
 The chat side of the sidebar is a 1-physical-pixel hairline, faint white on dark palettes and faint black on light. Reason: panel `outline` matches the sidebar and the CentralPanel used to cover a line painted on the panel edge.
 
-The chat header shows Search (Ctrl+F) to the left of More. Reason: WhatsApp Desktop puts the lupa next to the overflow menu; it reuses the existing chat search field.
+The chat header Search (Ctrl+G) opens a right inspector for messages in the open chat. Ctrl+F still searches the left list. Reason: WhatsApp Desktop puts the lupa next to More; in-chat hits need their own pane so they do not mix with the chat list.
 
 Check for updates and Download updates automatically sit in Settings **About**, under the version row. Reason: they describe this build, not the window.
 
