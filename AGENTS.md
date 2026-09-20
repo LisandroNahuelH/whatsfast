@@ -43,17 +43,20 @@ When the user asks to start the watcher, auto-build, live rebuild, or
 leave this running (do not wait for it to exit):
 
 ```sh
-cargo watch -d 15 -w src -w Cargo.toml -w build.rs -w assets -s "taskkill /IM whatsfast.exe /F 2>nul & cargo run"
+cargo watch -d 15 -w src -w Cargo.toml -w build.rs -w assets -s "cargo build & taskkill /IM whatsfast.exe /F 2>nul & cargo run"
 ```
 
 Watch only crate inputs. Docs, `AGENTS/`, and other noise must not restart
 a compile before the linker writes `target/debug/whatsfast.exe`. `-d 15`
 waits 15 seconds after the last crate-input change so a mid-link restart
-does not spin. If
+does not spin. Compile first while the app stays open. Kill
+`whatsfast.exe` only after that `cargo build`, so the linker can replace
+the file, then `cargo run` starts the new copy. If the watch aborts
+during `cargo build`, `taskkill` does not run. If
 `cargo watch` is missing, `cargo install cargo-watch` first. A second
 `whatsfast.exe` only surfaces the copy that holds the instance port, so
-the command kills every `whatsfast.exe` (including an installer copy)
-then runs the new debug build. Do not use `cargo watch -x run` here.
+the post-build kill covers every `whatsfast.exe` (including an installer
+copy). Do not use `cargo watch -x run` here.
 
 ## Product boundaries
 
