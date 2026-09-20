@@ -342,21 +342,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         i18n::t(Key::SettingsEnterSendsHint),
                         |settings| &mut settings.enter_sends,
                     );
-                    let receipts_note = if app.account_receipts_off {
-                        i18n::t(Key::SettingsReceiptsOffNote)
-                    } else {
-                        i18n::t(Key::SettingsReceiptsOnNote)
-                    };
-                    toggle(
-                        ui,
-                        app,
-                        i18n::t(Key::SettingsSendReceipts),
-                        receipts_note,
-                        |settings| &mut settings.send_read_receipts,
-                    );
-                    toggle(ui, app, i18n::t(Key::SettingsSendTyping), "", |settings| {
-                        &mut settings.send_typing
-                    });
                     toggle(
                         ui,
                         app,
@@ -431,6 +416,21 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     );
 
                     section(ui, app, i18n::t(Key::SettingsSectionPrivacy));
+                    let receipts_note = if app.account_receipts_off {
+                        i18n::t(Key::SettingsReceiptsOffNote)
+                    } else {
+                        i18n::t(Key::SettingsReceiptsOnNote)
+                    };
+                    toggle(
+                        ui,
+                        app,
+                        i18n::t(Key::SettingsSendReceipts),
+                        receipts_note,
+                        |settings| &mut settings.send_read_receipts,
+                    );
+                    toggle(ui, app, i18n::t(Key::SettingsSendTyping), "", |settings| {
+                        &mut settings.send_typing
+                    });
                     if app.account_privacy.fetch_failed {
                         widgets::rich_text(
                             ui,

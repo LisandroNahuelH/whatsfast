@@ -809,6 +809,38 @@ mod tests {
     }
 
     #[test]
+    fn receipts_and_typing_sit_in_settings_privacy() {
+        let mut app = super::super::tests::app();
+        app.page = Page::Settings;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        let privacy = *tour.labels.get("Privacy").expect("Privacy section");
+        let last_seen = *tour.labels.get("Last seen").expect("account last seen");
+        let enter = *tour.labels.get("Enter sends").expect("Chats row");
+        let receipts = *tour
+            .labels
+            .get("Send read receipts")
+            .expect("read receipts");
+        let typing = *tour.labels.get("Show when you are typing").expect("typing");
+        assert!(
+            enter.y < privacy.y,
+            "Chats should stay above Privacy: enter {enter:?} privacy {privacy:?}"
+        );
+        assert!(
+            privacy.y < receipts.y && receipts.y < last_seen.y,
+            "receipts at {receipts:?} should sit between Privacy {privacy:?} and Last seen {last_seen:?}"
+        );
+        assert!(
+            privacy.y < typing.y && typing.y < last_seen.y,
+            "typing at {typing:?} should sit between Privacy {privacy:?} and Last seen {last_seen:?}"
+        );
+    }
+
+    #[test]
     fn the_chat_wallpaper_dropdown_lists_auto_and_numbered_families() {
         use crate::settings::ChatWallpaper;
         let mut app = super::super::tests::app();
