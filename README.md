@@ -334,6 +334,10 @@ The archive key is a random 256-bit secret in Windows Credential Manager. If the
 
 Only `archive.db` and its SQLite journal/WAL are encrypted. Device credentials in `session.db`, downloaded media, profile pictures, saved sticker files and settings remain ordinary files. Use full-disk encryption for those files, swap, backups and remnants of the old plaintext archive. Migration removes the original only after verifying its encrypted copy; deletion cannot guarantee erasure from SSDs or snapshots. Keyring unlocking also does not protect against software running as you while your login is unlocked.
 
+### Interface language
+
+**Settings → Language** offers Follow system, English, and Español. Follow system reads the operating-system language once at startup; a machine set to Spanish opens in Spanish. The choice is saved in `settings.json` and applies at once, without a restart. Interface text is translated, including dates, the chat list, dialogs, and update notices; message bodies and contact names are never translated.
+
 ### Local themes
 
 **Settings → Appearance → Theme** uses Follow system, Light, Dark, and bundled palettes (Catppuccin, Catppuccin Latte, Nord, Ristretto, Tokyo Night, Rose Pine, Rose Pine Moon, and Rose Pine Dawn). Choose **Open themes folder** below the picker to add JSON palettes beside `settings.json`. A local file with a bundled palette's name overrides it. For example:
