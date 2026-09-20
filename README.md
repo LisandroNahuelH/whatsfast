@@ -216,7 +216,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Background download of older chat history
 
-- **Technical:** Settings **Download older history in the background** (Recent and pinned by default) slowly asks the phone for older messages and then downloads their files up to 64 MB. Failed files are asked again with a long wait, for up to 30 days. It fills the local archive, not the visible thread. Off turns it off. **Current Chat** covers only the open conversation. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned. Hover a name in the list to read what it does. It keeps running from the tray.
+- **Technical:** Settings **Downloads** → **Download older history in the background** (Recent and pinned by default) slowly asks the phone for older messages and then downloads their files up to 64 MB. Failed files are asked again with a long wait, for up to 30 days. It fills the local archive, not the visible thread. Off turns it off. **Current Chat** covers only the open conversation. Recent and pinned covers every pinned chat plus the ten most recently active chats that are not pinned. Hover a name in the list to read what it does. It keeps running from the tray.
 - **Daily use:** Scroll up later and the older text, photos, videos, and documents are already there, without hitting WhatsApp's rate limit from a fast flick.
 
 </td>
@@ -232,12 +232,22 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 <tr>
 <td width="50%" valign="top">
 
+### Downloads usage in Settings
+
+- **Technical:** Settings **Downloads** groups automatic attachment download and older-history prefetch. It shows total archive weight, how many messages are stored, and 6 px bars for images, videos, and stickers plus GIFs (voice and documents appear as Other when they have weight). **Open folder** opens `cache/media`. The numbers come from one archive SQL aggregate of persisted `media.size` values with a local path, not from walking the disk on the interface thread.
+- **Daily use:** See how much chat media sits on this PC, then open the folder when you want the files.
+
+</td>
+<td width="50%" valign="top">
+
 ### Close Settings by clicking the active section again
 
 - **Technical:** The settings panel treats a second click on the already selected section as “close panel,” without adding a separate dismiss control.
 - **Daily use:** One click to open a section, one click on the same row to get back to the chat. Fewer stray clicks when you only wanted to tweak one option.
 
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### Starred messages with sidebar list and bubble previews
