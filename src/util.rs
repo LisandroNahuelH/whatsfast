@@ -126,9 +126,10 @@ pub fn day_bounds(date: Date) -> Option<(i64, i64)> {
     Some((start, end))
 }
 
-/// Three 200 ms on/off flashes. `None` after 1.2 s.
-pub fn highlight_flash(elapsed_ms: u64) -> Option<bool> {
-    if elapsed_ms >= 1200 {
+/// `on_slices` ON slices of 200 ms, with 200 ms OFF between them.
+pub fn highlight_flash(elapsed_ms: u64, on_slices: u64) -> Option<bool> {
+    let total = on_slices.max(1).saturating_mul(400);
+    if elapsed_ms >= total {
         None
     } else {
         Some((elapsed_ms / 200).is_multiple_of(2))
@@ -451,12 +452,21 @@ mod tests {
 
     #[test]
     fn highlight_flash_is_three_on_slices() {
-        assert_eq!(crate::util::highlight_flash(0), Some(true));
-        assert_eq!(crate::util::highlight_flash(199), Some(true));
-        assert_eq!(crate::util::highlight_flash(200), Some(false));
-        assert_eq!(crate::util::highlight_flash(400), Some(true));
-        assert_eq!(crate::util::highlight_flash(1199), Some(false));
-        assert_eq!(crate::util::highlight_flash(1200), None);
+        assert_eq!(crate::util::highlight_flash(0, 3), Some(true));
+        assert_eq!(crate::util::highlight_flash(199, 3), Some(true));
+        assert_eq!(crate::util::highlight_flash(200, 3), Some(false));
+        assert_eq!(crate::util::highlight_flash(400, 3), Some(true));
+        assert_eq!(crate::util::highlight_flash(1199, 3), Some(false));
+        assert_eq!(crate::util::highlight_flash(1200, 3), None);
+    }
+
+    #[test]
+    fn highlight_flash_one_slice_lasts_four_hundred_ms() {
+        assert_eq!(crate::util::highlight_flash(0, 1), Some(true));
+        assert_eq!(crate::util::highlight_flash(199, 1), Some(true));
+        assert_eq!(crate::util::highlight_flash(200, 1), Some(false));
+        assert_eq!(crate::util::highlight_flash(399, 1), Some(false));
+        assert_eq!(crate::util::highlight_flash(400, 1), None);
     }
 
     #[test]

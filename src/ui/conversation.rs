@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use egui::{
     Align, Align2, Color32, CornerRadius, Frame, Key, KeyboardShortcut, Layout, Margin, Modifiers,
-    Rect, Sense, Stroke, Vec2, pos2, vec2,
+    PointerButton, Rect, Sense, Stroke, Vec2, pos2, vec2,
 };
 
 use crate::animation;
@@ -1547,7 +1547,8 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let palette = app.palette;
     if let Some((_, started)) = &app.highlight {
         let elapsed = started.elapsed().as_millis() as u64;
-        if crate::util::highlight_flash(elapsed).is_none() {
+        let ons = u64::from(app.highlight_ons.max(1));
+        if crate::util::highlight_flash(elapsed, ons).is_none() {
             app.highlight = None;
         } else {
             ui.ctx().request_repaint_after(Duration::from_millis(200));
@@ -1555,7 +1556,8 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     }
     let highlight = app.highlight.as_ref().and_then(|(id, started)| {
         let elapsed = started.elapsed().as_millis() as u64;
-        crate::util::highlight_flash(elapsed).map(|on| (id.clone(), on))
+        let ons = u64::from(app.highlight_ons.max(1));
+        crate::util::highlight_flash(elapsed, ons).map(|on| (id.clone(), on))
     });
     // Check out the conversation while drawing rows and collecting actions.
     let mut conversation = app.conversations.remove(&chat.id).unwrap_or_default();
@@ -1670,16 +1672,16 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                                 || previous.is_none_or(|previous| {
                                     previous.sender != message.sender || previous.from_me
                                 }));
-                        // Selection and the OpenMessage pulse both wash the
+                        // Selection and OpenMessage/Reply pulses wash the
                         // whole row from last frame's rect, before the bubble.
                         let row_id =
                             egui::Id::new(("message-row", chat.id.as_str(), message.id.as_str()));
                         let selecting = view.selecting.is_some();
                         let picked = view.selecting.is_some_and(|ids| ids.contains(&message.id));
-                        let (highlight_this, flashing) = match &view.highlight {
-                            Some((id, on)) if id == &message.id => (true, *on),
-                            _ => (false, false),
-                        };
+                        let flashing = view
+                            .highlight
+                            .as_ref()
+                            .is_some_and(|(id, on)| *on && id == &message.id);
                         if let Some((rect, hovered)) =
                             ui.ctx().data(|data| data.get_temp::<(Rect, bool)>(row_id))
                         {
@@ -1702,27 +1704,40 @@ fn messages(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                             response.scroll_to_me(Some(Align::Center));
                             anchored = true;
                         }
-                        if selecting || highlight_this {
-                            let row = Rect::from_min_max(
-                                pos2(ui.max_rect().left(), row_top),
-                                pos2(ui.max_rect().right(), ui.cursor().top()),
-                            );
-                            if selecting {
-                                let response = ui.interact(row, row_id, Sense::click());
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(row_id, (row, response.hovered()));
+                        let row = Rect::from_min_max(
+                            pos2(ui.max_rect().left(), row_top),
+                            pos2(ui.max_rect().right(), ui.cursor().top()),
+                        );
+                        if selecting {
+                            let response = ui.interact(row, row_id, Sense::click());
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(row_id, (row, response.hovered()));
+                            });
+                            paint_pick(ui, &palette, row, message.from_me, picked);
+                            if response.clicked() {
+                                actions.push(Action::ToggleSelected {
+                                    message: message.id.clone(),
                                 });
-                                paint_pick(ui, &palette, row, message.from_me, picked);
-                                if response.clicked() {
-                                    actions.push(Action::ToggleSelected {
-                                        message: message.id.clone(),
-                                    });
-                                }
-                                response.on_hover_cursor(egui::CursorIcon::PointingHand);
-                            } else {
-                                ui.ctx().data_mut(|data| {
-                                    data.insert_temp(row_id, (row, false));
-                                });
+                            }
+                            response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                        } else {
+                            ui.ctx().data_mut(|data| {
+                                data.insert_temp(row_id, (row, false));
+                            });
+                            if app.dialog.is_none()
+                                && app.picker.is_none()
+                                && app.image_viewer.is_none()
+                                && !matches!(message.content, Content::Revoked)
+                                && ui.input(|input| {
+                                    input.pointer.button_double_clicked(PointerButton::Primary)
+                                        && input
+                                            .pointer
+                                            .interact_pos()
+                                            .or(input.pointer.latest_pos())
+                                            .is_some_and(|pos| row.contains(pos))
+                                })
+                            {
+                                actions.push(Action::Reply(message.id.clone()));
                             }
                         }
                         previous = Some(message);
@@ -2296,6 +2311,9 @@ fn bubble_frame(
     // Picking messages takes over the bubble's left click, and the menu stays
     // shut while the selection bar is up.
     let selecting = view.selecting.is_some();
+    if !selecting && !matches!(message.content, Content::Revoked) && bubble.double_clicked() {
+        actions.push(Action::Reply(message.id.clone()));
+    }
     // Read right-click from input because inner widgets own their responses.
     // Open only when no floating layer covers the chat panel.
     let right_clicked = !selecting

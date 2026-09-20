@@ -161,8 +161,10 @@ pub struct App {
     pub chat_search_month: jiff::civil::Date,
     pub chat_search_calendar: bool,
     pub focus_chat_search: bool,
-    /// Bubble pulse after jumping to a search hit.
+    /// Row pulse after jumping to a search hit or starting a reply.
     pub highlight: Option<(String, Instant)>,
+    /// How many 200 ms ON slices [`Self::highlight`] plays. Search uses 3; reply uses 1.
+    pub highlight_ons: u8,
     /// Active typers and their latest event time by chat.
     pub typing: HashMap<ChatId, Vec<(String, Instant)>>,
     pub presence: HashMap<String, Presence>,
@@ -433,6 +435,7 @@ impl App {
             chat_search_calendar: false,
             focus_chat_search: false,
             highlight: None,
+            highlight_ons: 3,
             typing: HashMap::new(),
             presence: HashMap::new(),
             account_receipts_off: false,
@@ -2188,6 +2191,7 @@ impl App {
                 self.at_bottom = false;
                 self.scroll_anchor = Some(message.clone());
                 self.highlight = Some((message.clone(), Instant::now()));
+                self.highlight_ons = 3;
                 ctx.request_repaint();
                 let conversation = self.conversations.entry(chat.clone()).or_default();
                 if conversation.message(&message).is_none()
@@ -2330,8 +2334,11 @@ impl App {
                 self.toast("Copied");
             }
             Action::Reply(id) => {
-                self.reply_to = Some(id);
+                self.reply_to = Some(id.clone());
                 self.focus_composer = true;
+                self.highlight = Some((id, Instant::now()));
+                self.highlight_ons = 1;
+                ctx.request_repaint();
             }
             Action::CancelReply => self.reply_to = None,
             Action::Forward {
@@ -4167,6 +4174,21 @@ mod tests {
             app.highlight.as_ref().map(|(id, _)| id.as_str()),
             Some("old")
         );
+        assert_eq!(app.highlight_ons, 3);
+    }
+
+    #[test]
+    fn reply_pulses_the_row_once() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.apply(Action::Reply("old".into()), &ctx);
+        assert_eq!(app.reply_to.as_deref(), Some("old"));
+        assert_eq!(
+            app.highlight.as_ref().map(|(id, _)| id.as_str()),
+            Some("old")
+        );
+        assert_eq!(app.highlight_ons, 1);
+        assert!(app.focus_composer);
     }
 
     #[test]

@@ -1269,6 +1269,81 @@ mod tests {
         );
     }
 
+    fn double_click(pos: Pos2) -> Vec<Event> {
+        let mut events = vec![Event::PointerMoved(pos)];
+        events.extend(click_events(pos, PointerButton::Primary));
+        events.extend(click_events(pos, PointerButton::Primary));
+        events
+    }
+
+    fn last_incoming_text(app: &crate::app::App) -> crate::model::Message {
+        let chat = super::super::SAMPLES[0].id;
+        app.conversations
+            .get(chat)
+            .and_then(|conversation| {
+                conversation.messages.iter().rev().find(|message| {
+                    !message.from_me && matches!(message.content, Content::Text { .. })
+                })
+            })
+            .cloned()
+            .expect("an incoming message")
+    }
+
+    #[test]
+    fn double_clicking_a_bubble_replies_and_pulses_once() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let chat = super::super::SAMPLES[0].id;
+        let hit = last_incoming_text(&app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let target = ctx
+            .read_response(crate::ui::conversation::bubble_id(chat, &hit.id))
+            .expect("the bubble is drawn")
+            .rect
+            .center();
+        step_output(&mut app, &ctx, double_click(target), 0.10, true);
+        assert_eq!(app.reply_to.as_deref(), Some(hit.id.as_str()));
+        assert_eq!(app.highlight_ons, 1);
+        let output = step_output(&mut app, &ctx, Vec::new(), 0.12, true);
+        let expected = app.palette.accent.gamma_multiply(0.16);
+        assert!(
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::Shape::Rect(rect) if rect.fill == expected)
+            }),
+            "reply washes the full message row once"
+        );
+    }
+
+    #[test]
+    fn double_clicking_the_row_beside_a_bubble_replies() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        let chat = super::super::SAMPLES[0].id;
+        let hit = last_incoming_text(&app);
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        step_output(&mut app, &ctx, Vec::new(), 0.0, true);
+        let row = ctx
+            .data(|data| {
+                data.get_temp::<(Rect, bool)>(egui::Id::new(("message-row", chat, hit.id.as_str())))
+            })
+            .expect("the row stored its rect")
+            .0;
+        let bubble = ctx
+            .read_response(crate::ui::conversation::bubble_id(chat, &hit.id))
+            .expect("the bubble is drawn")
+            .rect;
+        let target = pos2(row.right() - 16.0, row.center().y);
+        assert!(
+            !bubble.contains(target),
+            "the click sits in the empty strip beside the bubble"
+        );
+        step_output(&mut app, &ctx, double_click(target), 0.10, true);
+        assert_eq!(app.reply_to.as_deref(), Some(hit.id.as_str()));
+    }
+
     #[test]
     fn holding_a_pinned_row_starts_the_gesture_and_the_release_ends_it() {
         let mut app = super::super::tests::app();
