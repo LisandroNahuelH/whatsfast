@@ -23,9 +23,12 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   Settings keeps a plain `palette.chat` fill.
   Clicking a chat photo or video opens `ui/viewer.rs`, a full-window overlay
   with a header, the file in the centre, and a chronological filmstrip of
-  that chat's images and videos from the archive. Wheel zoom, Plus/Minus,
-  and pan still apply to photos. Stickers and GIFs keep the click on the
-  message row. Overlay order is viewer, then picker, then dialogs.
+  that chat's images and videos from the archive. The overlay sizes those
+  panes from the window `content_rect` (`set_min_size` plus
+  `expand_to_include_rect`); a default egui Modal Area would shrink to the
+  widgets and leave an empty overlay. Wheel zoom, Plus/Minus, and pan still
+  apply to photos. Stickers and GIFs keep the click on the message row.
+  Overlay order is viewer, then picker, then dialogs.
   `ui/pane.rs` is the right inspector (`RightPane`). Search is the first use:
   one pane at a time, width persisted as `settings.inspector_width`. Header
   Search and Ctrl+G open it; Ctrl+F stays on the left list. The day filter is
