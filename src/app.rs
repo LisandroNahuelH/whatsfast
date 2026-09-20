@@ -1931,10 +1931,7 @@ impl App {
         }
     }
 
-    fn adopt_pending_installation(
-        &mut self,
-        installation: &crate::updates::install::Installation,
-    ) {
+    fn adopt_pending_installation(&mut self, installation: &crate::updates::install::Installation) {
         if !self.settings.check_for_updates || !self.settings.download_updates_automatically {
             return;
         }

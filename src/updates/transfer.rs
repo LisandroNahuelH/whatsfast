@@ -292,10 +292,16 @@ pub fn download_for(
             version: release.version.clone(),
         })
     })();
-    if result.is_err() {
-        let _ = fs::remove_dir_all(&directory);
+    match result {
+        Ok(prepared) => {
+            install::save_prepared(&prepared)?;
+            Ok(prepared)
+        }
+        Err(error) => {
+            let _ = fs::remove_dir_all(&directory);
+            Err(error)
+        }
     }
-    result
 }
 
 #[cfg(test)]

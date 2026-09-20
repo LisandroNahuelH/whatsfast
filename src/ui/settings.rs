@@ -325,7 +325,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         },
                     );
                     toggle(ui, app, "Check for updates", "Ask GitHub once a day whether a newer WhatsFast release exists. The request identifies only WhatsFast and its version.", |settings| &mut settings.check_for_updates);
-                    toggle(ui, app, "Download updates automatically", "Download and verify new releases in the background. A toast offers Update; one click installs and restarts. Native packages and Flatpak update through their package manager.", |settings| &mut settings.download_updates_automatically);
+                    toggle(ui, app, "Download updates automatically", "Download and verify new releases in the background. A toast offers Update; one click installs and restarts. If you skip the toast, the next start of WhatsFast installs the verified file. Native packages and Flatpak update through their package manager.", |settings| &mut settings.download_updates_automatically);
                 });
         });
 }
