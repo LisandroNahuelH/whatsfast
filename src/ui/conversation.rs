@@ -3031,6 +3031,7 @@ fn content(
                 file_name,
                 &detail.join(" · "),
                 width,
+                true,
                 actions,
             );
             caption.as_ref().and_then(|caption| {
@@ -3399,20 +3400,24 @@ fn frame_size(media: &Media, thumbnail_hint: Option<(u32, u32)>, limit: f32) -> 
 }
 
 /// Click on a downloaded image or sticker. Photos open in the viewer.
+/// Stickers have no extra click: they use the same row as a text bubble.
 fn downloaded_picture_action(
     sticker: bool,
     selecting: bool,
     chat: ChatId,
     message: String,
-    path: PathBuf,
 ) -> Option<Action> {
-    if sticker {
-        Some(Action::OpenFile(path))
-    } else if selecting {
+    if sticker || selecting {
         None
     } else {
         Some(Action::ViewImage { chat, message })
     }
+}
+
+/// Click on a downloaded video or GIF. Videos open in the system player.
+/// GIFs play in the bubble and have no extra click.
+fn downloaded_clip_action(gif: bool, path: PathBuf) -> Option<Action> {
+    (!gif).then_some(Action::OpenFile(path))
 }
 
 /// Draws an image or sticker, using its preview until downloaded. Returns its width.
@@ -3436,7 +3441,7 @@ fn picture(
                 media.width.unwrap_or(180) as f32,
                 media.height.unwrap_or(180) as f32,
             );
-            let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+            let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
             if ui.is_rect_visible(rect) {
                 match animation::frame(ui, path, rect) {
                     animation::Frame::Ready(texture) => {
@@ -3449,19 +3454,6 @@ fn picture(
                     }
                     _ => egui::Image::new(file_uri(path)).paint_at(ui, rect),
                 }
-            }
-            if response
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .clicked()
-                && let Some(action) = downloaded_picture_action(
-                    true,
-                    view.selecting.is_some(),
-                    view.chat.id.clone(),
-                    message.id.clone(),
-                    path.clone(),
-                )
-            {
-                actions.push(action);
             }
             return size.x;
         }
@@ -3477,21 +3469,21 @@ fn picture(
                     image
                         .fit_to_exact_size(size)
                         .corner_radius(if sticker.is_some() { 0.0 } else { 6.0 })
-                        .sense(if view.selecting.is_some() && sticker.is_none() {
+                        .sense(if view.selecting.is_some() || sticker.is_some() {
                             Sense::hover()
                         } else {
                             Sense::click()
                         }),
                 );
-                if response
-                    .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .clicked()
+                if sticker.is_none()
+                    && response
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
                     && let Some(action) = downloaded_picture_action(
-                        sticker.is_some(),
+                        false,
                         view.selecting.is_some(),
                         view.chat.id.clone(),
                         message.id.clone(),
-                        path.clone(),
                     )
                 {
                     actions.push(action);
@@ -3517,19 +3509,28 @@ fn picture(
                 } else {
                     frame_size(media, None, max_width)
                 };
-                let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+                let (rect, response) = ui.allocate_exact_size(
+                    size,
+                    if sticker.is_some() {
+                        Sense::hover()
+                    } else {
+                        Sense::click()
+                    },
+                );
                 if ui.is_rect_visible(rect) {
                     ui.painter().rect_filled(rect, 6.0, palette.surface);
                     theme::paint_icon(ui, Icon::CircleAlert, rect, 24.0, palette.danger);
-                    ui.painter().text(
-                        rect.center() + vec2(0.0, 24.0),
-                        Align2::CENTER_CENTER,
-                        "Could not display this picture. Click to open it.",
-                        theme::regular(11.5),
-                        palette.secondary,
-                    );
+                    if sticker.is_none() {
+                        ui.painter().text(
+                            rect.center() + vec2(0.0, 24.0),
+                            Align2::CENTER_CENTER,
+                            "Could not display this picture. Click to open it.",
+                            theme::regular(11.5),
+                            palette.secondary,
+                        );
+                    }
                 }
-                if response.clicked() {
+                if sticker.is_none() && response.clicked() {
                     actions.push(Action::OpenFile(path.clone()));
                 }
                 size.x
@@ -3650,6 +3651,7 @@ fn video(
             title,
             &detail.join(" · "),
             width,
+            !gif,
             actions,
         );
         return width;
@@ -3657,7 +3659,15 @@ fn video(
     let uri = thumbnail_uri(ui.ctx(), &message.chat, &message.id, thumbnail);
     let size = frame_size(media, Some((16, 9)), width.min(PICTURE_WIDTH));
     // Play downloaded GIFs in place; keep a poster for other videos.
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let inert = gif && media.path.is_some();
+    let (rect, response) = ui.allocate_exact_size(
+        size,
+        if inert {
+            Sense::hover()
+        } else {
+            Sense::click()
+        },
+    );
     let playing = match (&media.path, gif) {
         (Some(path), true) => Some(animation::frame(ui, path, rect)),
         _ => None,
@@ -3670,13 +3680,6 @@ fn video(
                 Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
                 Color32::WHITE,
             );
-        }
-        if response
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .clicked()
-            && let Some(path) = &media.path
-        {
-            actions.push(Action::OpenFile(path.clone()));
         }
         return size.x;
     }
@@ -3694,6 +3697,7 @@ fn video(
             (Some(_), _) if matches!(playing, Some(animation::Frame::Pending)) => {
                 theme::paint_spinner(ui, disc, 24.0, Color32::WHITE)
             }
+            (Some(_), _) if gif => {}
             (Some(_), _) => theme::paint_icon(ui, Icon::ExternalLink, disc, 22.0, Color32::WHITE),
             (None, MediaState::Downloading) => theme::paint_spinner(ui, disc, 24.0, Color32::WHITE),
             (None, MediaState::Failed(_)) => {
@@ -3737,12 +3741,17 @@ fn video(
             chat: view.chat.id.clone(),
             message: message.id.clone(),
         });
-    } else if response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
+    } else if !inert
+        && response
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .clicked()
     {
         match &media.path {
-            Some(path) => actions.push(Action::OpenFile(path.clone())),
+            Some(path) => {
+                if let Some(action) = downloaded_clip_action(gif, path.clone()) {
+                    actions.push(action);
+                }
+            }
             None if !matches!(media.state, MediaState::Downloading) => {
                 actions.push(Action::Download {
                     chat: view.chat.id.clone(),
@@ -3765,6 +3774,7 @@ fn attachment(
     title: &str,
     detail: &str,
     width: f32,
+    open_file: bool,
     actions: &mut Vec<Action>,
 ) {
     let palette = view.palette;
@@ -3787,9 +3797,10 @@ fn attachment(
                 theme::paint_icon(ui, icon, disc, 18.0, palette.accent);
             };
             let action = |ui: &mut egui::Ui| match (&media.path, &media.state) {
-                (Some(_), _) => {
+                (Some(_), _) if open_file => {
                     theme::icon(ui, Icon::ExternalLink, 18.0, palette.secondary);
                 }
+                (Some(_), _) => {}
                 (None, MediaState::Downloading) => {
                     theme::spinner(ui, 18.0, palette.accent);
                 }
@@ -3839,16 +3850,23 @@ fn attachment(
             response.rect,
         );
     });
-    let response = ui
-        .interact(
-            response.rect,
-            ui.id().with(("attachment", &message.id)),
-            Sense::click(),
-        )
-        .on_hover_cursor(egui::CursorIcon::PointingHand);
-    if response.clicked() && !auto {
+    let steal = open_file || media.path.is_none();
+    let mut response = ui.interact(
+        response.rect,
+        ui.id().with(("attachment", &message.id)),
+        if steal {
+            Sense::click()
+        } else {
+            Sense::hover()
+        },
+    );
+    if steal {
+        response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+    }
+    if steal && response.clicked() && !auto {
         match &media.path {
-            Some(path) => actions.push(Action::OpenFile(path.clone())),
+            Some(path) if open_file => actions.push(Action::OpenFile(path.clone())),
+            Some(_) => {}
             None if !matches!(media.state, MediaState::Downloading) => {
                 actions.push(Action::Download {
                     chat: view.chat.id.clone(),
@@ -4332,24 +4350,33 @@ mod tests {
     }
 
     #[test]
-    fn a_downloaded_photo_opens_the_viewer_and_a_sticker_opens_the_file() {
+    fn a_downloaded_photo_opens_the_viewer_and_a_sticker_does_not() {
         let chat = "a@s.whatsapp.net".to_owned();
-        let path = PathBuf::from("photo.jpg");
         assert_eq!(
-            downloaded_picture_action(false, false, chat.clone(), "photo".into(), path.clone()),
+            downloaded_picture_action(false, false, chat.clone(), "photo".into()),
             Some(Action::ViewImage {
                 chat: chat.clone(),
                 message: "photo".into()
             })
         );
         assert_eq!(
-            downloaded_picture_action(false, true, chat.clone(), "photo".into(), path.clone()),
+            downloaded_picture_action(false, true, chat.clone(), "photo".into()),
             None
         );
         assert_eq!(
-            downloaded_picture_action(true, false, chat, "sticker".into(), path.clone()),
-            Some(Action::OpenFile(path))
+            downloaded_picture_action(true, false, chat, "sticker".into()),
+            None
         );
+    }
+
+    #[test]
+    fn a_downloaded_video_opens_the_file_and_a_gif_does_not() {
+        let path = PathBuf::from("clip.mp4");
+        assert_eq!(
+            downloaded_clip_action(false, path.clone()),
+            Some(Action::OpenFile(path.clone()))
+        );
+        assert_eq!(downloaded_clip_action(true, path), None);
     }
 }
 
