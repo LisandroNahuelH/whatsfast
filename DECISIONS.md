@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-19 | Header Search and Ctrl+G open a right inspector for in-chat search | Ctrl+F keeps the chat list; a second finder in the same field mixed two jobs | Open-chat header Search runs FocusSearch |
 | 2026-09-19 | Open-chat header Search runs FocusSearch | Same field as Ctrl+F; a second in-chat finder would split results | Header had More only |
 | 2026-09-19 | Channel unfollow reuses LeaveGroup; copy and newsletter().leave differ | Same three surfaces as groups; `@broadcast` lists are not channels | Channels had no leave path |
 | 2026-09-19 | A verified pending update installs on the next process start when auto-download is on | Toast click stays immediate; closing to the tray is not a restart | In-memory `Prepared` only |
