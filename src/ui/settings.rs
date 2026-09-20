@@ -656,7 +656,6 @@ fn history_prefetch_row(ui: &mut egui::Ui, app: &mut App, palette: &theme::Palet
         |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
                 let selected = app.settings.history_prefetch.label();
-                let mut hint = None;
                 let response = egui::ComboBox::from_id_salt("history_prefetch")
                     .selected_text(" ")
                     .width(200.0_f32.min(ui.available_width()))
@@ -668,8 +667,8 @@ fn history_prefetch_row(ui: &mut egui::Ui, app: &mut App, palette: &theme::Palet
                                 choice.label(),
                                 app.settings.history_prefetch == choice,
                             );
-                            if row.hovered() {
-                                hint = Some(choice.hint());
+                            if row.contains_pointer() {
+                                show_prefetch_hint(app, &row, choice.hint());
                             }
                             if row.clicked() {
                                 app.actions.push(Action::SetHistoryPrefetch(choice));
@@ -699,7 +698,6 @@ fn history_prefetch_row(ui: &mut egui::Ui, app: &mut App, palette: &theme::Palet
                     info.current_text_value = Some(selected.to_owned());
                     info
                 });
-                show_prefetch_hint(ui, app, hint);
             });
         },
     );
@@ -1019,29 +1017,41 @@ fn show_wallpaper_preview(ui: &mut egui::Ui, app: &App, preview: Option<(Wallpap
         });
 }
 
-fn show_prefetch_hint(ui: &mut egui::Ui, app: &App, hint: Option<&str>) {
-    let Some(hint) = hint else {
+fn show_prefetch_hint(app: &App, row: &egui::Response, hint: &str) {
+    let mut rect = row.interact_rect;
+    if let Some(to_global) = row.ctx.layer_transform_to_global(row.layer_id) {
+        rect = to_global * rect;
+    }
+    let window = row.ctx.content_rect();
+    let gap_right = (window.right() - rect.right() - 8.0).max(0.0);
+    let gap_left = (rect.left() - window.left() - 8.0).max(0.0);
+    let (align, width) = if gap_right >= 80.0 {
+        (egui::RectAlign::RIGHT_START, gap_right.min(320.0))
+    } else if gap_left >= 80.0 {
+        (egui::RectAlign::LEFT_START, gap_left.min(320.0))
+    } else {
         return;
     };
-    let Some((width, origin)) = settings_hover_slot(ui, app, 88.0) else {
-        return;
-    };
-    egui::Area::new(egui::Id::new("prefetch-hint"))
-        .order(Order::Foreground)
-        .fixed_pos(origin)
+    let frame = Frame::new()
+        .fill(app.palette.panel)
+        .stroke(egui::Stroke::new(1.0, app.palette.dim))
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(Margin::symmetric(10, 8));
+    egui::Popup::from_response(row)
+        .id(egui::Id::new("prefetch-hint"))
+        .kind(egui::PopupKind::Tooltip)
+        .align(align)
+        .align_alternatives(&[])
+        .gap(8.0)
+        .close_behavior(egui::PopupCloseBehavior::IgnoreClicks)
         .interactable(false)
-        .show(ui.ctx(), |ui| {
-            Frame::new()
-                .fill(app.palette.panel)
-                .stroke(egui::Stroke::new(1.0, app.palette.dim))
-                .corner_radius(CornerRadius::same(8))
-                .inner_margin(Margin::symmetric(10, 8))
-                .show(ui, |ui| {
-                    ui.set_max_width(width);
-                    let line =
-                        widgets::line(ui, hint, theme::regular(13.0), app.palette.text, width, 4);
-                    let (rect, _) = ui.allocate_exact_size(line.size(), Sense::hover());
-                    line.paint(ui, rect.min, app.palette.text);
-                });
+        .width(width)
+        .frame(frame)
+        .show(|ui| {
+            ui.set_max_width(width);
+            let width = ui.available_width();
+            let line = widgets::line(ui, hint, theme::regular(13.0), app.palette.text, width, 4);
+            let (rect, _) = ui.allocate_exact_size(line.size(), Sense::hover());
+            line.paint(ui, rect.min, app.palette.text);
         });
 }

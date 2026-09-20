@@ -765,6 +765,50 @@ mod tests {
     }
 
     #[test]
+    fn hovering_a_prefetch_choice_pins_its_hint_to_that_row() {
+        let mut app = super::super::tests::app();
+        app.page = Page::Settings;
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut tour = Tour::new(None, None);
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, Vec::new());
+        }
+        click(&mut app, &mut tour, &ctx, "Recent and pinned");
+        let option = *tour.labels.get("Current Chat").expect("prefetch choice");
+        for _ in 0..3 {
+            frame(&mut app, &mut tour, &ctx, vec![Event::PointerMoved(option)]);
+        }
+        let hint = crate::i18n::t(crate::i18n::Key::SettingsHistoryCurrentHint);
+        let pos = tour
+            .labels
+            .iter()
+            .find(|(text, _)| text.as_str() == hint || text.contains("open chat only"))
+            .map(|(_, pos)| *pos)
+            .unwrap_or_else(|| {
+                let nearby: Vec<_> = tour
+                    .labels
+                    .keys()
+                    .filter(|text| {
+                        text.contains("Fetch")
+                            || text.contains("chat")
+                            || text.contains("Chat")
+                            || text.contains("30 days")
+                    })
+                    .collect();
+                panic!("choice hint missing; nearby labels: {nearby:?}")
+            });
+        assert!(
+            (pos.y - option.y).abs() < 48.0,
+            "hint at {pos:?} should sit on the hovered row at {option:?}"
+        );
+        assert!(
+            pos.x > option.x,
+            "hint at {pos:?} should sit to the right of {option:?}"
+        );
+    }
+
+    #[test]
     fn the_chat_wallpaper_dropdown_lists_auto_and_numbered_families() {
         use crate::settings::ChatWallpaper;
         let mut app = super::super::tests::app();
