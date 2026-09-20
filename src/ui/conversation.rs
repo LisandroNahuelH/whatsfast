@@ -2469,6 +2469,7 @@ fn bubble_frame(
         &[
             i18n::t(I18nKey::ChatDeleteEveryone),
             i18n::t(I18nKey::ChatShowInFolder),
+            i18n::t(I18nKey::ChatUnstar),
             "Delivered Yesterday at 20:45",
         ],
         true,
@@ -2932,6 +2933,26 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
         && widgets::menu_item(ui, &palette, Some(Icon::Reply), i18n::t(I18nKey::ChatReply))
     {
         actions.push(Action::Reply(message.id.clone()));
+    }
+    let starred = view.starred.is_some_and(|ids| ids.contains(&message.id));
+    if !matches!(message.content, Content::Revoked)
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Star),
+            if starred {
+                i18n::t(I18nKey::ChatUnstar)
+            } else {
+                i18n::t(I18nKey::ChatStar)
+            },
+        )
+    {
+        actions.push(Action::StarSelected {
+            chat: chat.clone(),
+            messages: vec![message.id.clone()],
+            starred: !starred,
+        });
+        ui.close();
     }
     let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
     if !matches!(message.content, Content::Revoked)

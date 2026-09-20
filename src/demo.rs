@@ -1869,6 +1869,81 @@ mod tests {
         assert!(egui::Popup::is_id_open(&ctx, popup), "and it stays open");
     }
 
+    fn painted_label_center(ctx: &egui::Context, needle: &str) -> Option<egui::Pos2> {
+        let mut found = None;
+        let layers: Vec<_> = ctx.memory(|memory| memory.layer_ids().collect());
+        for layer in layers {
+            let transform = ctx.layer_transform_to_global(layer).unwrap_or_default();
+            ctx.graphics(|graphics| {
+                if let Some(list) = graphics.get(layer) {
+                    for clipped in list.all_entries() {
+                        if let egui::Shape::Text(text) = &clipped.shape
+                            && text.galley.text() == needle
+                        {
+                            let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                            found = Some(transform * rect.center());
+                        }
+                    }
+                }
+            });
+        }
+        found
+    }
+
+    #[test]
+    fn the_bubble_menu_stars_the_message() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        apply_flags(&mut app, Some("react-menu"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let mut pos = None;
+        for _ in 0..3 {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1180.0, 2400.0),
+                    )),
+                    ..Default::default()
+                },
+                |ui| {
+                    let ctx = ui.ctx().clone();
+                    app.background_frame(&ctx);
+                    app.frame_ui(ui);
+                    pos = painted_label_center(&ctx, "Star");
+                },
+            );
+            output.textures_delta.clear();
+        }
+        let pos = pos.expect("Star is on the bubble menu");
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame_with(
+            &mut app,
+            &ctx,
+            vec![egui::Event::PointerMoved(pos), button(true)],
+        );
+        frame_with(&mut app, &ctx, vec![button(false)]);
+        let chat = sample_ids()[0].to_owned();
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            commands.iter().any(|command| matches!(
+                command,
+                crate::backend::Command::SetStar {
+                    chat: starred_chat,
+                    messages,
+                    starred: true,
+                } if starred_chat == &chat && messages == &["ada-link".to_owned()]
+            )),
+            "right-click Star sends SetStar for that message: {commands:?}"
+        );
+    }
+
     #[test]
     fn a_demo_flag_keeps_the_reaction_menu_open() {
         let mut app = app();
