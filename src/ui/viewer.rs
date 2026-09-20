@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use egui::{Align2, Color32, CornerRadius, Frame, Id, Order, Rect, Sense, UiBuilder, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, Frame, Id, Rect, Sense, UiBuilder, pos2, vec2};
 
 use crate::animation;
 use crate::app::App;
@@ -81,6 +81,17 @@ fn neighbor_ids<'a>(ids: &[&'a str], current: &str, step: i8) -> Option<&'a str>
     ids.get(next).copied()
 }
 
+/// Header, photo stage, and filmstrip inside the window.
+fn panes(window: Rect) -> (Rect, Rect, Rect) {
+    let header = Rect::from_min_max(window.min, pos2(window.max.x, window.min.y + HEADER));
+    let strip = Rect::from_min_max(pos2(window.min.x, window.max.y - STRIP), window.max);
+    let stage = Rect::from_min_max(
+        pos2(window.min.x, header.max.y),
+        pos2(window.max.x, strip.min.y),
+    );
+    (header, stage, strip)
+}
+
 pub fn neighbor_media<'a>(items: &'a [ChatMedia], current: &str, step: i8) -> Option<&'a str> {
     let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
     neighbor_ids(&ids, current, step)
@@ -108,15 +119,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     egui::Modal::new(Id::new("image-viewer"))
         .frame(Frame::new().fill(Color32::from_black_alpha(220)))
         .backdrop_color(Color32::from_black_alpha(220))
-        .area(egui::Area::new(Id::new("image-viewer-area")).order(Order::Foreground))
         .show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let header = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + HEADER));
-            let strip = Rect::from_min_max(pos2(rect.min.x, rect.max.y - STRIP), rect.max);
-            let stage = Rect::from_min_max(
-                pos2(rect.min.x, header.max.y),
-                pos2(rect.max.x, strip.min.y),
-            );
+            let screen = ui.ctx().content_rect();
+            ui.set_min_size(screen.size());
+            ui.expand_to_include_rect(screen);
+            let (header, stage, strip) = panes(screen);
             let response = ui.interact(stage, ui.id().with("stage"), Sense::click_and_drag());
             paint_stage(app, ui, &mut viewer, stage, &response);
             paint_header(app, ui, &viewer, header, &mut actions, &mut zoom_by);
@@ -657,6 +664,21 @@ fn fit(size: egui::Vec2, max: egui::Vec2) -> egui::Vec2 {
 mod tests {
     use super::*;
     use crate::model::{Media, Message};
+
+    #[test]
+    fn panes_keep_a_positive_stage_inside_the_window() {
+        let window = Rect::from_min_size(pos2(0.0, 0.0), vec2(1600.0, 880.0));
+        let (header, stage, strip) = panes(window);
+        assert_eq!(header.height(), HEADER);
+        assert_eq!(strip.height(), STRIP);
+        assert!(
+            stage.height() > 600.0,
+            "stage collapsed: {}",
+            stage.height()
+        );
+        assert_eq!(stage.width(), 1600.0);
+        assert!(stage.max.y <= strip.min.y + f32::EPSILON);
+    }
 
     fn photo(id: &str, path: Option<&str>) -> Message {
         Message {
