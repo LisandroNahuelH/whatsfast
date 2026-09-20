@@ -932,6 +932,11 @@ pub enum Action {
         messages: Vec<String>,
         starred: bool,
     },
+    /// Deletes the picked messages locally (same as delete for me).
+    DeleteSelected {
+        chat: ChatId,
+        messages: Vec<String>,
+    },
     /// Pins or unpins one message for everyone in the chat.
     SetMessagePinned {
         chat: ChatId,

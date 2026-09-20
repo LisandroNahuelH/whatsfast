@@ -2293,6 +2293,27 @@ mod tests {
     }
 
     #[test]
+    fn deleting_the_selection_removes_those_rows() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        render(&mut app, &ctx);
+        let chat = sample_ids()[0].to_owned();
+        let before = app.conversations[&chat].messages.len();
+        app.actions.push(crate::model::Action::DeleteSelected {
+            chat: chat.clone(),
+            messages: vec!["ada-sticker".into(), "ada-location".into()],
+        });
+        render(&mut app, &ctx);
+        let conversation = &app.conversations[&chat];
+        assert_eq!(conversation.messages.len(), before - 2);
+        assert!(conversation.message("ada-sticker").is_none());
+        assert!(conversation.message("ada-location").is_none());
+        assert!(conversation.message("ada-deleted").is_some());
+        assert!(app.selecting.is_none());
+    }
+
+    #[test]
     fn a_second_paste_of_the_same_picture_is_ignored() {
         let mut app = app();
         let ctx = egui::Context::default();

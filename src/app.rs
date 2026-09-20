@@ -1146,6 +1146,16 @@ impl App {
             && crate::util::now() - message.timestamp <= REVOKE_WINDOW.as_secs() as i64
     }
 
+    fn delete_local(&mut self, chat: &str, id: &str) {
+        if let Some(conversation) = self.conversations.get_mut(chat) {
+            conversation.messages.retain(|message| message.id != id);
+        }
+        self.backend.send(Command::DeleteLocal {
+            chat: chat.to_owned(),
+            id: id.to_owned(),
+        });
+    }
+
     /// Active typers in a chat as id and display name.
     pub fn typing_in(&self, chat: &str) -> Vec<(String, String)> {
         self.typing
@@ -2691,11 +2701,14 @@ impl App {
             }
             Action::DeleteForMe(id) => {
                 if let Some(chat) = self.open_chat.clone() {
-                    if let Some(conversation) = self.conversations.get_mut(&chat) {
-                        conversation.messages.retain(|message| message.id != id);
-                    }
-                    self.backend.send(Command::DeleteLocal { chat, id });
+                    self.delete_local(&chat, &id);
                 }
+            }
+            Action::DeleteSelected { chat, messages } => {
+                for id in messages {
+                    self.delete_local(&chat, &id);
+                }
+                self.selecting = None;
             }
             Action::Attach => {
                 if let Some(chat) = self.open_chat.clone() {

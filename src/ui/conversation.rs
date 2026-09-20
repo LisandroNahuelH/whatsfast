@@ -973,6 +973,14 @@ fn selection_bar(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 4.0;
+                    if bar_button(ui, &palette, Icon::Trash, i18n::t(I18nKey::CommonDelete))
+                        .clicked()
+                    {
+                        app.actions.push(Action::DeleteSelected {
+                            chat: chat.id.clone(),
+                            messages: picked.clone(),
+                        });
+                    }
                     // The same button adds and removes: it only removes when
                     // every picked message is already starred.
                     let removing = app
