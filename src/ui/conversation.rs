@@ -336,6 +336,28 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         });
 }
 
+/// Which pin chip a click on the banner bar belongs to. A hit on a chip
+/// keeps that chip; empty space on the same row goes to the nearest chip.
+fn pin_banner_index(chips: &[Rect], bar: Rect, pos: egui::Pos2) -> Option<usize> {
+    if chips.is_empty() || !bar.contains(pos) {
+        return None;
+    }
+    chips
+        .iter()
+        .position(|chip| pos.x >= chip.left() && pos.x <= chip.right())
+        .or_else(|| {
+            chips
+                .iter()
+                .enumerate()
+                .min_by(|(_, left), (_, right)| {
+                    (left.center().x - pos.x)
+                        .abs()
+                        .total_cmp(&(right.center().x - pos.x).abs())
+                })
+                .map(|(index, _)| index)
+        })
+}
+
 fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let rows: Vec<crate::archive::Pinned> =
         app.chat_pins.get(&chat.id).cloned().unwrap_or_default();
@@ -354,6 +376,7 @@ fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let (icon, _) = child.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
     theme::paint_icon(&child, Icon::Pin, icon, 14.0, palette.accent);
     child.spacing_mut().item_spacing.x = 6.0;
+    let mut chips = Vec::with_capacity(rows.len());
     for row in rows {
         let label = widgets::line(
             &child,
@@ -364,21 +387,28 @@ fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
             1,
         );
         let size = vec2(label.size().x + 16.0, 24.0);
-        let (rect, response) = child.allocate_exact_size(size, Sense::click());
+        let (rect, _) = child.allocate_exact_size(size, Sense::hover());
         child.painter().rect_filled(rect, 12.0, palette.surface);
         label.paint(
             &child,
             pos2(rect.left() + 8.0, rect.center().y - label.size().y / 2.0),
             palette.text,
         );
-        if response
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .clicked()
-        {
-            app.actions.push(Action::OpenMessage {
-                chat: row.chat.clone(),
-                message: row.id.clone(),
-            });
+        chips.push((rect, row));
+    }
+    let response = ui
+        .interact(bar, ui.id().with("pin-banner"), Sense::click())
+        .on_hover_cursor(egui::CursorIcon::PointingHand);
+    if response.clicked() {
+        if let Some(pos) = response.interact_pointer_pos() {
+            let rects: Vec<Rect> = chips.iter().map(|(rect, _)| *rect).collect();
+            if let Some(index) = pin_banner_index(&rects, bar, pos) {
+                let row = &chips[index].1;
+                app.actions.push(Action::OpenMessage {
+                    chat: row.chat.clone(),
+                    message: row.id.clone(),
+                });
+            }
         }
     }
 }
@@ -4495,6 +4525,26 @@ mod tests {
             height: h,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_click_on_the_pin_banner_row_opens_the_nearest_chip() {
+        let bar = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 36.0));
+        let one = Rect::from_min_size(pos2(40.0, 6.0), vec2(80.0, 24.0));
+        assert_eq!(pin_banner_index(&[one], bar, pos2(80.0, 18.0)), Some(0));
+        assert_eq!(pin_banner_index(&[one], bar, pos2(10.0, 2.0)), Some(0));
+        assert_eq!(pin_banner_index(&[one], bar, pos2(390.0, 34.0)), Some(0));
+        assert_eq!(pin_banner_index(&[one], bar, pos2(10.0, 40.0)), None);
+
+        let left = Rect::from_min_size(pos2(40.0, 6.0), vec2(60.0, 24.0));
+        let right = Rect::from_min_size(pos2(120.0, 6.0), vec2(60.0, 24.0));
+        let chips = [left, right];
+        assert_eq!(pin_banner_index(&chips, bar, pos2(50.0, 18.0)), Some(0));
+        assert_eq!(pin_banner_index(&chips, bar, pos2(150.0, 18.0)), Some(1));
+        assert_eq!(pin_banner_index(&chips, bar, pos2(105.0, 18.0)), Some(0));
+        assert_eq!(pin_banner_index(&chips, bar, pos2(115.0, 18.0)), Some(1));
+        assert_eq!(pin_banner_index(&chips, bar, pos2(5.0, 18.0)), Some(0));
+        assert_eq!(pin_banner_index(&[], bar, pos2(50.0, 18.0)), None);
     }
 
     #[test]
