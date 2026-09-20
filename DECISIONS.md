@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Viewer sizes header, stage, and strip from window `content_rect` | A default egui Modal Area shrinks to allocated widgets after frame 0 | Custom Modal `.area()` plus `ui.max_rect()` |
 | 2026-09-20 | In-chat pins use `Client::pin_message` for 7 days, cap 3 per chat | WhatsApp Web default; no duration menu in this cut | Dropping `pin_in_chat_message` (`return None`) |
 | 2026-09-20 | Viewer gallery lists Image and non-GIF Video from SQLite | The loaded page is not the whole album | `neighbor_image` on in-memory photos with a path |
 | 2026-09-20 | Local send-receipts and typing switches live in Settings Privacy | They describe what this copy discloses, not chat chrome | The same two switches in Settings Chats |
