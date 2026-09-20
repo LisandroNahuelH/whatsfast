@@ -1,7 +1,7 @@
 //! Colors, typography, icons, and base widgets.
 //!
-//! The UI uses Inter's font weights and Lucide icons. [`Palette`] holds all
-//! light and dark theme colors.
+//! The UI uses Montserrat's variable font weights and Lucide icons. [`Palette`]
+//! holds all light and dark theme colors.
 
 use egui::{Color32, CornerRadius, Response, Sense, Stroke, Vec2};
 
@@ -145,24 +145,57 @@ pub const RADIUS_SMALL: u8 = 4;
 pub const ROW_HEIGHT: f32 = 68.0;
 pub const TOP_BAR_HEIGHT: f32 = 60.0;
 
-const INTER_MEDIUM: &str = "inter-medium";
-const INTER_SEMIBOLD: &str = "inter-semibold";
-const INTER_BOLD: &str = "inter-bold";
+const MONTSERRAT: &str = "montserrat";
+const MONTSERRAT_MEDIUM: &str = "montserrat-medium";
+const MONTSERRAT_SEMIBOLD: &str = "montserrat-semibold";
+const MONTSERRAT_DEMI: &str = "montserrat-650";
+const MONTSERRAT_BOLD: &str = "montserrat-bold";
+const MONTSERRAT_HEAVY: &str = "montserrat-750";
+const MONTSERRAT_EXTRA: &str = "montserrat-800";
+
+const WEIGHT_FACES: &[(f32, &str)] = &[
+    (400.0, MONTSERRAT),
+    (500.0, MONTSERRAT_MEDIUM),
+    (600.0, MONTSERRAT_SEMIBOLD),
+    (650.0, MONTSERRAT_DEMI),
+    (700.0, MONTSERRAT_BOLD),
+    (750.0, MONTSERRAT_HEAVY),
+    (800.0, MONTSERRAT_EXTRA),
+];
 
 pub fn regular(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Proportional)
+    wght(size, 400.0)
 }
 
 pub fn medium(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_MEDIUM.into()))
+    wght(size, 500.0)
 }
 
 pub fn semibold(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_SEMIBOLD.into()))
+    wght(size, 600.0)
 }
 
 pub fn bold(size: f32) -> egui::FontId {
-    egui::FontId::new(size, egui::FontFamily::Name(INTER_BOLD.into()))
+    wght(size, 700.0)
+}
+
+/// Montserrat at `size` with the nearest registered `wght` axis value.
+pub fn wght(size: f32, weight: f32) -> egui::FontId {
+    let name = nearest_face(weight);
+    let family = if name == MONTSERRAT {
+        egui::FontFamily::Proportional
+    } else {
+        egui::FontFamily::Name(name.into())
+    };
+    egui::FontId::new(size, family)
+}
+
+fn nearest_face(weight: f32) -> &'static str {
+    WEIGHT_FACES
+        .iter()
+        .min_by(|left, right| (left.0 - weight).abs().total_cmp(&(right.0 - weight).abs()))
+        .map(|face| face.1)
+        .unwrap_or(MONTSERRAT)
 }
 
 /// Installs fonts, icons, and base style.
@@ -279,40 +312,42 @@ fn install_fonts(ctx: &egui::Context) {
     use std::sync::Arc;
 
     let mut fonts = FontDefinitions::default();
-    let inter = include_bytes!("../assets/fonts/InterVariable.ttf");
+    let montserrat = include_bytes!("../assets/fonts/Montserrat-Variable.ttf");
     let weighted = |weight: f32| {
-        let mut data = FontData::from_static(inter);
+        let mut data = FontData::from_static(montserrat);
         data.tweak.coords = VariationCoords::new([(b"wght", weight)]);
         Arc::new(data)
     };
-    fonts.font_data.insert("inter".to_owned(), weighted(400.0));
-    fonts
-        .font_data
-        .insert(INTER_MEDIUM.to_owned(), weighted(500.0));
-    fonts
-        .font_data
-        .insert(INTER_SEMIBOLD.to_owned(), weighted(600.0));
-    fonts
-        .font_data
-        .insert(INTER_BOLD.to_owned(), weighted(700.0));
+    for (weight, name) in WEIGHT_FACES {
+        fonts
+            .font_data
+            .insert((*name).to_owned(), weighted(*weight));
+    }
 
     fonts
         .families
         .entry(FontFamily::Proportional)
         .or_default()
-        .insert(0, "inter".to_owned());
+        .insert(0, MONTSERRAT.to_owned());
+    fonts
+        .families
+        .entry(FontFamily::Monospace)
+        .or_default()
+        .insert(0, MONTSERRAT.to_owned());
     let fallbacks: Vec<String> = fonts.families[&FontFamily::Proportional]
         .iter()
         .skip(1)
         .cloned()
         .collect();
-    for name in [INTER_MEDIUM, INTER_SEMIBOLD, INTER_BOLD] {
-        let mut family = vec![name.to_owned()];
+    for (_, name) in WEIGHT_FACES.iter().skip(1) {
+        let mut family = vec![(*name).to_owned()];
         family.extend(fallbacks.iter().cloned());
-        fonts.families.insert(FontFamily::Name(name.into()), family);
+        fonts
+            .families
+            .insert(FontFamily::Name((*name).into()), family);
     }
 
-    // Append system fallbacks after Inter and emoji fonts.
+    // Append system fallbacks after Montserrat and emoji fonts.
     for font in crate::system_fonts::fallbacks() {
         let mut data = FontData::from_static(&font.bytes);
         data.index = font.index;
@@ -850,5 +885,34 @@ mod tests {
         assert_eq!(hsl(0.0, 1.0, 0.5), Color32::from_rgb(255, 0, 0));
         assert_eq!(hsl(120.0, 1.0, 0.5), Color32::from_rgb(0, 255, 0));
         assert_eq!(hsl(240.0, 1.0, 0.5), Color32::from_rgb(0, 0, 255));
+    }
+
+    #[test]
+    fn montserrat_declares_a_weight_axis() {
+        use skrifa::{FontRef, MetadataProvider as _, Tag};
+        let font = FontRef::new(include_bytes!("../assets/fonts/Montserrat-Variable.ttf"))
+            .expect("Montserrat variable TTF");
+        let axis = font
+            .axes()
+            .iter()
+            .find(|axis| axis.tag() == Tag::new(b"wght"))
+            .expect("wght axis");
+        assert!(axis.min_value() <= 100.0);
+        assert!(axis.max_value() >= 800.0);
+    }
+
+    #[test]
+    fn wght_snaps_to_the_nearest_registered_face() {
+        assert_eq!(wght(14.0, 400.0).family, egui::FontFamily::Proportional);
+        assert_eq!(
+            wght(14.0, 640.0).family,
+            egui::FontFamily::Name(MONTSERRAT_DEMI.into())
+        );
+        assert_eq!(
+            wght(16.0, 760.0).family,
+            egui::FontFamily::Name(MONTSERRAT_HEAVY.into())
+        );
+        assert_eq!(medium(12.0).family, wght(12.0, 500.0).family);
+        assert_eq!(bold(20.0).family, wght(20.0, 700.0).family);
     }
 }

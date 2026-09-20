@@ -1,4 +1,4 @@
-//! System font fallbacks for scripts Inter does not support.
+//! System font fallbacks for scripts Montserrat does not support.
 //!
 //! Installed fonts are scanned once. The best regular sans-serif face for each
 //! missing script is added to egui's fallback list.
@@ -69,7 +69,7 @@ const FONT_SCAN_DEPTH: usize = 4;
 /// Maximum accepted faces in a collection to reject invalid counts.
 const MAX_FACES: u32 = 64;
 
-/// One system fallback per unsupported Inter script.
+/// One system fallback per unsupported Montserrat script.
 ///
 /// The font scan runs once per process, across recreated windows.
 pub fn fallbacks() -> &'static [Fallback] {

@@ -35,7 +35,7 @@ const PAGES: &[Option<&str>] = &[
 const FLOOR: &[(Option<&str>, usize)] = &[
     (None, 81),
     (Some("empty"), 40),
-    (Some("settings"), 111),
+    (Some("settings"), 110),
     (Some("login"), 11),
     (Some("pair"), 13),
     (Some("shortcuts"), 114),
@@ -43,7 +43,7 @@ const FLOOR: &[(Option<&str>, usize)] = &[
     (Some("info"), 90),
     (Some("mention"), 66),
     (Some("light"), 81),
-    (Some("privacy-except"), 116),
+    (Some("privacy-except"), 115),
     (Some("image-viewer"), 78),
     (Some("poll"), 66),
     (Some("update-failed"), 84),

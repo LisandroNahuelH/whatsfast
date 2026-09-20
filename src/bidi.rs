@@ -1,8 +1,8 @@
 //! Paragraph-level run order for RTL scripts.
 //!
 //! egui 0.36 shapes each font run with harfrust (within-run RTL shaping is
-//! already correct) and then places those runs left-to-right. Inter has no
-//! Hebrew/Arabic coverage, so spaces stay on Inter while letters fall back to
+//! already correct) and then places those runs left-to-right. Montserrat has no
+//! Hebrew/Arabic coverage, so spaces stay on Montserrat while letters fall back to
 //! another face. Each word is its own RTL run. Laid out LTR, the first logical
 //! word sits on the left; a Hebrew reader starting from the right reads the
 //! last word first (`הכלב הגדול קפץ` reads as `קפץ הגדול הכלב`).
@@ -445,21 +445,22 @@ mod tests {
             );
         let ctx = egui::Context::default();
         let mut fonts = FontDefinitions::default();
-        let inter = include_bytes!("../assets/fonts/InterVariable.ttf");
-        fonts
-            .font_data
-            .insert("inter".into(), Arc::new(FontData::from_static(inter)));
+        let montserrat = include_bytes!("../assets/fonts/Montserrat-Variable.ttf");
+        fonts.font_data.insert(
+            "montserrat".into(),
+            Arc::new(FontData::from_static(montserrat)),
+        );
         let face = std::fs::read(path).unwrap_or_else(|error| panic!("read {path}: {error}"));
         fonts
             .font_data
             .insert("rtl-fallback".into(), Arc::new(FontData::from_owned(face)));
         fonts.families.insert(
             FontFamily::Proportional,
-            vec!["inter".into(), "rtl-fallback".into()],
+            vec!["montserrat".into(), "rtl-fallback".into()],
         );
         fonts
             .families
-            .insert(FontFamily::Monospace, vec!["inter".into()]);
+            .insert(FontFamily::Monospace, vec!["montserrat".into()]);
         ctx.set_fonts(fonts);
 
         let galley = std::cell::RefCell::new(None);
@@ -792,10 +793,11 @@ mod tests {
     fn struck_underline_mesh_moves_with_runs() {
         let ctx = egui::Context::default();
         let mut fonts = FontDefinitions::default();
-        let inter = include_bytes!("../assets/fonts/InterVariable.ttf");
-        fonts
-            .font_data
-            .insert("inter".into(), Arc::new(FontData::from_static(inter)));
+        let montserrat = include_bytes!("../assets/fonts/Montserrat-Variable.ttf");
+        fonts.font_data.insert(
+            "montserrat".into(),
+            Arc::new(FontData::from_static(montserrat)),
+        );
         let path = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
@@ -812,7 +814,7 @@ mod tests {
             .insert("rtl-fallback".into(), Arc::new(FontData::from_owned(face)));
         fonts.families.insert(
             FontFamily::Proportional,
-            vec!["inter".into(), "rtl-fallback".into()],
+            vec!["montserrat".into(), "rtl-fallback".into()],
         );
         ctx.set_fonts(fonts);
 

@@ -1,6 +1,6 @@
 [package]
 name = "whatsfast"
-version = "0.15.263"
+version = "0.15.264"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
@@ -40,7 +40,7 @@ directories = "6"
 eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts", "links", "wayland", "x11", "persistence"] }
 egui = "0.36"
 egui_extras = { version = "0.36", features = ["file", "image", "svg", "webp", "gif"] }
-# Finds system fonts for scripts not covered by Inter. Keep skrifa aligned with
+# Finds system fonts for scripts not covered by Montserrat. Keep skrifa aligned with
 # epaint to avoid compiling two versions. memmap2 limits font scans to the
 # required pages.
 skrifa = "0.44"
