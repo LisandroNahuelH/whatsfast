@@ -875,6 +875,8 @@ pub enum Action {
     StepImage(i8),
     OpenUrl(String),
     CopyText(String),
+    /// Puts a downloaded chat image on the system clipboard.
+    CopyImage(PathBuf),
     /// Starts a reply to a message in the open chat.
     Reply(String),
     /// Closes the viewer, jumps to the message, and replies with three pulses.

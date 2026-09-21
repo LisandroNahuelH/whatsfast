@@ -2296,6 +2296,11 @@
       "es": "Copiar texto"
     },
     {
+      "key": "ChatCopyImage",
+      "en": "Copy image",
+      "es": "Copiar imagen"
+    },
+    {
       "key": "ChatSent",
       "en": "Sent {when}",
       "es": "Enviado {when}"
@@ -2439,6 +2444,11 @@
       "key": "ToastCopied",
       "en": "Copied",
       "es": "Copiado"
+    },
+    {
+      "key": "ToastCopyImageFailed",
+      "en": "Could not copy the image",
+      "es": "No se pudo copiar la imagen"
     },
     {
       "key": "ToastStickerSaved",

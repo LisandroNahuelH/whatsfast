@@ -2460,6 +2460,13 @@ impl App {
                 ctx.copy_text(text);
                 self.toast(i18n::t(Key::ToastCopied));
             }
+            Action::CopyImage(path) => match image_file_rgba(&path).and_then(set_clipboard_image) {
+                Ok(()) => self.toast(i18n::t(Key::ToastCopied)),
+                Err(_) => {
+                    log::warn!("copy image failed");
+                    self.toast_error(i18n::t(Key::ToastCopyImageFailed));
+                }
+            },
             Action::Reply(id) => {
                 self.reply_to = Some(id.clone());
                 self.focus_composer = true;
@@ -3881,6 +3888,28 @@ fn clipboard_image() -> Result<(usize, usize, Vec<u8>), arboard::Error> {
         .ok_or(arboard::Error::ConversionFailure)
 }
 
+fn image_file_rgba(path: &std::path::Path) -> Result<(usize, usize, Vec<u8>), arboard::Error> {
+    let image = image::open(path).map_err(|_| arboard::Error::ConversionFailure)?;
+    let rgba = image.to_rgba8();
+    packed_rgba(
+        rgba.width() as usize,
+        rgba.height() as usize,
+        rgba.into_raw(),
+    )
+    .ok_or(arboard::Error::ConversionFailure)
+}
+
+fn set_clipboard_image(
+    (width, height, bytes): (usize, usize, Vec<u8>),
+) -> Result<(), arboard::Error> {
+    let mut clipboard = arboard::Clipboard::new()?;
+    clipboard.set_image(arboard::ImageData {
+        width,
+        height,
+        bytes: std::borrow::Cow::Owned(bytes),
+    })
+}
+
 impl Delivery {
     /// Whether an outgoing message is still pending.
     pub fn in_flight(self) -> bool {
@@ -3903,6 +3932,18 @@ mod tests {
         assert!(packed_rgba(1, 1, vec![0; 3]).is_none());
         assert!(packed_rgba(1, 1, vec![0; 4]).is_some());
         assert!(packed_rgba(0, 1, vec![0; 4]).is_none());
+    }
+
+    #[test]
+    fn a_png_file_loads_as_clipboard_rgba() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dot.png");
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([10, 20, 30, 255]))
+            .save(&path)
+            .unwrap();
+        let (width, height, bytes) = image_file_rgba(&path).expect("decodes");
+        assert_eq!((width, height), (1, 1));
+        assert_eq!(bytes, vec![10, 20, 30, 255]);
     }
 
     #[test]

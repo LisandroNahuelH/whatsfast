@@ -1,6 +1,6 @@
 //! Full-window photo and video viewer with a filmstrip and action header.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use egui::{Align2, Color32, CornerRadius, Frame, Id, Rect, Sense, UiBuilder, pos2, vec2};
 
@@ -20,27 +20,6 @@ const HEADER: f32 = 56.0;
 const STRIP: f32 = 76.0;
 const THUMB: f32 = 56.0;
 const STRIP_GAP: f32 = 8.0;
-
-// #region agent log
-fn agent_dbg(hypothesis_id: &str, location: &str, message: &str, data: &str) {
-    use std::io::Write;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(r"C:\OfiSync\0. Lisandro\0. Programacion\WhatsFast\debug-138664.log")
-    else {
-        return;
-    };
-    let _ = writeln!(
-        file,
-        "{{\"sessionId\":\"138664\",\"runId\":\"post-fix\",\"hypothesisId\":\"{hypothesis_id}\",\"location\":\"{location}\",\"message\":\"{message}\",\"data\":{data},\"timestamp\":{ts}}}"
-    );
-}
-// #endregion
 
 #[derive(Clone, Debug)]
 pub struct ImageViewer {
@@ -129,6 +108,33 @@ fn click_closes_viewer(pos: egui::Pos2, stage: Rect, media: Rect, left: Rect, ri
     stage.contains(pos) && !media.contains(pos) && !left.contains(pos) && !right.contains(pos)
 }
 
+fn still_image_path(app: &App, viewer: &ImageViewer) -> Option<PathBuf> {
+    let item = app
+        .viewer_media
+        .iter()
+        .find(|item| item.id == viewer.message);
+    if item.is_some_and(|item| item.video) {
+        return None;
+    }
+    let message = app
+        .conversations
+        .get(&viewer.chat)
+        .and_then(|conversation| conversation.message(&viewer.message));
+    if message.is_some_and(|message| matches!(message.content, Content::Video { gif: false, .. })) {
+        return None;
+    }
+    if let Some(path) = item
+        .and_then(|item| item.path.clone())
+        .filter(|path| path.is_file())
+    {
+        return Some(path);
+    }
+    match message.map(|message| &message.content) {
+        Some(Content::Image { media, .. }) => media.path.clone().filter(|path| path.is_file()),
+        _ => None,
+    }
+}
+
 pub fn neighbor_media<'a>(items: &'a [ChatMedia], current: &str, step: i8) -> Option<&'a str> {
     let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
     neighbor_ids(&ids, current, step)
@@ -166,25 +172,45 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             paint_header(app, ui, &viewer, header, &mut actions, &mut zoom_by);
             paint_strip(app, ui, &viewer, strip, &mut actions);
             paint_chevrons(ui, &palette, stage, &mut actions);
+            if let Some(path) = still_image_path(app, &viewer) {
+                let right_clicked = ui.input(|input| {
+                    input.pointer.secondary_clicked()
+                        && input
+                            .pointer
+                            .interact_pos()
+                            .is_some_and(|pos| media.contains(pos))
+                });
+                let open = if right_clicked {
+                    Some(egui::SetOpenCommand::Bool(true))
+                } else if response.clicked() {
+                    Some(egui::SetOpenCommand::Bool(false))
+                } else {
+                    None
+                };
+                let width = widgets::menu_width(ui, &[i18n::t(Key::ChatCopyImage)], true);
+                egui::Popup::menu(&response)
+                    .open_memory(open)
+                    .width(width)
+                    .frame(widgets::menu_frame(&palette))
+                    .at_pointer_fixed()
+                    .show(|ui| {
+                        if widgets::menu_item(
+                            ui,
+                            &palette,
+                            Some(Icon::Image),
+                            i18n::t(Key::ChatCopyImage),
+                        ) {
+                            actions.push(Action::CopyImage(path.clone()));
+                            ui.close();
+                        }
+                    });
+            }
             if response.clicked()
                 && let Some(pos) = response.interact_pointer_pos()
             {
                 let left = chevron_hit(stage, true);
                 let right = chevron_hit(stage, false);
-                let close = click_closes_viewer(pos, stage, media, left, right);
-                // #region agent log
-                agent_dbg(
-                    "C",
-                    "viewer.rs:show",
-                    "stage click",
-                    &format!(
-                        "{{\"close\":{close},\"in_media\":{},\"in_chevron\":{}}}",
-                        media.contains(pos),
-                        left.contains(pos) || right.contains(pos)
-                    ),
-                );
-                // #endregion
-                if close {
+                if click_closes_viewer(pos, stage, media, left, right) {
                     actions.push(Action::CloseImageViewer);
                 }
             }
@@ -608,27 +634,6 @@ fn paint_strip(
                             Some(egui::Align::Center),
                             egui::style::ScrollAnimation::none(),
                         );
-                        // #region agent log
-                        {
-                            use std::sync::atomic::{AtomicU32, Ordering};
-                            static FRAMES: AtomicU32 = AtomicU32::new(0);
-                            let n = FRAMES.fetch_add(1, Ordering::Relaxed);
-                            if n < 8 || n.is_multiple_of(30) {
-                                let cx = inner.center().x;
-                                agent_dbg(
-                                    "A",
-                                    "viewer.rs:paint_strip",
-                                    "thumb centre",
-                                    &format!(
-                                        "{{\"n\":{n},\"dx\":{:.1},\"index\":{index},\"count\":{},\"last\":{}}}",
-                                        thumb.center().x - cx,
-                                        items.len(),
-                                        index + 1 == items.len()
-                                    ),
-                                );
-                            }
-                        }
-                        // #endregion
                     }
                     if ui.is_rect_visible(thumb) {
                         paint_thumb(ui, &palette, item, thumb, item.id == viewer.message);

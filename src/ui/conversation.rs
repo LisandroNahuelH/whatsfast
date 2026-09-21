@@ -2511,6 +2511,7 @@ fn bubble_frame(
         &[
             i18n::t(I18nKey::ChatDeleteEveryone),
             i18n::t(I18nKey::ChatShowInFolder),
+            i18n::t(I18nKey::ChatCopyImage),
             i18n::t(I18nKey::ChatUnstar),
             "Delivered Yesterday at 20:45",
         ],
@@ -3109,6 +3110,19 @@ fn context_menu(ui: &mut egui::Ui, view: &View<'_>, message: &Message, actions: 
             chat: chat.clone(),
             messages: vec![message.id.clone()],
         }));
+    }
+    if !as_deleted(message, view.keep_revoked)
+        && let Content::Image { media, .. } = &message.content
+        && let Some(path) = &media.path
+        && path.is_file()
+        && widgets::menu_item(
+            ui,
+            &palette,
+            Some(Icon::Image),
+            i18n::t(I18nKey::ChatCopyImage),
+        )
+    {
+        actions.push(Action::CopyImage(path.clone()));
     }
     let text = match &message.content {
         Content::Text { text, .. } => Some(text.clone()),

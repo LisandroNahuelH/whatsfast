@@ -462,6 +462,7 @@ pub enum Key {
     ChatReactWithEmoji,
     ChatReply,
     ChatCopyText,
+    ChatCopyImage,
     ChatSent,
     ChatDeliveredAt,
     ChatDelivered,
@@ -491,6 +492,7 @@ pub enum Key {
     ToastSendingFilesMany,
     ToastCouldNotOpen,
     ToastCopied,
+    ToastCopyImageFailed,
     ToastStickerSaved,
     ToastSendingGif,
     ToastCouldNotRecord,
@@ -802,7 +804,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, for the completeness tests.
-    pub const ALL: [Key; 795] = [
+    pub const ALL: [Key; 797] = [
         Key::SettingsThemeDark,
         Key::SettingsThemeLight,
         Key::SettingsThemeSystem,
@@ -1262,6 +1264,7 @@ impl Key {
         Key::ChatReactWithEmoji,
         Key::ChatReply,
         Key::ChatCopyText,
+        Key::ChatCopyImage,
         Key::ChatSent,
         Key::ChatDeliveredAt,
         Key::ChatDelivered,
@@ -1291,6 +1294,7 @@ impl Key {
         Key::ToastSendingFilesMany,
         Key::ToastCouldNotOpen,
         Key::ToastCopied,
+        Key::ToastCopyImageFailed,
         Key::ToastStickerSaved,
         Key::ToastSendingGif,
         Key::ToastCouldNotRecord,
