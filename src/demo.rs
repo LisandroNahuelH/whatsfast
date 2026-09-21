@@ -2813,6 +2813,59 @@ mod tests {
     }
 
     #[test]
+    fn a_short_own_text_bubble_hugs_the_right() {
+        let mut app = app();
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        let chat = sample_ids()[0].to_owned();
+        let when = crate::util::now();
+        let conversation = app.conversations.get_mut(&chat).expect("chat");
+        conversation.messages.push(message(
+            &chat,
+            "you-long",
+            true,
+            when,
+            Content::text("Listened, agreed on all three points in writing."),
+        ));
+        conversation.messages.push(message(
+            &chat,
+            "you-md",
+            true,
+            when + 1,
+            Content::text(".md"),
+        ));
+        render(&mut app, &ctx);
+        render(&mut app, &ctx);
+        let short = ctx
+            .data(|data| {
+                data.get_temp::<egui::Rect>(
+                    crate::ui::conversation::bubble_id(&chat, "you-md").with("rect"),
+                )
+            })
+            .expect("the short bubble was drawn");
+        let long = ctx
+            .data(|data| {
+                data.get_temp::<egui::Rect>(
+                    crate::ui::conversation::bubble_id(&chat, "you-long").with("rect"),
+                )
+            })
+            .expect("the long bubble was drawn");
+        assert!(short.width() < 200.0, "{} wide", short.width());
+        assert!(
+            short.width() < long.width() * 0.55,
+            "short {} vs long {}",
+            short.width(),
+            long.width()
+        );
+        assert!(
+            (short.right() - long.right()).abs() < 8.0,
+            "own bubbles share the right edge: {} vs {}",
+            short.right(),
+            long.right()
+        );
+    }
+
+    #[test]
     fn muting_a_chat_takes_effect_at_once() {
         let mut app = app();
         let ctx = egui::Context::default();

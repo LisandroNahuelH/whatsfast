@@ -3583,11 +3583,19 @@ fn rich_body(
     };
     let laid = markup::layout(ui, text, &mentions, &style, width);
     let size = laid.galley.size();
+    // Galley::size().x is the wrap cap, not the ink. Use row widths so a
+    // short outgoing line sits on the right instead of filling 72%.
+    let widest = laid
+        .galley
+        .rows
+        .iter()
+        .map(|row| row.row.size.x)
+        .fold(0.0, f32::max);
     let last_row = laid.galley.rows.last().map_or(0.0, |row| row.row.size.x);
     let inline = reserve.filter(|reserve| last_row + 8.0 + reserve <= width);
     let mut allocation = match inline {
-        Some(reserve) => vec2(size.x.max(last_row + 8.0 + reserve), size.y),
-        None => size,
+        Some(reserve) => vec2(widest.max(last_row + 8.0 + reserve), size.y),
+        None => vec2(widest, size.y),
     };
     if let Some(span) = span {
         // Span the card width and keep the text left-aligned in own bubbles.
