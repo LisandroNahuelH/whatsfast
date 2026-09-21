@@ -873,6 +873,16 @@ pub fn titlebar_inset(ctx: &egui::Context) -> f32 {
     }
 }
 
+/// Client-drawn caption on Windows and Linux. Hidden in fullscreen.
+pub fn client_chrome(ctx: &egui::Context) -> bool {
+    !macos_chrome(ctx) && !ctx.input(|input| input.viewport().fullscreen.unwrap_or(false))
+}
+
+/// Height of the themed caption bar, in points.
+pub fn client_titlebar_height(ctx: &egui::Context) -> f32 {
+    if client_chrome(ctx) { 36.0 } else { 0.0 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -920,5 +930,20 @@ mod tests {
         );
         assert_eq!(medium(12.0).family, wght(12.0, 500.0).family);
         assert_eq!(bold(20.0).family, wght(20.0, 700.0).family);
+    }
+
+    #[test]
+    fn client_chrome_skips_macos_preview() {
+        let ctx = egui::Context::default();
+        if macos_chrome(&ctx) {
+            assert!(!client_chrome(&ctx));
+            assert_eq!(client_titlebar_height(&ctx), 0.0);
+        } else {
+            assert!(client_chrome(&ctx));
+            assert_eq!(client_titlebar_height(&ctx), 36.0);
+        }
+        preview_macos(&ctx);
+        assert!(!client_chrome(&ctx));
+        assert_eq!(client_titlebar_height(&ctx), 0.0);
     }
 }

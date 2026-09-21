@@ -1340,7 +1340,10 @@ mod tests {
         step_output(&mut app, &ctx, Vec::new(), 0.0, true);
         assert!(app.right_pane.is_none());
         // More is the rightmost 30px control; Search sits one slot left.
-        let search = pos2(1280.0 - 14.0 - 30.0 - 8.0 - 15.0, 8.0 + 22.0);
+        let search = pos2(
+            1280.0 - 14.0 - 30.0 - 8.0 - 15.0,
+            crate::theme::client_titlebar_height(&ctx) + 8.0 + 22.0,
+        );
         step_output(
             &mut app,
             &ctx,
@@ -1367,7 +1370,7 @@ mod tests {
         assert_eq!(app.page, Page::Chats);
         let search = pos2(
             1280.0 - app.settings.inspector_width - 14.0 - 30.0 - 8.0 - 15.0,
-            8.0 + 22.0,
+            crate::theme::client_titlebar_height(&ctx) + 8.0 + 22.0,
         );
         step_output(
             &mut app,

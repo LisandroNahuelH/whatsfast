@@ -1100,6 +1100,9 @@ pub enum Action {
     HideWindow,
     /// Applies the configured close-button behavior.
     CloseWindow,
+    MinimizeWindow,
+    ToggleMaximized,
+    ToggleFullscreen,
     /// Mutes until Unix time, indefinitely with `Some(0)`, or unmutes with `None`.
     SetMuted(ChatId, Option<i64>),
     /// Sends pending attachments with the composer text as caption.

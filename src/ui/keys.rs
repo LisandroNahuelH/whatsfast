@@ -33,6 +33,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
         key(Modifiers::COMMAND, Key::Comma, Action::Open(Page::Settings));
         key(Modifiers::COMMAND, Key::Q, Action::Quit);
         key(Modifiers::COMMAND, Key::W, Action::CloseWindow);
+        key(Modifiers::NONE, Key::F11, Action::ToggleFullscreen);
         key(
             Modifiers::COMMAND,
             Key::Slash,
@@ -133,7 +134,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
 }
 
 /// Shortcuts shown in the help dialog.
-pub fn shortcuts() -> [(&'static str, &'static str); 16] {
+pub fn shortcuts() -> [(&'static str, &'static str); 17] {
     [
         ("Ctrl+F / Ctrl+K", i18n::t(I18nKey::ShortcutSearchChats)),
         ("Ctrl+G", i18n::t(I18nKey::ShortcutSearchMessages)),
@@ -152,6 +153,7 @@ pub fn shortcuts() -> [(&'static str, &'static str); 16] {
         ("Ctrl++ / Ctrl+-", i18n::t(I18nKey::ShortcutZoom)),
         ("Ctrl+0", i18n::t(I18nKey::ShortcutResetZoom)),
         ("Ctrl+/", i18n::t(I18nKey::ShortcutThisList)),
+        ("F11", i18n::t(I18nKey::ShortcutFullscreen)),
         ("Ctrl+W", i18n::t(I18nKey::ShortcutCloseWindow)),
         ("Ctrl+Q", i18n::t(I18nKey::CommonQuit)),
     ]
@@ -339,5 +341,31 @@ mod tests {
         assert!(app.actions.is_empty());
         escape(&mut app, &ctx);
         assert!(matches!(app.actions.as_slice(), [Action::CloseRightPane]));
+    }
+
+    #[test]
+    fn f11_toggles_fullscreen() {
+        let root = tempfile::tempdir().unwrap();
+        let mut app = App::headless(
+            crate::paths::AppDirs::under(root.path()),
+            crate::settings::Settings::default(),
+        )
+        .0;
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key: Key::F11,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ui| handle(&mut app, ui.ctx()),
+        );
+        output.textures_delta.clear();
+        assert!(matches!(app.actions.as_slice(), [Action::ToggleFullscreen]));
     }
 }

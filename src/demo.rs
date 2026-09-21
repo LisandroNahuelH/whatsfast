@@ -2554,10 +2554,15 @@ mod tests {
             .iter()
             .map(|message| message.id.clone())
             .collect();
+        let view = app
+            .selection_view
+            .lock()
+            .expect("the view rect")
+            .expect("the conversation was drawn");
         let body_of = |ctx: &egui::Context, id: &str| {
             let key = crate::ui::conversation::bubble_id(&chat, id).with("body");
             ctx.data(|data| data.get_temp::<egui::Rect>(key))
-                .filter(|rect| screen.contains_rect(*rect))
+                .filter(|rect| screen.contains_rect(*rect) && view.contains(rect.center()))
         };
         let sweepable = |content: &crate::model::Content| -> Option<String> {
             match content {
@@ -2733,12 +2738,17 @@ mod tests {
             .iter()
             .map(|message| message.id.clone())
             .collect();
+        let view = app
+            .selection_view
+            .lock()
+            .expect("the view rect")
+            .expect("the conversation was drawn");
         let mut bodies: Vec<egui::Rect> = ids
             .iter()
             .filter_map(|id| {
                 let key = crate::ui::conversation::bubble_id(&chat, id).with("body");
                 ctx.data(|data| data.get_temp::<egui::Rect>(key))
-                    .filter(|rect| screen.contains_rect(*rect))
+                    .filter(|rect| screen.contains_rect(*rect) && view.contains(rect.center()))
             })
             .collect();
         bodies.sort_by(|a, b| a.top().total_cmp(&b.top()));

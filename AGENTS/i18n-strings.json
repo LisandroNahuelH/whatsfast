@@ -911,6 +911,26 @@
       "es": "Cerrar la ventana (WhatsFast queda en la bandeja)"
     },
     {
+      "key": "ShortcutFullscreen",
+      "en": "Full screen",
+      "es": "Pantalla completa"
+    },
+    {
+      "key": "WindowMinimize",
+      "en": "Minimize",
+      "es": "Minimizar"
+    },
+    {
+      "key": "WindowMaximize",
+      "en": "Maximize",
+      "es": "Maximizar"
+    },
+    {
+      "key": "WindowRestore",
+      "en": "Restore",
+      "es": "Restaurar"
+    },
+    {
       "key": "LoginTagline",
       "en": "A native WhatsApp client.",
       "es": "Un cliente de WhatsApp nativo."

@@ -336,7 +336,7 @@ fn demo_size_arg() -> Option<[f32; 2]> {
 fn native_options(demo_persistence: Option<std::path::PathBuf>) -> eframe::NativeOptions {
     let demo_size = demo_size_arg().unwrap_or([1180.0, 780.0]);
     let demo = demo_persistence.is_some();
-    let viewport = egui::ViewportBuilder::default()
+    let mut viewport = egui::ViewportBuilder::default()
         .with_title(if demo { "WhatsFast Demo" } else { "WhatsFast" })
         .with_app_id(if demo {
             "whatsfast-demo".to_owned()
@@ -350,6 +350,11 @@ fn native_options(demo_persistence: Option<std::path::PathBuf>) -> eframe::Nativ
         .with_fullsize_content_view(true)
         .with_titlebar_shown(false)
         .with_title_shown(false);
+    // Windows and Linux paint a themed caption. macOS keeps traffic lights.
+    #[cfg(not(target_os = "macos"))]
+    {
+        viewport = viewport.with_decorations(false);
+    }
     eframe::NativeOptions {
         viewport,
         persistence_path: demo_persistence,

@@ -3333,6 +3333,15 @@ impl App {
             }
             // Route through the configured window-close behavior.
             Action::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Action::MinimizeWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            Action::ToggleMaximized => {
+                let maximized = ctx.input(|input| input.viewport().maximized.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+            }
+            Action::ToggleFullscreen => {
+                let fullscreen = ctx.input(|input| input.viewport().fullscreen.unwrap_or(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fullscreen));
+            }
         }
     }
 

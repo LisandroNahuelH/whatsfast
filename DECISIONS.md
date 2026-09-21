@@ -4,6 +4,8 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Windows and Linux use a client-drawn caption | Native min/max/close ignore the app palette and Lucide | `titlebar_shown(false)` with OS decorations still on |
+| 2026-09-20 | F11 toggles viewport fullscreen | Same shortcut as other desktop apps; Esc still dismisses UI | No fullscreen key |
 | 2026-09-20 | Opening a chat reloads the newest archive page | History files rows without `Event::Messages`; `requested` skipped a second `LoadChat` | One `LoadChat` per process lifetime |
 | 2026-09-20 | `put_lid` moves message rows onto the phone-number chat | Mute/pin copy left bodies on `{lid}@lid`, so the named chat missed phone copies | Mapping prefs only |
 | 2026-09-20 | Ingest peels nested `device_sent` / ephemeral wrappers | `get_base_message` peels each kind once; phone copies nest the other way and `classify` dropped them | Single `get_base_message` peel |

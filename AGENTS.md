@@ -43,13 +43,13 @@ When the user asks to start the watcher, auto-build, live rebuild, or
 leave this running (do not wait for it to exit):
 
 ```sh
-cargo watch -d 15 -w src -w Cargo.toml -w build.rs -w assets -s "cargo build & taskkill /IM whatsfast.exe /F 2>nul & cargo run"
+cargo watch -d 30 -w src -w Cargo.toml -w build.rs -w assets -s "cargo build & taskkill /IM whatsfast.exe /F 2>nul & cargo run"
 ```
 
 Watch only crate inputs. Docs, `AGENTS/`, and other noise must not restart
-a compile before the linker writes `target/debug/whatsfast.exe`. `-d 15`
-waits 15 seconds after the last crate-input change so a mid-link restart
-does not spin. Compile first while the app stays open. Kill
+a compile before the linker writes `target/debug/whatsfast.exe`. `-d 30`
+waits 30 seconds after the last crate-input change so a mid-edit or
+interrupted watch does not spin. Compile first while the app stays open. Kill
 `whatsfast.exe` only after that `cargo build`, so the linker can replace
 the file, then `cargo run` starts the new copy. If the watch aborts
 during `cargo build`, `taskkill` does not run. If
@@ -226,7 +226,9 @@ Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
   copy is still open. `src/notify.rs` sends desktop notifications
   for `Event::Incoming` (live messages from others, not history) when the
   reader is away from that chat. macOS has no title bar: the content runs
-  to the top. `src/macos.rs` keeps native application menus alive across window
+  to the top. Windows and Linux use `with_decorations(false)` and a 36 px
+  themed caption (`theme::client_chrome`); F11 toggles fullscreen and hides
+  that bar. `src/macos.rs` keeps native application menus alive across window
   recreation and aligns traffic lights with the chat header. Linking retains
   `ui::titlebar_strip`; other headers reserve horizontal space for the buttons.
 - Group delivery uses `archive::receipts`: save the recipients when filing an

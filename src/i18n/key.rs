@@ -185,6 +185,10 @@ pub enum Key {
     ShortcutResetZoom,
     ShortcutThisList,
     ShortcutCloseWindow,
+    ShortcutFullscreen,
+    WindowMinimize,
+    WindowMaximize,
+    WindowRestore,
     LoginTagline,
     LoginConnecting,
     LoginLinkedWaiting,
@@ -798,7 +802,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, for the completeness tests.
-    pub const ALL: [Key; 791] = [
+    pub const ALL: [Key; 795] = [
         Key::SettingsThemeDark,
         Key::SettingsThemeLight,
         Key::SettingsThemeSystem,
@@ -981,6 +985,10 @@ impl Key {
         Key::ShortcutResetZoom,
         Key::ShortcutThisList,
         Key::ShortcutCloseWindow,
+        Key::ShortcutFullscreen,
+        Key::WindowMinimize,
+        Key::WindowMaximize,
+        Key::WindowRestore,
         Key::LoginTagline,
         Key::LoginConnecting,
         Key::LoginLinkedWaiting,

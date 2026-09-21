@@ -15,7 +15,7 @@ pub mod viewer;
 pub mod wallpaper;
 pub mod widgets;
 
-use egui::{Align2, CornerRadius, Frame, Margin, Stroke, vec2};
+use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, Sense, Stroke, vec2};
 
 use crate::app::App;
 use crate::backend::LinkStatus;
@@ -239,32 +239,146 @@ fn toasts(app: &mut App, ctx: &egui::Context) {
         });
 }
 
-/// Draggable space for the macOS traffic-light title bar.
-fn titlebar_strip(app: &App, ui: &mut egui::Ui) {
-    if app.is_linked() {
+/// macOS traffic-light inset while linking, or the themed caption on other OS.
+fn titlebar_strip(app: &mut App, ui: &mut egui::Ui) {
+    let ctx = ui.ctx();
+    let client = theme::client_chrome(ctx);
+    let macos_inset = theme::titlebar_inset(ctx);
+    if !client && (app.is_linked() || macos_inset == 0.0) {
         return;
     }
-    let inset = theme::titlebar_inset(ui.ctx());
-    if inset == 0.0 {
-        return;
-    }
+    let height = if client {
+        theme::client_titlebar_height(ctx)
+    } else {
+        macos_inset
+    };
     let fill = if app.is_linked() {
         app.palette.panel
     } else {
         app.palette.window
     };
     egui::Panel::top("titlebar")
-        .exact_size(inset)
+        .exact_size(height)
         .show_separator_line(false)
         .frame(Frame::new().fill(fill))
         .show(ui, |ui| {
-            let rect = ui.max_rect();
-            titlebar_drag(ui, rect);
+            if client {
+                client_caption(app, ui);
+            } else {
+                titlebar_drag(ui, ui.max_rect());
+            }
         });
 }
 
+const CAPTION_BTN: f32 = 46.0;
+
+fn client_caption(app: &mut App, ui: &mut egui::Ui) {
+    let palette = app.palette;
+    let full = ui.max_rect();
+    let buttons = egui::Rect::from_min_max(
+        egui::pos2(full.max.x - CAPTION_BTN * 3.0, full.min.y),
+        full.max,
+    );
+    let drag = egui::Rect::from_min_max(full.min, egui::pos2(buttons.min.x, full.max.y));
+
+    let mut btn_ui = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(buttons)
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
+    if caption_button(
+        &mut btn_ui,
+        Icon::X,
+        palette,
+        true,
+        i18n::t(Key::CommonClose),
+    ) {
+        app.actions.push(Action::CloseWindow);
+    }
+    if caption_button(
+        &mut btn_ui,
+        if maximized {
+            Icon::Copy
+        } else {
+            Icon::Maximize
+        },
+        palette,
+        false,
+        i18n::t(if maximized {
+            Key::WindowRestore
+        } else {
+            Key::WindowMaximize
+        }),
+    ) {
+        app.actions.push(Action::ToggleMaximized);
+    }
+    if caption_button(
+        &mut btn_ui,
+        Icon::Minus,
+        palette,
+        false,
+        i18n::t(Key::WindowMinimize),
+    ) {
+        app.actions.push(Action::MinimizeWindow);
+    }
+
+    let mut brand = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(drag)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    brand.add_space(10.0);
+    let (logo_rect, _) = brand.allocate_exact_size(vec2(20.0, 20.0), Sense::hover());
+    theme::logo(
+        &brand,
+        logo_rect.center(),
+        18.0,
+        theme::MARK,
+        Color32::WHITE,
+    );
+    brand.add_space(8.0);
+    let galley =
+        brand
+            .painter()
+            .layout_no_wrap("WhatsFast".to_owned(), theme::medium(13.0), palette.text);
+    let (text_rect, _) = brand.allocate_exact_size(galley.size(), Sense::hover());
+    brand.painter().galley(text_rect.min, galley, palette.text);
+
+    let response = titlebar_drag(ui, drag);
+    if response.double_clicked() {
+        app.actions.push(Action::ToggleMaximized);
+    }
+}
+
+fn caption_button(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    palette: theme::Palette,
+    close: bool,
+    tooltip: &str,
+) -> bool {
+    let size = vec2(CAPTION_BTN, ui.max_rect().height());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    if ui.is_rect_visible(rect) && response.hovered() {
+        let fill = if close {
+            palette.danger
+        } else {
+            palette.surface_hover
+        };
+        ui.painter().rect_filled(rect, 0.0, fill);
+    }
+    let tint = if close && response.hovered() {
+        Color32::WHITE
+    } else {
+        palette.text
+    };
+    theme::paint_icon(ui, icon, rect, 16.0, tint);
+    response.on_hover_text(tooltip).clicked()
+}
+
 /// Makes `rect` drag the window.
-pub fn titlebar_drag(ui: &mut egui::Ui, rect: egui::Rect) {
+pub fn titlebar_drag(ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
     let response = ui.interact(
         rect,
         ui.id().with("titlebar-drag"),
@@ -274,6 +388,7 @@ pub fn titlebar_drag(ui: &mut egui::Ui, rect: egui::Rect) {
     if response.is_pointer_button_down_on() && ui.input(|input| input.pointer.primary_pressed()) {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
+    response
 }
 
 /// Header for pages without a conversation toolbar and with the sidebar hidden.
