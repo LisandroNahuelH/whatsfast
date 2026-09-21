@@ -880,7 +880,7 @@ pub fn client_chrome(ctx: &egui::Context) -> bool {
 
 /// Height of the themed caption bar, in points.
 pub fn client_titlebar_height(ctx: &egui::Context) -> f32 {
-    if client_chrome(ctx) { 36.0 } else { 0.0 }
+    if client_chrome(ctx) { 27.0 } else { 0.0 }
 }
 
 #[cfg(test)]
@@ -940,7 +940,7 @@ mod tests {
             assert_eq!(client_titlebar_height(&ctx), 0.0);
         } else {
             assert!(client_chrome(&ctx));
-            assert_eq!(client_titlebar_height(&ctx), 36.0);
+            assert_eq!(client_titlebar_height(&ctx), 27.0);
         }
         preview_macos(&ctx);
         assert!(!client_chrome(&ctx));

@@ -1209,7 +1209,12 @@ mod tests {
         // time row, so numbers elsewhere on the screen do not count.
         let days: Vec<Pos2> = numbers
             .iter()
-            .filter(|(_, pos)| pos.y > month.y + 10.0 && pos.y < time.y)
+            .filter(|(_, pos)| {
+                pos.y > month.y + 10.0
+                    && pos.y < time.y
+                    && pos.x >= time.x - 24.0
+                    && pos.x <= time.x + crate::ui::schedule::WIDTH
+            })
             .map(|(_, pos)| *pos)
             .collect();
         assert!(days.len() >= 28, "a month shows its days");

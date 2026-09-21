@@ -329,15 +329,16 @@ fn client_caption(app: &mut App, ui: &mut egui::Ui) {
             .layout(Layout::left_to_right(Align::Center)),
     );
     brand.add_space(10.0);
-    let (logo_rect, _) = brand.allocate_exact_size(vec2(20.0, 20.0), Sense::hover());
+    let mark = 19.8;
+    let (logo_rect, _) = brand.allocate_exact_size(vec2(mark, mark), Sense::hover());
     theme::logo(
         &brand,
         logo_rect.center(),
-        18.0,
+        mark,
         theme::MARK,
         Color32::WHITE,
     );
-    brand.add_space(8.0);
+    brand.add_space(2.0);
     let galley =
         brand
             .painter()
@@ -373,7 +374,7 @@ fn caption_button(
     } else {
         palette.text
     };
-    theme::paint_icon(ui, icon, rect, 16.0, tint);
+    theme::paint_icon(ui, icon, rect, 12.0, tint);
     response.on_hover_text(tooltip).clicked()
 }
 

@@ -18,7 +18,7 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 
 - **`src/ui/`** — egui views; emit `model::Action`; no direct archive access.
   On Windows and Linux the viewport has no OS decorations. `titlebar_strip`
-  paints a 36 px themed caption (`theme::client_chrome`) with Lucide min/max/close
+  paints a 27 px themed caption (`theme::client_chrome`) with Lucide min/max/close
   and `ViewportCommand` drag, minimize, maximize, and close. `F11` sends
   `ToggleFullscreen` and hides that bar. macOS keeps native traffic lights.
   The open chat paints a bundled doodle wallpaper behind the bubbles, scaled

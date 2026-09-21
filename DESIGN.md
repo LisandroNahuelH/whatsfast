@@ -10,7 +10,7 @@ Source artwork: [packaging/icons/whatsfast-1024.png](packaging/icons/whatsfast-1
 
 Interface text is Montserrat Variable (`wght` 100–900). Size and weight pick the face; there is no `wdth` axis. Scale: display 28/700 (login brand), page 24/700 (Settings), heading 20/700 (chat-list headers), section 17/700, chat name 14.5/500, body 14/400, meta 12.5, caption 11.5. Reason: one variable file covers titles and body without a second family.
 
-The Windows and Linux caption is a 36 px client bar: `palette.panel` when linked, `palette.window` on login, Montserrat medium 13 for the brand, Lucide Minus / Maximize (Copy when restored) / X. Close hover uses `danger`. The bar hides in full screen. macOS keeps traffic lights. Reason: the native Windows caption ignores the selected theme.
+The Windows and Linux caption is a 27 px client bar: `palette.panel` when linked, `palette.window` on login, Montserrat medium 13 for the brand, Lucide Minus / Maximize (Copy when restored) / X. Close hover uses `danger`. The bar hides in full screen. macOS keeps traffic lights. Reason: the native Windows caption ignores the selected theme.
 
 The empty message composer is 35% taller than one text line, the caret fills that band, and typed letters sit on the vertical center of that band with attach, emoji, send, and schedule. The bubble keeps 20% more space above the window's bottom edge than the old 8px inset. Reason: a tight one-line field against the window reads cheap; extra air does not change send keys.
 

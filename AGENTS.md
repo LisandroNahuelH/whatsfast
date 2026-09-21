@@ -226,7 +226,7 @@ Layers and remotes: [ARCHITECTURE.md](ARCHITECTURE.md). Key invariants below.
   copy is still open. `src/notify.rs` sends desktop notifications
   for `Event::Incoming` (live messages from others, not history) when the
   reader is away from that chat. macOS has no title bar: the content runs
-  to the top. Windows and Linux use `with_decorations(false)` and a 36 px
+  to the top. Windows and Linux use `with_decorations(false)` and a 27 px
   themed caption (`theme::client_chrome`); F11 toggles fullscreen and hides
   that bar. `src/macos.rs` keeps native application menus alive across window
   recreation and aligns traffic lights with the chat header. Linking retains
