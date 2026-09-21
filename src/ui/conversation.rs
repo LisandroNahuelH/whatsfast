@@ -2457,7 +2457,9 @@ fn bubble_frame(
             // no more than the cap. Text spans that width and stays left-aligned.
             // Bubbles without cards use the natural text width.
             let cap = ((max_width - 20.0).min(ui.available_width())).max(0.0);
-            let reserve = footer_width(ui, message);
+            let starred = view.starred.is_some_and(|ids| ids.contains(&message.id));
+            let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
+            let reserve = footer_width(ui, message, starred, pinned, view.keep_revoked);
             let slot = match settled_width(ui, view, message, cap) {
                 Some(width) => {
                     if let Some(quoted) = &message.quoted {
@@ -2472,8 +2474,8 @@ fn bubble_frame(
                 &palette,
                 message,
                 slot,
-                view.starred.is_some_and(|ids| ids.contains(&message.id)),
-                view.pins.is_some_and(|ids| ids.contains(&message.id)),
+                starred,
+                pinned,
                 view.keep_revoked,
             );
         });
@@ -2594,7 +2596,9 @@ fn natural_text_width(ui: &egui::Ui, view: &View<'_>, message: &Message, cap: f3
         .map(|row| row.row.size.x)
         .fold(0.0, f32::max);
     let last = laid.galley.rows.last().map_or(0.0, |row| row.row.size.x);
-    let reserve = footer_width(ui, message);
+    let starred = view.starred.is_some_and(|ids| ids.contains(&message.id));
+    let pinned = view.pins.is_some_and(|ids| ids.contains(&message.id));
+    let reserve = footer_width(ui, message, starred, pinned, view.keep_revoked);
     Some(if last + 8.0 + reserve <= cap {
         widest.max(last + 8.0 + reserve)
     } else {
@@ -2695,11 +2699,17 @@ fn mirrored_row(
 const FOOTER_MARK: f32 = 13.0;
 /// One gap: time to the nearest mark, and between pin and star.
 const FOOTER_MARK_GAP: f32 = 8.0;
-/// Room one mark keeps, so showing it does not change the bubble's width.
+/// Room one visible mark keeps next to the clock.
 const FOOTER_MARK_SLOT: f32 = FOOTER_MARK + FOOTER_MARK_GAP;
 
-/// Width of the message footer.
-fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
+/// Width of the message footer: clock, ticks, and marks that are on the bubble.
+fn footer_width(
+    ui: &egui::Ui,
+    message: &Message,
+    starred: bool,
+    pinned: bool,
+    keep_revoked: bool,
+) -> f32 {
     let font = theme::regular(11.0);
     let time = ui
         .painter()
@@ -2723,7 +2733,10 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
     } else {
         0.0
     };
-    time + edited + if message.from_me { 19.0 } else { 0.0 } + FOOTER_MARK_SLOT * 3.0
+    let marks = (starred as u8
+        + pinned as u8
+        + u8::from(keep_revoked && message.revoked_at.is_some())) as f32;
+    time + edited + if message.from_me { 19.0 } else { 0.0 } + marks * FOOTER_MARK_SLOT
 }
 
 const FOOTER_STAR: Color32 = Color32::from_rgb(0xEA, 0xB3, 0x08);
@@ -4745,9 +4758,10 @@ mod tests {
     }
 
     #[test]
-    fn the_footer_reserves_room_for_the_star_mark() {
+    fn the_footer_only_reserves_marks_that_are_on_the_bubble() {
         let ctx = egui::Context::default();
         let mut incoming = 0.0;
+        let mut starred = 0.0;
         let mut own = 0.0;
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -4757,18 +4771,23 @@ mod tests {
             |ui| {
                 let from_them = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, false);
                 let from_me = crate::archive::tests::message("1@s.whatsapp.net", "m1", 0, true);
-                incoming = footer_width(ui, &from_them);
-                own = footer_width(ui, &from_me);
+                incoming = footer_width(ui, &from_them, false, false, false);
+                starred = footer_width(ui, &from_them, true, false, false);
+                own = footer_width(ui, &from_me, false, false, false);
             },
         );
         output.textures_delta.clear();
         assert!(
-            incoming >= FOOTER_MARK_SLOT * 3.0,
-            "the footer keeps room for the star, pin, and trash marks before they appear"
+            incoming < 40.0,
+            "a plain incoming footer is just the clock, got {incoming}"
         );
         assert!(
-            own > incoming,
-            "our own messages also keep room for the delivery ticks"
+            (starred - incoming - FOOTER_MARK_SLOT).abs() < 0.5,
+            "a star adds one mark slot, {starred} vs {incoming}"
+        );
+        assert!(
+            (own - incoming - 19.0).abs() < 0.5,
+            "our own messages add the delivery ticks, {own} vs {incoming}"
         );
     }
 

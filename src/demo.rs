@@ -2871,6 +2871,13 @@ mod tests {
             when + 1,
             Content::text(".md"),
         ));
+        conversation.messages.push(message(
+            &chat,
+            "them-line",
+            false,
+            when + 2,
+            Content::text("Si perame nomás k después te paso"),
+        ));
         render(&mut app, &ctx);
         render(&mut app, &ctx);
         let short = ctx
@@ -2899,6 +2906,53 @@ mod tests {
             "own bubbles share the right edge: {} vs {}",
             short.right(),
             long.right()
+        );
+        let incoming = ctx
+            .data(|data| {
+                data.get_temp::<egui::Rect>(
+                    crate::ui::conversation::bubble_id(&chat, "them-line").with("rect"),
+                )
+            })
+            .expect("the incoming bubble was drawn");
+        let body = ctx
+            .data(|data| {
+                data.get_temp::<egui::Rect>(
+                    crate::ui::conversation::bubble_id(&chat, "them-line").with("body"),
+                )
+            })
+            .expect("the incoming body was drawn");
+        let ink = ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(
+                    "Si perame nomás k después te paso".to_owned(),
+                    crate::theme::regular(14.5),
+                    app.palette.text,
+                )
+                .size()
+                .x
+        });
+        let clock = ctx.fonts_mut(|fonts| {
+            fonts
+                .layout_no_wrap(
+                    crate::util::clock(when + 2),
+                    crate::theme::regular(11.0),
+                    app.palette.secondary,
+                )
+                .size()
+                .x
+        });
+        assert!(
+            (incoming.width() - body.width() - 20.0).abs() < 4.0,
+            "incoming bubble is ink plus margins, bubble {} body {}",
+            incoming.width(),
+            body.width()
+        );
+        assert!(
+            body.width() <= ink + 8.0 + clock + 2.0,
+            "incoming last line does not keep empty star slots, body {} ink {} clock {}",
+            body.width(),
+            ink,
+            clock
         );
     }
 
