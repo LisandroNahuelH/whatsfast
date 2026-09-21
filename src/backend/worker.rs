@@ -7752,14 +7752,25 @@ mod receipt_tests {
             .collect()
     }
 
-    #[tokio::test]
-    async fn forgetting_a_session_deletes_every_file_of_it() {
-        let (worker, _events, _inbox, _wa) = worker();
+    /// A worker whose session database lives in its own directory, with the
+    /// four files written. The shared `worker()` root is one path for the whole
+    /// test process, so two session tests writing and wiping there would race
+    /// each other's assertions.
+    fn worker_with_session() -> (Worker, tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let (mut worker, _events, _inbox, _wa) = worker();
+        worker.dirs = AppDirs::under(dir.path());
         let session = worker.dirs.session_db();
         std::fs::create_dir_all(session.parent().expect("parent")).expect("dir");
         for path in session_files(&session) {
             std::fs::write(&path, b"credentials").expect("write");
         }
+        (worker, dir, session)
+    }
+
+    #[tokio::test]
+    async fn forgetting_a_session_deletes_every_file_of_it() {
+        let (worker, _dir, session) = worker_with_session();
 
         worker.forget_session().await;
 
@@ -7774,12 +7785,7 @@ mod receipt_tests {
     /// start to resume and be logged out for again.
     #[tokio::test]
     async fn forgetting_a_session_waits_for_the_handle_that_outlives_it() {
-        let (worker, _events, _inbox, _wa) = worker();
-        let session = worker.dirs.session_db();
-        std::fs::create_dir_all(session.parent().expect("parent")).expect("dir");
-        for path in session_files(&session) {
-            std::fs::write(&path, b"credentials").expect("write");
-        }
+        let (worker, _dir, session) = worker_with_session();
         let held = std::fs::File::open(&session).expect("the file opens");
         let release = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
