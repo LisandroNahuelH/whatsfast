@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-21 | Viewer strip scrollbar handle uses foreground ink | `extreme_bg_color` and widget `bg_fill` are both `palette.surface`, so a fill handle vanished on the rail | `foreground_color = false` on the solid strip bar |
 | 2026-09-21 | Viewer filmstrip uses a solid scrollbar under the thumbs | The app's floating bars sat on the thumbnails | `ScrollStyle::floating` on the strip |
 | 2026-09-20 | A pinned message under the header is one plain line, never a chip | A rounded chip capped the text at 160 px and read as a second row of bubbles; the message's own words, cut with an ellipsis, belong in the banner | Rounded surface chips side by side |
 | 2026-09-20 | Recording controls pack on the right of the composer | Eyes stay on Send; a full-width wave splits the glance | Flex the live bars across leftover composer width |
