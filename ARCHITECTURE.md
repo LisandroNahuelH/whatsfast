@@ -102,7 +102,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   bubble menu, the media viewer, and the same footer mark as a star. A live
   or history `REVOKE` writes `messages.revoked_at` and leaves `content`.
   Local Delete for everyone still stores `Content::Revoked`. `chat_media()` lists
-  Image and non-GIF Video rows for the viewer strip.
+  Image and non-GIF Video rows, and Document rows that are those files, for
+  the viewer strip.
   Composer drafts live in `drafts` (chat, text, mentions, reply_to). The UI
   writes `Command::SetDraft` at most every 300 ms and on leave; `Event::Drafts`
   restores them at start. `put_lid` moves the row onto the phone-number chat.
