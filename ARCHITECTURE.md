@@ -36,7 +36,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   Search and Ctrl+G open it; Ctrl+F stays on the left list. The day filter is
   an `Area` popup under the calendar icon, centered on it. Closing the chat
   closes the pane.
-- **`src/app.rs`** — Applies actions after each frame. A verified GitHub update
+- **`src/app.rs`** — Applies actions after each frame. Opening a chat always
+  sends `LoadChat` for the newest archive page. A verified GitHub update
   in `.whatsfast-pending` is adopted here on process start (not in demos).
   Quit while the payload is Ready starts the helper; closing to the tray does
   not. Ctrl+V image paste reads `Event::Paste` or V-release (egui-winit drops
@@ -48,7 +49,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   auto-download is on.
 - **`src/backend.rs` / `src/backend/worker.rs`** — Tokio worker thread; owns
   whatsapp-rust `Bot`, archive, downloads, profile pictures. Talks to UI via
-  `Command` and `Event`. Serial `Command::Forward` keeps a queue and starts
+  `Command` and `Event`. Ingest and history peel nested `device_sent` /
+  ephemeral / view-once wrappers before `classify()`, so copies sent from
+  the phone are stored. Serial `Command::Forward` keeps a queue and starts
   the next send only after `Command::Sent` writes `Delivery::Sent` (first
   tick) or `Failed`; parallel batches still use `forward_batch`. Background
   history prefetch asks the phone one page at a time and downloads files
@@ -74,7 +77,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
 - **`src/privacy.rs`** — Account privacy kinds, values, Except lists, and the
   in-memory snapshot the Settings page shows.
 - **`src/archive.rs`** — SQLite (SQLCipher) message store; single copy after
-  link-time history sync. `chats.marked_unread` is a local empty-dot reminder;
+  link-time history sync. `put_lid` copies mute/pin and refiles message
+  rows from `{lid}@lid` onto `{pn}@s.whatsapp.net`. `chats.marked_unread` is a local empty-dot reminder;
   real `unread` counts still come from the phone. Opening the chat or a new
   incoming message clears the flag. `chats.favorite` and the `chat_lists` /
   `chat_list_members` / `chat_list_pins` tables are local list filters. Pins

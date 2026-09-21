@@ -4,6 +4,9 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Opening a chat reloads the newest archive page | History files rows without `Event::Messages`; `requested` skipped a second `LoadChat` | One `LoadChat` per process lifetime |
+| 2026-09-20 | `put_lid` moves message rows onto the phone-number chat | Mute/pin copy left bodies on `{lid}@lid`, so the named chat missed phone copies | Mapping prefs only |
+| 2026-09-20 | Ingest peels nested `device_sent` / ephemeral wrappers | `get_base_message` peels each kind once; phone copies nest the other way and `classify` dropped them | Single `get_base_message` peel |
 | 2026-09-20 | Bubble-footer pin mark is black | Dark green `#166534` blended into outgoing bubbles | Filled pin in dark green |
 | 2026-09-20 | Incoming REVOKE stores `revoked_at` and keeps `content` | Recover the body on this copy; Settings can still paint the deleted placeholder | `set_content(Revoked)`, which destroyed the JSON body |
 | 2026-09-20 | Selection-bar Delete is delete-for-me for every picked row | Mixed incoming and outgoing picks cannot all revoke; the bubble menu still has both items | No batch delete on the bar |
