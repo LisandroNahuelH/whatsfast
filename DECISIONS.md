@@ -2,6 +2,7 @@
 
 Append-only, newest first.
 
+| 2026-09-20 | Recording controls pack on the right of the composer | Eyes stay on Send; a full-width wave splits the glance | Flex the live bars across leftover composer width |
 | 2026-09-20 | Photo and video files join the in-app viewer album | An MP4 sent as a document is still a video; opening it in the OS split the album | `Content::Document` always used the system handler |
 | 2026-09-20 | A client started with no paired identity reports pairing (`Unlinked`), never `Connecting` | `Connecting` means a linked session is resuming; after an unlink the restarted client was showing the chat shell with an empty list while it asked for a QR code | Every start reading as a linked session |
 | 2026-09-20 | Unlinking announces `LoggedOut` first, then tears down, and deletes the session store with brief retries | The window must reach the login screen at once, and Windows refuses to delete a file the outgoing client's SQLite pool still holds; a survivor is resumed and rejected in a logout loop | Teardown first, one silent delete attempt |
