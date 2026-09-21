@@ -1207,11 +1207,14 @@ impl App {
                     if older && !messages.is_empty() {
                         conversation.phone_delivered = true;
                     }
+                    let page_len = messages.len();
                     conversation.merge(messages, older);
                     if older {
                         conversation.loading_older = false;
                         conversation.complete = complete;
-                    } else if was_empty {
+                    } else if was_empty || complete || page_len != 1 {
+                        // LoadChat first pages carry a real complete flag.
+                        // Live ingest sends one row with complete: false.
                         conversation.complete = complete;
                     }
                     // Request phone history when sync created a chat without messages.
@@ -1635,13 +1638,11 @@ impl App {
 
     fn ensure_loaded(&mut self, chat: &str) {
         let conversation = self.conversations.entry(chat.to_owned()).or_default();
-        if !conversation.requested {
-            conversation.requested = true;
-            self.backend.send(Command::LoadChat {
-                chat: chat.to_owned(),
-                before: None,
-            });
-        }
+        conversation.requested = true;
+        self.backend.send(Command::LoadChat {
+            chat: chat.to_owned(),
+            before: None,
+        });
     }
 
     pub fn load_older(&mut self, chat: &str) {
@@ -4418,6 +4419,107 @@ mod tests {
         assert_eq!(ids, vec!["a", "b", "c"]);
         conversation.merge(vec![message("c", "c", 3)], false);
         assert_eq!(conversation.messages.len(), 3);
+    }
+
+    #[test]
+    fn opening_a_chat_again_reloads_the_archive_page() {
+        let mut app = app();
+        let (backend, mut commands) = Backend::recording();
+        app.backend = backend;
+        let chat = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(chat.into(), "Ada".into()));
+        app.conversations.insert(
+            chat.into(),
+            Conversation {
+                requested: true,
+                complete: true,
+                messages: vec![message(chat, "old", 10)],
+                ..Default::default()
+            },
+        );
+        let ctx = egui::Context::default();
+        app.apply(Action::OpenChat(chat.into()), &ctx);
+        let mut saw_load = false;
+        while let Ok(command) = commands.try_recv() {
+            if matches!(
+                command,
+                Command::LoadChat {
+                    chat: ref id,
+                    before: None
+                } if id == chat
+            ) {
+                saw_load = true;
+            }
+        }
+        assert!(saw_load, "re-opening must LoadChat even when requested");
+    }
+
+    #[test]
+    fn a_first_page_reload_updates_complete_without_live_ingest_clearing_it() {
+        let root = std::env::temp_dir().join(format!(
+            "whatsfast-complete-{}-{}",
+            std::process::id(),
+            "reload"
+        ));
+        let (mut app, events) = App::headless(AppDirs::under(&root), Settings::default());
+        let ctx = egui::Context::default();
+        let chat = "1@s.whatsapp.net";
+        events
+            .send(Event::Messages {
+                chat: chat.into(),
+                messages: vec![message(chat, "a", 1)],
+                older: false,
+                complete: true,
+            })
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(app.conversations.get(chat).unwrap().complete);
+        let page: Vec<_> = (0..60)
+            .map(|i| message(chat, &format!("m{i}"), i as i64))
+            .collect();
+        events
+            .send(Event::Messages {
+                chat: chat.into(),
+                messages: page,
+                older: false,
+                complete: false,
+            })
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(!app.conversations.get(chat).unwrap().complete);
+        events
+            .send(Event::Messages {
+                chat: chat.into(),
+                messages: vec![message(chat, "live", 61)],
+                older: false,
+                complete: false,
+            })
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(
+            !app.conversations.get(chat).unwrap().complete,
+            "live ingest must not flip complete"
+        );
+        events
+            .send(Event::Messages {
+                chat: chat.into(),
+                messages: vec![message(chat, "only", 1)],
+                older: false,
+                complete: true,
+            })
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(app.conversations.get(chat).unwrap().complete);
+        events
+            .send(Event::Messages {
+                chat: chat.into(),
+                messages: vec![message(chat, "newer", 2)],
+                older: false,
+                complete: false,
+            })
+            .unwrap();
+        app.background_frame(&ctx);
+        assert!(app.conversations.get(chat).unwrap().complete);
     }
 
     #[test]
