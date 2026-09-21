@@ -189,7 +189,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### In-app media viewer with gallery and actions
 
-- **Technical:** Clicking a photo or video in a chat opens a full-window viewer. The same path opens an MP4 or similar file sent as a document. The header shows the chat and actions (zoom, go to the message, reply, star, pin, react, forward, download, close). A filmstrip along the bottom lists every image and video in that chat from the archive, oldest first, including those files. Arrow keys and chevrons step through that list, including items still downloading. Stickers and GIFs keep the click on the message row. **Open file** in the bubble menu still uses the system handler.
+- **Technical:** Clicking a photo or video in a chat opens a full-window viewer. The same path opens an MP4 or similar file sent as a document. The header shows the chat and actions (zoom, go to the message, reply, star, pin, react, forward, download, close). A filmstrip along the bottom lists every image and video in that chat from the archive, oldest first, including those files. The thumbs sit above the strip scrollbar. Arrow keys and chevrons step through that list, including items still downloading. Stickers and GIFs keep the click on the message row. **Open file** in the bubble menu still uses the system handler.
 - **Daily use:** You can walk a whole album without leaving WhatsFast, zoom a screenshot, reply or pin from the photo, and jump back to the message in the thread.
 
 </td>
