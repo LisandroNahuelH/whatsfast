@@ -72,6 +72,14 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   is set and `me` is dropped from `participants`. Archive is optional.
   Leaving a channel (`@newsletter`) uses `Client::newsletter().leave`. Lists
   (`@broadcast`) have no leave path.
+  Unlinking (from the phone or Settings) announces `LinkStatus::LoggedOut`
+  before the teardown, deletes the session store with retries (Windows keeps
+  that file open until the outgoing client's connection pool closes), and
+  starts a fresh client. A start whose store carries no identity reports
+  pairing (`LinkStatus::Unlinked`, then the QR) rather than `Connecting`, so
+  the window leaves the chat shell for the login screen and never paints a
+  linked-looking shell with nothing in it. `App::reset_session` drops the
+  account-scoped state at the same moment.
   Connect loads account privacy with `fetch_privacy_settings` and MEX
   `get_privacy_lists`. Settings Privacy writes `set_privacy_setting` and
   `set_privacy_disallowed_list` (a 409 refetches the list hash once). Values
@@ -95,6 +103,10 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   or history `REVOKE` writes `messages.revoked_at` and leaves `content`.
   Local Delete for everyone still stores `Content::Revoked`. `chat_media()` lists
   Image and non-GIF Video rows for the viewer strip.
+  Composer drafts live in `drafts` (chat, text, mentions, reply_to). The UI
+  writes `Command::SetDraft` at most every 300 ms and on leave; `Event::Drafts`
+  restores them at start. `put_lid` moves the row onto the phone-number chat.
+  The chat list shows `Draft:` only for a chat that is not open.
 - **`src/model.rs`** — App types; worker translates protobuf in `classify()`.
 - **`src/i18n/`** — Every interface string is a `Key` in an enum with an
   English and a Spanish table (`key.rs`, `en.rs`, `es.rs`); `t`, `f`, and
