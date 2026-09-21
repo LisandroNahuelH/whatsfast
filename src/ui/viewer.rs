@@ -611,14 +611,15 @@ fn paint_strip(
     let pad = strip_side_pad(inner.width());
     let mut child = ui.new_child(UiBuilder::new().max_rect(inner));
     // The app style floats bars over content. This strip needs the bar under
-    // the thumbs, so they stay fully visible.
+    // the thumbs. Use foreground ink for the handle: extreme_bg_color and
+    // widget bg_fill are both palette.surface, so a fill handle vanishes.
     {
         let scroll = &mut child.spacing_mut().scroll;
         scroll.floating = false;
         scroll.bar_width = 8.0;
         scroll.bar_inner_margin = 4.0;
         scroll.bar_outer_margin = 2.0;
-        scroll.foreground_color = false;
+        scroll.foreground_color = true;
     }
     egui::ScrollArea::horizontal()
         .id_salt("viewer-strip")
