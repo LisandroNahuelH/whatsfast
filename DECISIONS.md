@@ -8,6 +8,7 @@ Append-only, newest first.
 | 2026-09-20 | Unlinking announces `LoggedOut` first, then tears down, and deletes the session store with brief retries | The window must reach the login screen at once, and Windows refuses to delete a file the outgoing client's SQLite pool still holds; a survivor is resumed and rejected in a logout loop | Teardown first, one silent delete attempt |
 | 2026-09-20 | Chat-list **Draft:** only after leaving the chat | Live typing on the open row looks like a saved draft | Open-row preview from `composer` |
 | 2026-09-20 | Draft writes debounce 300 ms and flush on leave | Coalesce keystrokes; a close or chat switch must not wait | Write only when switching chats |
+| 2026-09-20 | Footer width is clock, ticks, and visible marks only | Hidden star, pin, and trash slots left a pad after the last glyph | Always reserve `FOOTER_MARK_SLOT * 3` |
 | 2026-09-20 | Text bubbles size to row ink, not wrap cap | `Galley::size().x` is the 72% wrap limit; short outgoing lines sat in a wide empty pad | Allocate `galley.size().x` for the body |
 | 2026-09-20 | Windows and Linux use a client-drawn caption | Native min/max/close ignore the app palette and Lucide | `titlebar_shown(false)` with OS decorations still on |
 | 2026-09-20 | F11 toggles viewport fullscreen | Same shortcut as other desktop apps; Esc still dismisses UI | No fullscreen key |

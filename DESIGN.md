@@ -38,7 +38,7 @@ A message pin is not a chat pin. Pin for everyone for 7 days, at most three per 
 
 The chat list paints **Draft:** plus the first line in `palette.accent`, with no ticks, only after you leave that chat. The open row keeps the last sent message (or typing). Reason: a live prefix on the row you are writing in looks like a saved draft, and ticks on an unsent line would look like a delivered message.
 
-A text bubble is as wide as the ink plus the inline clock. Own short lines sit on the right. Reason: egui's galley reports the wrap cap (72%), which left a large empty pad on the left of outgoing bubbles.
+A text bubble is as wide as the ink plus the inline clock (and ticks or footer marks only when they are on that bubble). Own short lines sit on the right. Reason: empty star, pin, and trash slots used to leave a pad between the last glyph and the clock.
 
 The bubble footer uses one 8 px gap from the time to the nearest mark and between pin and star. Reason: a 16 px slot with a 13 px icon left about 1.5 px of air and the two marks read as one blob.
 
