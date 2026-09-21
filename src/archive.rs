@@ -11,6 +11,7 @@ use crate::model::{
     Chat, ChatKind, Contact, Content, Delivery, LastMessage, Message, StorageStats,
 };
 
+mod drafts;
 mod encryption;
 mod lists;
 mod pins;
@@ -18,6 +19,7 @@ mod polls;
 mod receipts;
 mod scheduled;
 mod stars;
+pub use drafts::Draft;
 pub use pins::Pinned;
 pub use polls::PollVote;
 pub use scheduled::{Outcome as ScheduledOutcome, Scheduled};
@@ -263,6 +265,7 @@ impl Archive {
         connection.execute_batch(stars::SCHEMA)?;
         connection.execute_batch(pins::SCHEMA)?;
         connection.execute_batch(lists::SCHEMA)?;
+        connection.execute_batch(drafts::SCHEMA)?;
         for (table, column, definition) in MIGRATIONS {
             let exists = connection
                 .prepare(&format!("PRAGMA table_info({table})"))?
@@ -781,6 +784,43 @@ impl Archive {
             params![from, to],
         )?;
         changed |= scheduled > 0;
+        // Keep the newer composer draft when both chats already have one.
+        let from_at: Option<i64> = tx
+            .query_row(
+                "SELECT updated_at FROM drafts WHERE chat = ?1",
+                params![from],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let to_at: Option<i64> = tx
+            .query_row(
+                "SELECT updated_at FROM drafts WHERE chat = ?1",
+                params![to],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match (from_at, to_at) {
+            (None, _) => {}
+            (Some(from_at), Some(to_at)) if to_at >= from_at => {
+                tx.execute("DELETE FROM drafts WHERE chat = ?1", params![from])?;
+                changed = true;
+            }
+            (Some(_), Some(_)) => {
+                tx.execute("DELETE FROM drafts WHERE chat = ?1", params![to])?;
+                tx.execute(
+                    "UPDATE drafts SET chat = ?2 WHERE chat = ?1",
+                    params![from, to],
+                )?;
+                changed = true;
+            }
+            (Some(_), None) => {
+                tx.execute(
+                    "UPDATE drafts SET chat = ?2 WHERE chat = ?1",
+                    params![from, to],
+                )?;
+                changed = true;
+            }
+        }
         let members = tx.execute(
             "UPDATE chat_list_members SET chat_id = ?2 WHERE chat_id = ?1 AND NOT EXISTS (
                 SELECT 1 FROM chat_list_members keep
@@ -804,6 +844,7 @@ impl Archive {
             "DELETE FROM poll_votes WHERE chat = ?1",
             "DELETE FROM group_receipts WHERE chat = ?1",
             "DELETE FROM scheduled WHERE chat = ?1",
+            "DELETE FROM drafts WHERE chat = ?1",
             "DELETE FROM chat_list_members WHERE chat_id = ?1",
             "DELETE FROM chat_list_pins WHERE chat_id = ?1",
         ] {
@@ -2290,6 +2331,36 @@ pub(crate) mod tests {
         assert!(archive.chat(lid).expect("lid chat").is_none());
         let chat = archive.chat(pn).expect("phone chat").expect("exists");
         assert_eq!(chat.last_activity, 200);
+    }
+
+    #[test]
+    fn composer_drafts_round_trip_and_move_with_privacy_ids() {
+        let archive = Archive::in_memory().expect("opens");
+        let lid = "167650256810092@lid";
+        let pn = "4917663430455@s.whatsapp.net";
+        archive.ensure_chat(lid, "Ada").expect("lid chat");
+        archive.ensure_chat(pn, "Ada").expect("phone chat");
+        archive
+            .set_draft(lid, "hello from lid", "[]", Some("quoted"), 20)
+            .expect("lid draft");
+        archive
+            .set_draft(pn, "older phone", "[]", None, 10)
+            .expect("phone draft");
+        archive
+            .clear_draft("nobody@s.whatsapp.net")
+            .expect("missing is fine");
+        assert!(
+            archive
+                .put_lid("167650256810092", "4917663430455")
+                .expect("map")
+        );
+        let drafts = archive.drafts().expect("list");
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].chat, pn);
+        assert_eq!(drafts[0].text, "hello from lid");
+        assert_eq!(drafts[0].reply_to.as_deref(), Some("quoted"));
+        archive.clear_draft(pn).expect("clears");
+        assert!(archive.drafts().expect("empty").is_empty());
     }
 
     #[test]

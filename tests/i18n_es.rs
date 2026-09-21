@@ -18,6 +18,7 @@ const PAGES: &[Option<&str>] = &[
     Some("empty"),
     Some("settings"),
     Some("login"),
+    Some("logged-out"),
     Some("pair"),
     Some("shortcuts"),
     Some("about"),
@@ -37,6 +38,7 @@ const FLOOR: &[(Option<&str>, usize)] = &[
     (Some("empty"), 40),
     (Some("settings"), 110),
     (Some("login"), 11),
+    (Some("logged-out"), 5),
     (Some("pair"), 13),
     (Some("shortcuts"), 114),
     (Some("about"), 89),
@@ -82,7 +84,7 @@ fn no_english_label_is_left_on_a_spanish_page() {
             .map_or(3, |(_, count)| *count);
         assert!(
             labels.len() >= floor,
-            "page {page:?} painted {} labels; the floor is {floor}, so the harvest lost coverage",
+            "page {page:?} painted {} labels; the floor is {floor}, so the harvest lost coverage: {labels:?}",
             labels.len()
         );
         for label in &labels {

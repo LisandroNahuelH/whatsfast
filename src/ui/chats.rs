@@ -1800,6 +1800,16 @@ fn row(app: &mut App, ui: &mut egui::Ui, chat: &Chat, index: usize) -> egui::Res
                 badge_right - x,
                 1,
             )
+        } else if let Some(draft) = app.draft_preview(&chat.id) {
+            let line = i18n::f(Key::ChatDraftPreview, &[("text", draft)]);
+            widgets::line(
+                ui,
+                &line,
+                theme::regular(13.0),
+                palette.accent,
+                (badge_right - x).max(0.0),
+                1,
+            )
         } else if let Some(last) = &chat.last {
             if last.from_me {
                 let tick_rect =

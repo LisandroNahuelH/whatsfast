@@ -69,6 +69,10 @@ const STARRED_LIMIT: usize = 200;
 const PINNED_LIMIT: usize = 200;
 /// Default pin lifetime, matching WhatsApp Web.
 const PIN_SECS: i64 = 7 * 24 * 60 * 60;
+/// Attempts to delete the stored session after a logout, and the pause between
+/// them, for the handles the outgoing client has not released yet.
+const SESSION_WIPE_TRIES: usize = 40;
+const SESSION_WIPE_PAUSE: Duration = Duration::from_millis(50);
 
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
@@ -624,6 +628,13 @@ impl Worker {
         }
     }
 
+    fn emit_drafts(&self) {
+        match self.archive.drafts() {
+            Ok(drafts) => self.emit(Event::Drafts(drafts)),
+            Err(error) => log::warn!("could not list drafts: {error}"),
+        }
+    }
+
     fn emit_chat(&self, id: &str) {
         if let Ok(Some(mut chat)) = self.archive.chat(id) {
             self.polish_chat(&mut chat);
@@ -711,6 +722,7 @@ impl Worker {
         }
         self.emit(Event::Contacts(self.contacts.values().cloned().collect()));
         self.emit_chats();
+        self.emit_drafts();
         self.emit_chat_lists();
     }
 
@@ -846,9 +858,20 @@ impl Worker {
         match bot {
             Ok(bot) => {
                 let handle = bot.spawn();
-                self.client = Some(handle.client());
+                let client = handle.client();
+                // A store holding a paired device resumes that session; an
+                // empty one is asking for a QR code. The second case must not
+                // read as `Connecting`: the window treats that as a linked
+                // session and would show the chat shell, empty, while the code
+                // is still on its way.
+                let status = if client.pn().is_some() {
+                    LinkStatus::Connecting
+                } else {
+                    self.unlinked()
+                };
+                self.client = Some(client);
                 self.handle = Some(handle);
-                self.set_status(LinkStatus::Connecting);
+                self.set_status(status);
             }
             Err(error) => self.set_status(LinkStatus::Failed(i18n::f(
                 Key::ToastStartFailed,
@@ -905,7 +928,10 @@ impl Worker {
         }
         self.lid_to_pn.insert(lid.to_owned(), pn.to_owned());
         match self.archive.put_lid(lid, pn) {
-            Ok(true) => self.emit_chats(),
+            Ok(true) => {
+                self.emit_chats();
+                self.emit_drafts();
+            }
             Ok(false) => {}
             Err(error) => log::warn!("could not remember an id mapping: {error}"),
         }
@@ -1653,7 +1679,14 @@ impl Worker {
         });
     }
 
+    /// Takes this device off the account and pairs again.
     async fn on_logged_out(&mut self) {
+        // Announced before the teardown rather than after it. Stopping the
+        // client, clearing the archive, and deleting the session all take
+        // time, and the window must leave the chat shell the moment the phone
+        // unlinks the device, not once a list it is still painting has been
+        // emptied behind it.
+        self.set_status(LinkStatus::LoggedOut);
         self.stop_bot().await;
         if let Err(error) = self.archive.clear() {
             log::warn!("could not clear the archive: {error}");
@@ -1680,18 +1713,44 @@ impl Worker {
         self.pair_code = None;
         self.pairing_phone = None;
         self.set_syncing(false);
-        let session = self.dirs.session_db();
-        for suffix in ["", "-wal", "-shm", "-journal"] {
-            let mut path = session.clone().into_os_string();
-            path.push(suffix);
-            let _ = std::fs::remove_file(path);
-        }
+        self.forget_session().await;
         let _ = std::fs::remove_dir_all(self.dirs.avatar_cache_dir());
         let _ = std::fs::remove_dir_all(self.dirs.media_cache_dir());
         self.emit(Event::Chats(Vec::new()));
-        self.set_status(LinkStatus::LoggedOut);
         // Recreate the store so the next connection starts linking.
         self.start_bot().await;
+    }
+
+    /// Deletes the stored session so the restarted client pairs from scratch.
+    ///
+    /// Windows refuses to delete a file that still has an open handle, and the
+    /// outgoing client's store keeps pooled SQLite connections until its last
+    /// task lets go of it, so the first attempts can fail. Retried for a short
+    /// while: a session left behind is loaded again by the next start and
+    /// rejected by the server, which is a logout loop where a QR code belongs.
+    async fn forget_session(&self) {
+        let session = self.dirs.session_db();
+        for attempt in 1..=SESSION_WIPE_TRIES {
+            let mut held = false;
+            for suffix in ["", "-wal", "-shm", "-journal"] {
+                let mut path = session.clone().into_os_string();
+                path.push(suffix);
+                match std::fs::remove_file(PathBuf::from(path)) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        held = true;
+                        log::debug!("the session file is still held: {error}");
+                    }
+                }
+            }
+            if !held {
+                return;
+            }
+            log::debug!("session delete attempt {attempt} of {SESSION_WIPE_TRIES}");
+            tokio::time::sleep(SESSION_WIPE_PAUSE).await;
+        }
+        log::warn!("the stored session could not be deleted; this start may resume it");
     }
 
     fn on_contact_update(&mut self, update: &wa_events::ContactUpdate) {
@@ -3012,6 +3071,27 @@ impl Worker {
                         log::debug!("chat state not sent: {error}");
                     }
                 });
+            }
+            Command::SetDraft {
+                chat,
+                text,
+                mentions,
+                reply_to,
+            } => {
+                if let Err(error) = self.archive.set_draft(
+                    &chat,
+                    &text,
+                    &mentions,
+                    reply_to.as_deref(),
+                    crate::util::now(),
+                ) {
+                    log::warn!("could not save a draft: {error}");
+                }
+            }
+            Command::ClearDraft { chat } => {
+                if let Err(error) = self.archive.clear_draft(&chat) {
+                    log::warn!("could not drop a draft: {error}");
+                }
             }
             Command::MarkRead { chat, receipts } => self.mark_read(chat, receipts),
             Command::SetMarkedUnread { chat, marked } => {
@@ -7658,6 +7738,83 @@ mod receipt_tests {
             prefetch_older: HashSet::new(),
         };
         (worker, events_rx, inbox, wa_events)
+    }
+
+    /// The four files a session database can leave behind.
+    fn session_files(session: &Path) -> Vec<PathBuf> {
+        ["", "-wal", "-shm", "-journal"]
+            .iter()
+            .map(|suffix| {
+                let mut path = session.to_path_buf().into_os_string();
+                path.push(suffix);
+                PathBuf::from(path)
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn forgetting_a_session_deletes_every_file_of_it() {
+        let (worker, _events, _inbox, _wa) = worker();
+        let session = worker.dirs.session_db();
+        std::fs::create_dir_all(session.parent().expect("parent")).expect("dir");
+        for path in session_files(&session) {
+            std::fs::write(&path, b"credentials").expect("write");
+        }
+
+        worker.forget_session().await;
+
+        for path in session_files(&session) {
+            assert!(!path.exists(), "{} survived the wipe", path.display());
+        }
+    }
+
+    /// The outgoing client's store keeps the session file open for a moment
+    /// after a logout, and Windows refuses to delete a file with a live handle:
+    /// the wipe has to wait it out, not leave the credentials for the next
+    /// start to resume and be logged out for again.
+    #[tokio::test]
+    async fn forgetting_a_session_waits_for_the_handle_that_outlives_it() {
+        let (worker, _events, _inbox, _wa) = worker();
+        let session = worker.dirs.session_db();
+        std::fs::create_dir_all(session.parent().expect("parent")).expect("dir");
+        for path in session_files(&session) {
+            std::fs::write(&path, b"credentials").expect("write");
+        }
+        let held = std::fs::File::open(&session).expect("the file opens");
+        let release = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            drop(held);
+        });
+
+        worker.forget_session().await;
+        release.await.expect("the holder task");
+
+        for path in session_files(&session) {
+            assert!(!path.exists(), "{} survived the wipe", path.display());
+        }
+    }
+
+    /// The signal `start_bot` reads to tell a session to resume from a device
+    /// to pair: a store that was never paired carries no identity, so the
+    /// restarted client after a logout reports pairing and the window shows
+    /// the login screen instead of an empty chat shell.
+    #[tokio::test]
+    async fn an_unpaired_session_store_carries_no_identity() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let path = dir.path().join("session.db");
+        let store = SqliteStore::new(&path.to_string_lossy())
+            .await
+            .expect("store");
+        let bot = Bot::builder()
+            .with_backend(store)
+            .build()
+            .await
+            .expect("bot");
+
+        assert!(
+            bot.client().pn().is_none(),
+            "an empty store must not look like a linked session"
+        );
     }
 
     fn own_message(id: &str, timestamp: i64) -> Message {

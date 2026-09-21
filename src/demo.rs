@@ -858,6 +858,10 @@ pub fn populate(app: &mut App) {
         },
     );
     app.open_chat = Some(ada.to_owned());
+    app.drafts.insert(
+        "441632960123@s.whatsapp.net".to_owned(),
+        "Need the logbook scan".to_owned(),
+    );
     // Mark the open chat as read.
     if let Some(chat) = app.chats.iter_mut().find(|chat| chat.id == ada) {
         chat.unread = 0;
@@ -1091,6 +1095,12 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                     pair_code: None,
                     pairing_phone: None,
                 };
+            }
+            // What the phone leaves behind: the login screen, waiting for the
+            // new code, with none of the old account's state.
+            "logged-out" => {
+                unlink(app);
+                app.link = LinkStatus::LoggedOut;
             }
             "pair" => {
                 unlink(app);
@@ -1570,7 +1580,7 @@ mod tests {
             apply_flags(&mut app, Some(page));
             render(&mut app, &ctx);
         }
-        for page in ["login", "pair", "phone"] {
+        for page in ["login", "pair", "phone", "logged-out"] {
             let mut app = self::app();
             apply_flags(&mut app, Some(page));
             render(&mut app, &ctx);
@@ -2809,6 +2819,29 @@ mod tests {
             (240.0..=345.0).contains(&rect.width()),
             "{} wide",
             rect.width()
+        );
+    }
+
+    #[test]
+    fn a_chat_row_shows_the_draft_prefix() {
+        let mut app = app();
+        let grace = sample_ids()[2];
+        assert_eq!(
+            app.draft_preview(grace),
+            Some("Need the logbook scan"),
+            "a closed chat with a draft shows it in the list"
+        );
+        let line = crate::i18n::f(
+            crate::i18n::Key::ChatDraftPreview,
+            &[("text", "Need the logbook scan")],
+        );
+        assert!(line.starts_with("Draft:"), "{line}");
+        app.composer = "live line".into();
+        app.open_chat = Some(sample_ids()[0].to_owned());
+        assert_eq!(
+            app.draft_preview(sample_ids()[0]),
+            None,
+            "the open chat does not show Draft: while you type"
         );
     }
 

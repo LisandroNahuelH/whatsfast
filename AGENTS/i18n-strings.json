@@ -2001,6 +2001,11 @@
       "es": "escribiendo…"
     },
     {
+      "key": "ChatDraftPreview",
+      "en": "Draft: {text}",
+      "es": "Borrador: {text}"
+    },
+    {
       "key": "ChatEmptyLoading",
       "en": "Your chats appear on the left as they load.",
       "es": "Tus chats aparecen a la izquierda mientras cargan."

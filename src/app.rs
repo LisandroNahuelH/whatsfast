@@ -46,6 +46,7 @@ enum ScrollAxis {
 }
 /// Delay after the last keystroke before clearing typing state.
 const COMPOSING_TIMEOUT: Duration = Duration::from_secs(4);
+const DRAFT_FLUSH: Duration = Duration::from_millis(300);
 /// Typing-state timeout when no stop event arrives.
 const TYPING_TIMEOUT: Duration = Duration::from_secs(12);
 
@@ -136,6 +137,9 @@ pub struct App {
     /// Composer drafts by chat.
     pub drafts: HashMap<ChatId, String>,
     draft_mentions: HashMap<ChatId, Vec<ComposerMention>>,
+    draft_reply: HashMap<ChatId, String>,
+    draft_dirty: bool,
+    draft_since: Option<Instant>,
     pub composer: String,
     composer_mentions: Vec<ComposerMention>,
     /// Byte offset of the `:` starting the active emoji query.
@@ -341,7 +345,7 @@ pub enum Pending {
     File(PathBuf),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct ComposerMention {
     id: String,
     name: String,
@@ -429,6 +433,9 @@ impl App {
             scroll_chat_into_view: None,
             drafts: HashMap::new(),
             draft_mentions: HashMap::new(),
+            draft_reply: HashMap::new(),
+            draft_dirty: false,
+            draft_since: None,
             composer: String::new(),
             composer_mentions: Vec::new(),
             emoji_start: None,
@@ -1196,6 +1203,7 @@ impl App {
                     }
                 }
                 Event::ChatUpdated(chat) => self.handle_chat_updated(*chat),
+                Event::Drafts(list) => self.apply_drafts(list),
                 Event::Messages {
                     chat,
                     messages,
@@ -1570,23 +1578,127 @@ impl App {
                 }
             }
             LinkStatus::LoggedOut => {
-                self.poll_voting.clear();
-                self.poll_creating = false;
-                self.poll_draft = Default::default();
-                self.notifications.clear_all();
-                self.chats.clear();
-                self.conversations.clear();
-                self.contacts.clear();
-                self.avatars.clear();
-                self.account_privacy = crate::privacy::Snapshot::default();
-                self.account_receipts_off = false;
-                self.open_chat = None;
+                self.reset_session();
                 self.toast_error(i18n::t(Key::ToastUnlinked));
             }
             LinkStatus::Failed(message) => self.toast_error(message.clone()),
             _ => {}
         }
         self.link = status;
+    }
+
+    /// Drops everything that belonged to the account that just went away.
+    ///
+    /// The window paints the login screen instead of the chat shell while the
+    /// app is unlinked, so nothing here is visible until the next link. Left
+    /// behind, it would surface then: another account's drafts, a search hit,
+    /// an open viewer, a chat list filter, or a dialog over a chat that no
+    /// longer exists.
+    fn reset_session(&mut self) {
+        self.me = None;
+        self.me_name = None;
+        self.me_about = None;
+        self.syncing = false;
+        self.sync_percent = None;
+        self.chats.clear();
+        self.contacts.clear();
+        self.conversations.clear();
+        self.open_chat = None;
+        self.scroll_chat_into_view = None;
+        self.scroll_anchor = None;
+        self.scroll_to_bottom = false;
+        self.at_bottom = false;
+        self.drafts.clear();
+        self.draft_mentions.clear();
+        self.draft_reply.clear();
+        self.draft_dirty = false;
+        self.draft_since = None;
+        self.composer.clear();
+        self.composer_mentions.clear();
+        self.emoji_start = None;
+        self.emoji_selected = 0;
+        self.mention_start = None;
+        self.mention_selected = 0;
+        self.reply_to = None;
+        self.editing = None;
+        self.composing = false;
+        self.last_keystroke = None;
+        self.search.clear();
+        self.search_hits.clear();
+        self.right_pane = None;
+        self.chat_search.clear();
+        self.chat_search_hits.clear();
+        self.chat_search_day = None;
+        self.chat_search_calendar = false;
+        self.focus_chat_search = false;
+        self.highlight = None;
+        self.storage_stats = StorageStats::default();
+        self.storage_stats_at = None;
+        self.storage_stats_asked = false;
+        self.typing.clear();
+        self.presence.clear();
+        self.account_receipts_off = false;
+        self.account_privacy = crate::privacy::Snapshot::default();
+        self.avatars.clear();
+        self.avatar_requests.clear();
+        self.avatars_full.clear();
+        self.avatar_full_requests.clear();
+        self.dropping = false;
+        self.picker = None;
+        self.picker_anchor = None;
+        self.picker_search.clear();
+        self.picker_focus = false;
+        self.reaction_target = None;
+        self.reaction_anchor = None;
+        self.open_message_menu = None;
+        self.selecting = None;
+        self.pin_drag = None;
+        self.chat_list = ChatListId::All;
+        self.chat_lists.clear();
+        self.list_pins.clear();
+        self.list_name.clear();
+        self.list_picked.clear();
+        self.scheduled.clear();
+        self.show_scheduled = false;
+        self.starred.clear();
+        self.show_starred = false;
+        self.stars.clear();
+        self.pinned.clear();
+        self.show_pinned = false;
+        self.pins.clear();
+        self.chat_pins.clear();
+        self.viewer_media.clear();
+        self.image_viewer = None;
+        self.emoji_jump = None;
+        self.pending.clear();
+        self.played_told.clear();
+        self.recording = None;
+        self.player.stop();
+        self.gif_query.clear();
+        self.gif_results.clear();
+        self.gif_pending = false;
+        self.gif_error = None;
+        self.stickers.clear();
+        self.stickers_saved.clear();
+        self.sticker_packs.clear();
+        self.stickers_pending = false;
+        self.sticker_import_pending = false;
+        self.sticker_link.clear();
+        self.page = Page::Chats;
+        self.dialog = None;
+        self.forward_search.clear();
+        self.poll_draft = Default::default();
+        self.poll_creating = false;
+        self.poll_voting.clear();
+        self.contact_edit = None;
+        self.new_contact_phone.clear();
+        self.new_contact_name.clear();
+        self.new_contact_last.clear();
+        self.new_contact_pending = false;
+        self.pair_phone.clear();
+        self.focus_composer = false;
+        self.focus_search = false;
+        self.notifications.clear_all();
     }
 
     fn handle_chat_updated(&mut self, chat: Chat) {
@@ -1766,24 +1878,10 @@ impl App {
             // A selection belongs to the chat it was made in.
             self.selecting = None;
             if let Some(previous) = self.open_chat.take() {
-                let draft = std::mem::take(&mut self.composer);
-                // Discard an unfinished edit instead of keeping it as a draft.
-                if self.editing.take().is_some() || draft.trim().is_empty() {
-                    self.drafts.remove(&previous);
-                    self.draft_mentions.remove(&previous);
-                    self.composer_mentions.clear();
-                } else {
-                    self.drafts.insert(previous.clone(), draft);
-                    self.draft_mentions.insert(
-                        previous.clone(),
-                        std::mem::take(&mut self.composer_mentions),
-                    );
-                }
                 self.stop_composing(&previous);
+                self.stash_open_draft(previous);
             }
-            self.composer = self.drafts.remove(&id).unwrap_or_default();
-            self.composer_mentions = self.draft_mentions.remove(&id).unwrap_or_default();
-            self.reply_to = None;
+            self.load_draft_into_composer(&id);
             self.editing = None;
         }
         self.emoji_start = None;
@@ -1815,6 +1913,151 @@ impl App {
             self.mark_settings_dirty();
         }
         self.sync_prefetch();
+    }
+
+    fn stash_open_draft(&mut self, chat: ChatId) {
+        let draft = std::mem::take(&mut self.composer);
+        let mentions = std::mem::take(&mut self.composer_mentions);
+        let reply = self.reply_to.take();
+        // Discard an unfinished edit instead of keeping it as a draft.
+        if self.editing.take().is_some() || (draft.trim().is_empty() && reply.is_none()) {
+            self.forget_draft(&chat);
+        } else {
+            self.drafts.insert(chat.clone(), draft);
+            self.draft_mentions.insert(chat.clone(), mentions);
+            match reply {
+                Some(reply) => {
+                    self.draft_reply.insert(chat.clone(), reply);
+                }
+                None => {
+                    self.draft_reply.remove(&chat);
+                }
+            }
+            self.persist_stored_draft(&chat);
+        }
+        self.draft_dirty = false;
+        self.draft_since = None;
+    }
+
+    fn load_draft_into_composer(&mut self, id: &str) {
+        self.composer = self.drafts.remove(id).unwrap_or_default();
+        self.composer_mentions = self.draft_mentions.remove(id).unwrap_or_default();
+        self.reply_to = self.draft_reply.remove(id);
+        self.draft_dirty = false;
+        self.draft_since = None;
+    }
+
+    fn forget_draft(&mut self, chat: &str) {
+        self.drafts.remove(chat);
+        self.draft_mentions.remove(chat);
+        self.draft_reply.remove(chat);
+        self.backend.send(Command::ClearDraft {
+            chat: chat.to_owned(),
+        });
+    }
+
+    fn persist_stored_draft(&mut self, chat: &str) {
+        let Some(text) = self.drafts.get(chat).cloned() else {
+            self.forget_draft(chat);
+            return;
+        };
+        let mentions = self.draft_mentions.get(chat).cloned().unwrap_or_default();
+        let reply = self.draft_reply.get(chat).cloned();
+        self.send_draft_command(chat, &text, &mentions, reply.as_deref());
+    }
+
+    fn mark_draft_dirty(&mut self) {
+        if self.editing.is_some() {
+            return;
+        }
+        self.draft_dirty = true;
+        if self.draft_since.is_none() {
+            self.draft_since = Some(Instant::now());
+        }
+    }
+
+    fn flush_open_draft(&mut self, force: bool) {
+        if self.editing.is_some() {
+            return;
+        }
+        let Some(chat) = self.open_chat.clone() else {
+            return;
+        };
+        if !force && !self.draft_dirty {
+            return;
+        }
+        if !force
+            && self
+                .draft_since
+                .is_some_and(|since| since.elapsed() < DRAFT_FLUSH)
+        {
+            return;
+        }
+        let text = self.composer.clone();
+        let mentions = self.composer_mentions.clone();
+        let reply = self.reply_to.clone();
+        if text.trim().is_empty() && reply.is_none() {
+            self.forget_draft(&chat);
+        } else {
+            self.send_draft_command(&chat, &text, &mentions, reply.as_deref());
+        }
+        self.draft_dirty = false;
+        self.draft_since = None;
+    }
+
+    fn send_draft_command(
+        &mut self,
+        chat: &str,
+        text: &str,
+        mentions: &[ComposerMention],
+        reply: Option<&str>,
+    ) {
+        let mentions = serde_json::to_string(mentions).unwrap_or_else(|_| "[]".into());
+        self.backend.send(Command::SetDraft {
+            chat: chat.to_owned(),
+            text: text.to_owned(),
+            mentions,
+            reply_to: reply.filter(|id| !id.is_empty()).map(str::to_owned),
+        });
+    }
+
+    fn apply_drafts(&mut self, list: Vec<crate::archive::Draft>) {
+        let open = self.open_chat.clone();
+        let keep_live =
+            open.is_some() && self.editing.is_none() && !self.composer.trim().is_empty();
+        let mut drafts = HashMap::new();
+        let mut mentions = HashMap::new();
+        let mut replies = HashMap::new();
+        for draft in list {
+            if keep_live && open.as_deref() == Some(draft.chat.as_str()) {
+                continue;
+            }
+            let parsed: Vec<ComposerMention> =
+                serde_json::from_str(&draft.mentions).unwrap_or_default();
+            if !parsed.is_empty() {
+                mentions.insert(draft.chat.clone(), parsed);
+            }
+            if let Some(reply) = draft.reply_to.filter(|id| !id.is_empty()) {
+                replies.insert(draft.chat.clone(), reply);
+            }
+            drafts.insert(draft.chat, draft.text);
+        }
+        self.drafts = drafts;
+        self.draft_mentions = mentions;
+        self.draft_reply = replies;
+        if !keep_live && let Some(id) = open {
+            self.load_draft_into_composer(&id);
+        }
+    }
+
+    /// First-line draft for a closed chat. The open chat keeps the last message.
+    pub fn draft_preview(&self, chat: &str) -> Option<&str> {
+        if self.open_chat.as_deref() == Some(chat) {
+            return None;
+        }
+        let text = self.drafts.get(chat)?;
+        let line = text.split('\n').next().unwrap_or(text).trim();
+        (!line.is_empty()).then_some(line)
     }
 
     /// Returns keyboard focus to the open conversation when no search or
@@ -1880,19 +2123,21 @@ impl App {
                 message.mentions = mention_refs(&mentions);
             }
             self.backend.send(Command::EditText {
-                chat,
+                chat: chat.clone(),
                 id,
                 text,
                 mentions,
             });
+            self.forget_draft(&chat);
             return;
         }
         self.backend.send(Command::SendText {
-            chat,
+            chat: chat.clone(),
             text,
             quoting,
             mentions,
         });
+        self.forget_draft(&chat);
         self.scroll_to_bottom = true;
         self.at_bottom = true;
     }
@@ -1978,13 +2223,14 @@ impl App {
         }
         if !files.is_empty() {
             self.backend.send(Command::SendFiles {
-                chat,
+                chat: chat.clone(),
                 paths: files,
                 caption: caption.take(),
                 mentions,
             });
         }
         self.reply_to = None;
+        self.forget_draft(&chat);
         self.scroll_to_bottom = true;
         self.at_bottom = true;
     }
@@ -2048,6 +2294,16 @@ impl App {
         self.maybe_download_update();
         if self.settings_dirty && self.last_settings_save.elapsed() > Duration::from_secs(2) {
             self.save_settings();
+        }
+        if self.draft_dirty {
+            if self
+                .draft_since
+                .is_some_and(|since| since.elapsed() >= DRAFT_FLUSH)
+            {
+                self.flush_open_draft(true);
+            } else {
+                ctx.request_repaint_after(DRAFT_FLUSH);
+            }
         }
         if !self.typing.is_empty() || self.composing {
             ctx.request_repaint_after(Duration::from_secs(1));
@@ -2298,14 +2554,7 @@ impl App {
                 self.selecting = None;
                 if let Some(chat) = self.open_chat.take() {
                     self.stop_composing(&chat);
-                    let draft = std::mem::take(&mut self.composer);
-                    if self.editing.take().is_none() && !draft.trim().is_empty() {
-                        self.drafts.insert(chat.clone(), draft);
-                        self.draft_mentions
-                            .insert(chat, std::mem::take(&mut self.composer_mentions));
-                    } else {
-                        self.composer_mentions.clear();
-                    }
+                    self.stash_open_draft(chat);
                 }
                 self.reply_to = None;
                 self.emoji_start = None;
@@ -2362,8 +2611,10 @@ impl App {
             Action::Composing { chat, composing } => {
                 if composing {
                     self.note_keystroke();
+                    self.mark_draft_dirty();
                 } else {
                     self.stop_composing(&chat);
+                    self.flush_open_draft(true);
                 }
             }
             Action::MarkRead(chat) => self.mark_read(&chat),
@@ -2472,6 +2723,7 @@ impl App {
                 self.focus_composer = true;
                 self.highlight = Some((id, Instant::now()));
                 self.highlight_ons = 1;
+                self.mark_draft_dirty();
                 ctx.request_repaint();
             }
             Action::ReplyFromViewer { chat, message } => {
@@ -2487,7 +2739,10 @@ impl App {
                 self.apply(Action::Reply(message), ctx);
                 self.highlight_ons = 3;
             }
-            Action::CancelReply => self.reply_to = None,
+            Action::CancelReply => {
+                self.reply_to = None;
+                self.mark_draft_dirty();
+            }
             Action::Forward {
                 from_chat,
                 messages,
@@ -2619,7 +2874,9 @@ impl App {
                     // The same button that opened settings closes them, and
                     // closing lands on the empty window a fresh start shows.
                     self.page = Page::Chats;
-                    self.open_chat = None;
+                    if let Some(chat) = self.open_chat.take() {
+                        self.stash_open_draft(chat);
+                    }
                     self.dialog = None;
                 } else {
                     self.page = Page::Settings;
@@ -2654,7 +2911,7 @@ impl App {
                 next_at,
             } => {
                 self.backend.send(Command::ScheduleMessage {
-                    chat,
+                    chat: chat.clone(),
                     text,
                     kind,
                     hour,
@@ -2667,6 +2924,7 @@ impl App {
                 self.dialog = None;
                 self.composer.clear();
                 self.composer_mentions.clear();
+                self.forget_draft(&chat);
             }
             Action::Edit(id) => {
                 let text = self
@@ -2835,6 +3093,7 @@ impl App {
                     self.set_composer_cursor(ctx, cursor);
                     self.remember_emoji(&emoji);
                     self.focus_composer = true;
+                    self.mark_draft_dirty();
                 }
                 self.emoji_start = None;
             }
@@ -2867,6 +3126,7 @@ impl App {
                     let cursor = self.composer[..start + inserted.len()].chars().count();
                     self.set_composer_cursor(ctx, cursor);
                     self.focus_composer = true;
+                    self.mark_draft_dirty();
                 }
                 self.emoji_start = None;
                 self.mention_start = None;
@@ -3310,6 +3570,7 @@ impl App {
             }
             Action::Reconnect => self.backend.send(Command::Reconnect),
             Action::Quit => {
+                self.flush_open_draft(true);
                 if self.settings.check_for_updates
                     && self.settings.download_updates_automatically
                     && matches!(
@@ -3334,6 +3595,7 @@ impl App {
             }
             Action::HideWindow => {
                 if self.tray.is_some() {
+                    self.flush_open_draft(true);
                     self.hide_intent = true;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -3533,6 +3795,7 @@ impl App {
             && !self.quit_requested
             && self.hides_to_tray()
         {
+            self.flush_open_draft(true);
             self.hide_intent = true;
         }
         self.lock_scroll_axis(ctx);
@@ -3559,6 +3822,7 @@ impl App {
             .map_or(self.composer.len(), |(byte, _)| byte);
         self.composer.insert_str(byte, text);
         self.set_composer_cursor(ctx, at + text.chars().count());
+        self.mark_draft_dirty();
     }
 
     fn set_composer_cursor(&self, ctx: &egui::Context, at: usize) {
@@ -3766,6 +4030,7 @@ impl App {
     }
 
     pub fn save_state(&mut self) {
+        self.flush_open_draft(true);
         if self.settings_dirty {
             self.save_settings();
         }
@@ -4049,6 +4314,46 @@ mod tests {
         let chat = app.chat(&id).expect("chat");
         assert!(chat.archived);
         assert!(app.open_chat.is_none());
+    }
+
+    #[test]
+    fn unlinking_returns_the_window_to_the_login_screen() {
+        let mut app = app();
+        let id = "1@s.whatsapp.net".to_owned();
+        app.link = LinkStatus::Connected;
+        app.chats.push(Chat::new(id.clone(), "Ada".to_owned()));
+        app.open_chat = Some(id.clone());
+        app.composer = "half written".into();
+        app.page = Page::Settings;
+        app.dialog = Some(Dialog::ConfirmUnlink);
+
+        // What the worker sends when the phone unlinks this device: the
+        // logout first, then a client that has no session and is asking for a
+        // QR code.
+        app.handle_link(LinkStatus::LoggedOut);
+
+        assert!(!app.is_linked(), "the chat shell must not come back");
+        assert!(app.chats.is_empty(), "the chats belong to the old account");
+        assert!(app.conversations.is_empty());
+        assert!(app.open_chat.is_none());
+        assert!(app.dialog.is_none(), "a dialog over a gone chat closes");
+        assert!(app.composer.is_empty(), "the draft goes with the account");
+        assert_eq!(app.page, Page::Chats);
+        assert!(
+            app.toasts
+                .iter()
+                .any(|toast| toast.message == i18n::t(Key::ToastUnlinked)),
+            "the unlink is announced"
+        );
+
+        // Pairing before the code arrives still has to read as unlinked: the
+        // window shows the login screen, not an empty chat list.
+        app.handle_link(LinkStatus::Unlinked {
+            qr: None,
+            pair_code: None,
+            pairing_phone: None,
+        });
+        assert!(!app.is_linked());
     }
 
     #[test]
@@ -4841,6 +5146,21 @@ mod tests {
     }
 
     #[test]
+    fn the_open_chat_hides_its_draft_preview() {
+        let mut app = app();
+        let ada = "1@s.whatsapp.net";
+        let bob = "2@s.whatsapp.net";
+        app.chats.push(Chat::new(ada.into(), "Ada".into()));
+        app.chats.push(Chat::new(bob.into(), "Bob".into()));
+        app.open_chat(ada.into());
+        app.composer = "still typing".into();
+        assert_eq!(app.draft_preview(ada), None);
+        app.open_chat(bob.into());
+        assert_eq!(app.draft_preview(ada), Some("still typing"));
+        assert_eq!(app.draft_preview(bob), None);
+    }
+
+    #[test]
     fn opening_a_chat_keeps_drafts_apart() {
         let mut app = app();
         app.chats
@@ -4854,6 +5174,103 @@ mod tests {
         app.open_chat("1@s.whatsapp.net".into());
         assert_eq!(app.composer, "hello ada");
         assert_eq!(app.settings.last_chat.as_deref(), Some("1@s.whatsapp.net"));
+    }
+
+    #[test]
+    fn switching_chats_keeps_a_reply_draft() {
+        let mut app = app();
+        app.chats
+            .push(Chat::new("1@s.whatsapp.net".into(), "Ada".into()));
+        app.chats
+            .push(Chat::new("2@s.whatsapp.net".into(), "Bob".into()));
+        app.open_chat("1@s.whatsapp.net".into());
+        app.composer = "about that".into();
+        app.reply_to = Some("quoted".into());
+        app.open_chat("2@s.whatsapp.net".into());
+        assert!(app.reply_to.is_none());
+        app.open_chat("1@s.whatsapp.net".into());
+        assert_eq!(app.composer, "about that");
+        assert_eq!(app.reply_to.as_deref(), Some("quoted"));
+    }
+
+    #[test]
+    fn a_keystroke_queues_a_draft_write() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let id = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(id.into(), "Ada".into()));
+        app.open_chat(id.into());
+        let _ = app.backend.take_demo_commands();
+        app.composer = "unfinished".into();
+        app.mark_draft_dirty();
+        app.flush_open_draft(true);
+        let commands = app.backend.take_demo_commands();
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            Command::SetDraft { text, reply_to, .. }
+                if text == "unfinished" && reply_to.is_none()
+        )));
+    }
+
+    #[test]
+    fn editing_does_not_persist_as_a_draft() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let id = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(id.into(), "Ada".into()));
+        app.open_chat(id.into());
+        let _ = app.backend.take_demo_commands();
+        app.editing = Some("m1".into());
+        app.composer = "changed body".into();
+        app.mark_draft_dirty();
+        app.flush_open_draft(true);
+        app.open_chat("2@s.whatsapp.net".into());
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            !commands
+                .iter()
+                .any(|command| matches!(command, Command::SetDraft { .. })),
+            "{commands:?}"
+        );
+        assert!(app.drafts.is_empty());
+    }
+
+    #[test]
+    fn sending_clears_the_stored_draft() {
+        let mut app = app();
+        app.backend.record_demo_commands();
+        let id = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(id.into(), "Ada".into()));
+        app.open_chat(id.into());
+        app.composer = "gone".into();
+        app.drafts.insert(id.into(), "gone".into());
+        let _ = app.backend.take_demo_commands();
+        app.send_text(id.into(), "gone".into(), None);
+        assert!(!app.drafts.contains_key(id));
+        let commands = app.backend.take_demo_commands();
+        assert!(
+            commands
+                .iter()
+                .any(|command| matches!(command, Command::ClearDraft { chat } if chat == id))
+        );
+    }
+
+    #[test]
+    fn archived_drafts_restore_an_empty_open_composer() {
+        let mut app = app();
+        let id = "1@s.whatsapp.net";
+        app.chats.push(Chat::new(id.into(), "Ada".into()));
+        app.open_chat = Some(id.into());
+        app.apply_drafts(vec![crate::archive::Draft {
+            chat: id.into(),
+            text: "from disk".into(),
+            mentions: "[]".into(),
+            reply_to: Some("q1".into()),
+            updated_at: 1,
+        }]);
+        assert_eq!(app.composer, "from disk");
+        assert_eq!(app.reply_to.as_deref(), Some("q1"));
+        assert!(!app.drafts.contains_key(id));
     }
 
     #[test]

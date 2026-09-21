@@ -492,6 +492,7 @@ pub(super) fn text(key: Key) -> &'static str {
         Key::ChatMuteForever => "Silenciar siempre",
         Key::ChatInfo => "Info",
         Key::TypingShort => "escribiendo…",
+        Key::ChatDraftPreview => "Borrador: {text}",
         Key::ChatEmptyLoading => "Tus chats aparecen a la izquierda mientras cargan.",
         Key::ChatEmptySelect => "Elige un chat a la izquierda.",
         Key::ChatEmptyHints => "Ctrl+K para buscar · Ctrl+/ para los atajos",

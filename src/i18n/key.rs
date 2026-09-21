@@ -403,6 +403,7 @@ pub enum Key {
     ChatMuteForever,
     ChatInfo,
     TypingShort,
+    ChatDraftPreview,
     ChatEmptyLoading,
     ChatEmptySelect,
     ChatEmptyHints,
@@ -804,7 +805,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, for the completeness tests.
-    pub const ALL: [Key; 797] = [
+    pub const ALL: [Key; 798] = [
         Key::SettingsThemeDark,
         Key::SettingsThemeLight,
         Key::SettingsThemeSystem,
@@ -1205,6 +1206,7 @@ impl Key {
         Key::ChatMuteForever,
         Key::ChatInfo,
         Key::TypingShort,
+        Key::ChatDraftPreview,
         Key::ChatEmptyLoading,
         Key::ChatEmptySelect,
         Key::ChatEmptyHints,

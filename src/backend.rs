@@ -224,6 +224,17 @@ pub enum Command {
         chat: ChatId,
         composing: bool,
     },
+    /// Writes unsent composer text for a chat.
+    SetDraft {
+        chat: ChatId,
+        text: String,
+        mentions: String,
+        reply_to: Option<String>,
+    },
+    /// Drops the stored composer draft for a chat.
+    ClearDraft {
+        chat: ChatId,
+    },
     /// Marks a visible chat read and optionally sends receipts.
     MarkRead {
         chat: ChatId,
@@ -691,6 +702,8 @@ pub enum Event {
         message: String,
         finished: bool,
     },
+    /// Unsent composer drafts from the archive.
+    Drafts(Vec<crate::archive::Draft>),
     /// The scheduled messages, soonest first.
     Scheduled(Vec<crate::archive::Scheduled>),
     /// The starred messages of one chat, for the mark in the conversation.
