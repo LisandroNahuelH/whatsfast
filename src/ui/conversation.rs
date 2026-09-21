@@ -2726,7 +2726,7 @@ fn footer_width(ui: &egui::Ui, message: &Message) -> f32 {
 }
 
 const FOOTER_STAR: Color32 = Color32::from_rgb(0xEA, 0xB3, 0x08);
-const FOOTER_PIN: Color32 = Color32::from_rgb(0x16, 0x65, 0x34);
+const FOOTER_PIN: Color32 = Color32::BLACK;
 const FOOTER_TRASH: Color32 = Color32::from_rgb(0xDC, 0x3C, 0x2A);
 
 fn as_deleted(message: &Message, keep_revoked: bool) -> bool {
