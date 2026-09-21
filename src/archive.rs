@@ -696,7 +696,7 @@ impl Archive {
     }
 
     /// Stores a privacy id mapping and carries early mute/pin sync to the
-    /// canonical chat. Returns whether that chat's preferences were touched.
+    /// canonical chat. Returns whether that chat's preferences or messages moved.
     pub fn put_lid(&self, lid: &str, pn: &str) -> Result<bool> {
         self.connection.execute(
             "INSERT INTO lids (lid, pn) VALUES (?1, ?2) ON CONFLICT(lid) DO UPDATE SET pn = excluded.pn",
@@ -720,7 +720,118 @@ impl Archive {
                 mute_updated_at = NULLIF(MAX(COALESCE(mute_updated_at, -1), COALESCE(excluded.mute_updated_at, -1)), -1)",
             params![format!("{lid}@lid"), format!("{pn}@s.whatsapp.net"), pn],
         )?;
-        Ok(changed > 0)
+        let moved = self.refile_lid(lid, pn)?;
+        Ok(changed > 0 || moved)
+    }
+
+    /// Moves rows filed under a privacy id onto the canonical phone chat.
+    pub fn refile_lid(&self, lid: &str, pn: &str) -> Result<bool> {
+        let from = format!("{lid}@lid");
+        let to = format!("{pn}@s.whatsapp.net");
+        if from == to || lid.is_empty() || pn.is_empty() {
+            return Ok(false);
+        }
+        let tx = self.connection.unchecked_transaction()?;
+        let pending: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM messages WHERE chat = ?1",
+            params![from],
+            |row| row.get(0),
+        )?;
+        if pending > 0 {
+            tx.execute(
+                "INSERT OR IGNORE INTO chats (id, name, kind) VALUES (?1, ?2, ?3)",
+                params![to, pn, kind_name(ChatKind::from_id(&to))],
+            )?;
+        }
+        let mut changed = false;
+        changed |=
+            Self::refile_keyed(&tx, "messages", "AND keep.id = messages.id", &from, &to)? > 0;
+        changed |= Self::refile_keyed(&tx, "stars", "AND keep.id = stars.id", &from, &to)? > 0;
+        changed |= Self::refile_keyed(
+            &tx,
+            "message_pins",
+            "AND keep.id = message_pins.id",
+            &from,
+            &to,
+        )? > 0;
+        changed |= Self::refile_keyed(&tx, "polls", "AND keep.id = polls.id", &from, &to)? > 0;
+        changed |= Self::refile_keyed(
+            &tx,
+            "poll_history",
+            "AND keep.id = poll_history.id",
+            &from,
+            &to,
+        )? > 0;
+        changed |= Self::refile_keyed(
+            &tx,
+            "poll_votes",
+            "AND keep.poll = poll_votes.poll AND keep.voter = poll_votes.voter",
+            &from,
+            &to,
+        )? > 0;
+        changed |= Self::refile_keyed(
+            &tx,
+            "group_receipts",
+            "AND keep.id = group_receipts.id AND keep.recipient = group_receipts.recipient",
+            &from,
+            &to,
+        )? > 0;
+        let scheduled = tx.execute(
+            "UPDATE scheduled SET chat = ?2 WHERE chat = ?1",
+            params![from, to],
+        )?;
+        changed |= scheduled > 0;
+        let members = tx.execute(
+            "UPDATE chat_list_members SET chat_id = ?2 WHERE chat_id = ?1 AND NOT EXISTS (
+                SELECT 1 FROM chat_list_members keep
+                WHERE keep.list_id = chat_list_members.list_id AND keep.chat_id = ?2)",
+            params![from, to],
+        )?;
+        changed |= members > 0;
+        let pins = tx.execute(
+            "UPDATE chat_list_pins SET chat_id = ?2 WHERE chat_id = ?1 AND NOT EXISTS (
+                SELECT 1 FROM chat_list_pins keep
+                WHERE keep.list_id = chat_list_pins.list_id AND keep.chat_id = ?2)",
+            params![from, to],
+        )?;
+        changed |= pins > 0;
+        for sql in [
+            "DELETE FROM messages WHERE chat = ?1",
+            "DELETE FROM stars WHERE chat = ?1",
+            "DELETE FROM message_pins WHERE chat = ?1",
+            "DELETE FROM polls WHERE chat = ?1",
+            "DELETE FROM poll_history WHERE chat = ?1",
+            "DELETE FROM poll_votes WHERE chat = ?1",
+            "DELETE FROM group_receipts WHERE chat = ?1",
+            "DELETE FROM scheduled WHERE chat = ?1",
+            "DELETE FROM chat_list_members WHERE chat_id = ?1",
+            "DELETE FROM chat_list_pins WHERE chat_id = ?1",
+        ] {
+            tx.execute(sql, params![from])?;
+        }
+        tx.execute(
+            "UPDATE chats SET last_activity = MAX(last_activity,
+                COALESCE((SELECT MAX(timestamp) FROM messages WHERE chat = ?1), 0))
+             WHERE id = ?1",
+            params![to],
+        )?;
+        let removed = tx.execute("DELETE FROM chats WHERE id = ?1", params![from])?;
+        tx.commit()?;
+        Ok(changed || removed > 0)
+    }
+
+    fn refile_keyed(
+        conn: &Connection,
+        table: &str,
+        keep_match: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<usize> {
+        let sql = format!(
+            "UPDATE {table} SET chat = ?2 WHERE chat = ?1 AND NOT EXISTS (
+                SELECT 1 FROM {table} keep WHERE keep.chat = ?2 {keep_match})"
+        );
+        conn.execute(&sql, params![from, to])
     }
 
     pub fn lids(&self) -> Result<Vec<(String, String)>> {
@@ -2144,6 +2255,41 @@ pub(crate) mod tests {
             chats[1].last.as_ref().map(|last| last.summary.as_str()),
             Some("message m3")
         );
+    }
+
+    #[test]
+    fn put_lid_moves_privacy_id_messages_onto_the_phone_chat() {
+        let archive = Archive::in_memory().expect("opens");
+        let lid = "167650256810092@lid";
+        let pn = "4917663430455@s.whatsapp.net";
+        archive.ensure_chat(lid, "Ada").expect("lid chat");
+        archive.ensure_chat(pn, "Ada").expect("phone chat");
+        archive
+            .insert_message(&message(lid, "own", 200, true), None)
+            .expect("lid row");
+        archive
+            .insert_message(&message(pn, "theirs", 100, false), None)
+            .expect("phone row");
+        archive
+            .insert_message(&message(lid, "theirs", 150, false), None)
+            .expect("duplicate id stays on the phone chat");
+        assert!(
+            archive
+                .put_lid("167650256810092", "4917663430455")
+                .expect("map")
+        );
+        assert!(archive.message(lid, "own").expect("read").is_none());
+        let moved = archive.message(pn, "own").expect("read").expect("refiled");
+        assert!(moved.from_me);
+        assert_eq!(moved.timestamp, 200);
+        let kept = archive
+            .message(pn, "theirs")
+            .expect("read")
+            .expect("canonical copy");
+        assert_eq!(kept.timestamp, 100);
+        assert!(archive.chat(lid).expect("lid chat").is_none());
+        let chat = archive.chat(pn).expect("phone chat").expect("exists");
+        assert_eq!(chat.last_activity, 200);
     }
 
     #[test]

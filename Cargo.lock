@@ -6488,7 +6488,7 @@ dependencies = [
 
 [[package]]
 name = "whatsfast"
-version = "0.15.290"
+version = "0.15.291"
 dependencies = [
  "aes",
  "anyhow",

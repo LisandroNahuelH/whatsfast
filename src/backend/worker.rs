@@ -690,6 +690,11 @@ impl Worker {
         self.me_about = self.archive.meta("me_about").ok().flatten();
         if let Ok(lids) = self.archive.lids() {
             self.lid_to_pn = lids.into_iter().collect();
+            for (lid, pn) in &self.lid_to_pn {
+                if let Err(error) = self.archive.refile_lid(lid, pn) {
+                    log::warn!("could not move privacy-id messages: {error}");
+                }
+            }
         }
         if let Ok(contacts) = self.archive.contacts() {
             self.contacts = contacts
@@ -765,7 +770,7 @@ impl Worker {
             let Ok(message) = wa::Message::decode_from_slice(&raw) else {
                 continue;
             };
-            let base = message.get_base_message();
+            let base = visible_base(&message);
             let Some(mut content) = classify(base) else {
                 continue;
             };
@@ -1845,7 +1850,7 @@ impl Worker {
             self.canonical(&info.source.sender)
         };
         let push_name = (!info.push_name.is_empty()).then(|| info.push_name.clone());
-        let base = message.get_base_message();
+        let base = visible_base(message);
         if let Some(expiration) = info.ephemeral_expiration
             && self
                 .archive
@@ -1901,7 +1906,7 @@ impl Worker {
                 }
                 Some(Type::MESSAGE_EDIT) => {
                     if let Some(edited) = protocol.edited_message.as_option()
-                        && let Some(mut content) = classify(edited.get_base_message())
+                        && let Some(mut content) = classify(visible_base(edited))
                     {
                         // Preserve downloaded media when updating a caption.
                         if let Ok(Some(existing)) = self.archive.message(&chat, &target)
@@ -2254,7 +2259,7 @@ impl Worker {
             .quoted_message
             .as_option()
             .map(|quoted| {
-                let base = quoted.get_base_message();
+                let base = visible_base(quoted);
                 (
                     classify(base)
                         .map(|content| content.summary())
@@ -4441,7 +4446,7 @@ impl Worker {
             });
             return false;
         };
-        let base = message.get_base_message().clone();
+        let base = visible_base(&message).clone();
         let (downloadable, mime, file_name): (Box<dyn Downloadable>, String, Option<String>) =
             if let Some(image) = base.image_message.as_option() {
                 (
@@ -4756,7 +4761,7 @@ impl Worker {
     fn media_name(&self, chat: &ChatId, id: &str) -> Option<(String, Option<String>)> {
         let raw = self.archive.raw(chat, id).ok().flatten()?;
         let message = wa::Message::decode_from_slice(&raw).ok()?;
-        let base = message.get_base_message().clone();
+        let base = visible_base(&message).clone();
         if let Some(image) = base.image_message.as_option() {
             Some((image.mimetype.clone().unwrap_or_default(), None))
         } else if let Some(video) = base
@@ -4986,7 +4991,7 @@ impl Worker {
                         .as_deref()
                         .and_then(|raw| wa::Message::decode_from_slice(raw).ok())
                         .and_then(|message| {
-                            let base = message.get_base_message();
+                            let base = visible_base(&message);
                             let sticker = base.sticker_message.as_option()?;
                             sticker_hash(
                                 sticker.file_sha256.as_deref(),
@@ -5858,6 +5863,21 @@ fn seconds(timestamp: i64) -> i64 {
     } else {
         timestamp.max(0)
     }
+}
+
+/// Peels `device_sent` / ephemeral / view-once wrappers until the body.
+/// `get_base_message` peels each kind once, so phone copies that nest
+/// `ephemeral_message { device_sent_message { body } }` still look empty.
+fn visible_base(message: &wa::Message) -> &wa::Message {
+    let mut current = message;
+    for _ in 0..8 {
+        let next = current.get_base_message();
+        if std::ptr::eq(next, current) {
+            break;
+        }
+        current = next;
+    }
+    current
 }
 
 fn sanitize(id: &str) -> String {
@@ -6817,9 +6837,9 @@ fn parse_conversation(conversation: wa::Conversation) -> ParsedChat {
             continue;
         };
         let from_me = key.from_me.unwrap_or(false);
-        let timestamp = info.message_timestamp.unwrap_or(0) as i64;
+        let timestamp = seconds(info.message_timestamp.unwrap_or(0) as i64);
         newest = newest.max(timestamp);
-        let base = message.get_base_message();
+        let base = visible_base(message);
         if let Some(protocol) = base.protocol_message.as_option() {
             if protocol.r#type == Some(wa::message::protocol_message::Type::REVOKE)
                 && let Some(target) = protocol.key.as_option().and_then(|key| key.id.clone())
@@ -6945,7 +6965,7 @@ fn parse_conversation(conversation: wa::Conversation) -> ParsedChat {
                 summary: context
                     .quoted_message
                     .as_option()
-                    .and_then(|quoted| classify(quoted.get_base_message()))
+                    .and_then(|quoted| classify(visible_base(quoted)))
                     .map(|content| content.summary())
                     .unwrap_or_default(),
             })
@@ -6983,7 +7003,7 @@ fn parse_conversation(conversation: wa::Conversation) -> ParsedChat {
     let last_activity = conversation
         .conversation_timestamp
         .or(conversation.last_msg_timestamp)
-        .map(|timestamp| timestamp as i64)
+        .map(|timestamp| seconds(timestamp as i64))
         .unwrap_or(0)
         .max(newest);
     use wa::conversation::EndOfHistoryTransferType as End;
@@ -7157,6 +7177,75 @@ mod tests {
         }
         assert_eq!(thumbnail_of(&image), Some(vec![0xff, 0xd8]));
         assert_eq!(classify(&wa::Message::default()), None);
+    }
+
+    fn phone_copy_nested_in_ephemeral(inner: wa::Message) -> wa::Message {
+        wa::Message {
+            ephemeral_message: MessageField::some(wa::message::FutureProofMessage {
+                message: MessageField::some(wa::Message {
+                    device_sent_message: MessageField::some(wa::message::DeviceSentMessage {
+                        destination_jid: Some("4917663430455@s.whatsapp.net".into()),
+                        message: MessageField::some(inner),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn nested_phone_copies_classify_after_peeling_wrappers() {
+        let image = wa::Message {
+            image_message: whatsapp_rust::prelude::MessageField::some(wa::message::ImageMessage {
+                caption: Some("from phone".into()),
+                mimetype: Some("image/jpeg".into()),
+                file_length: Some(10),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let nested = phone_copy_nested_in_ephemeral(image);
+        assert_eq!(
+            classify(nested.get_base_message()),
+            None,
+            "one peel leaves device_sent set on media"
+        );
+        match classify(visible_base(&nested)) {
+            Some(Content::Image { caption, .. }) => {
+                assert_eq!(caption.as_deref(), Some("from phone"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn history_files_nested_phone_copies_with_second_timestamps() {
+        let nested = phone_copy_nested_in_ephemeral(wa::Message::text("from phone"));
+        let parsed = parse_conversation(wa::Conversation {
+            id: "4917663430455@s.whatsapp.net".into(),
+            messages: vec![wa::HistorySyncMsg {
+                message: MessageField::some(wa::WebMessageInfo {
+                    key: MessageField::some(wa::MessageKey {
+                        remote_jid: Some("4917663430455@s.whatsapp.net".into()),
+                        from_me: Some(true),
+                        id: Some("own".into()),
+                        ..Default::default()
+                    }),
+                    message: MessageField::some(nested),
+                    message_timestamp: Some(1_700_000_000_000),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+        assert_eq!(parsed.messages.len(), 1);
+        assert_eq!(parsed.messages[0].id, "own");
+        assert_eq!(parsed.messages[0].timestamp, 1_700_000_000);
+        assert_eq!(parsed.messages[0].content, Content::text("from phone"));
+        assert_eq!(parsed.last_activity, 1_700_000_000);
     }
 
     #[test]
