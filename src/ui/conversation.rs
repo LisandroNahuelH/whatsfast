@@ -4574,7 +4574,7 @@ fn voice_player(
     Some(row)
 }
 
-/// Voice-recording controls and live waveform.
+/// Voice-recording controls and live waveform, packed next to Send.
 fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let (elapsed, levels) = match app.recording.as_ref() {
@@ -4582,50 +4582,14 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
         None => return,
     };
     let button = 36.0;
+    // Compact bars beside Send. Stretching them across the composer
+    // pulls the eyes away from the mic they just pressed.
+    const WAVE: f32 = 140.0;
     ui.allocate_ui_with_layout(
         vec2(ui.available_width().max(0.0), button),
-        egui::Layout::left_to_right(egui::Align::Center),
+        egui::Layout::right_to_left(egui::Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing.x = 10.0;
-            if theme::circle_button(
-                ui,
-                Icon::Trash,
-                button,
-                palette.surface,
-                palette.surface_hover,
-                palette.secondary,
-                i18n::t(I18nKey::CommonDiscard),
-            )
-            .clicked()
-            {
-                app.actions.push(Action::CancelRecording);
-            }
-            // Pulsing recording light and elapsed time.
-            let (dot, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
-            let pulse = 0.55 + 0.45 * (elapsed.as_secs_f32() * 3.0).sin().abs();
-            ui.painter()
-                .circle_filled(dot.center(), 5.0, palette.danger.gamma_multiply(pulse));
-            theme::text(
-                ui,
-                crate::util::duration(elapsed.as_secs() as u32),
-                theme::medium(14.0),
-                palette.text,
-            );
-            // Recent audio levels, newest on the right.
-            let wave_width = (ui.available_width() - button - 10.0).max(40.0);
-            let (rect, _) = ui.allocate_exact_size(vec2(wave_width, 28.0), Sense::hover());
-            let pitch = 3.0;
-            let count = (rect.width() / pitch).floor() as usize;
-            let start = levels.len().saturating_sub(count);
-            for (index, level) in levels[start..].iter().enumerate() {
-                let height = 2.0_f32 + (level * 4.0).min(1.0) * 24.0;
-                let x = rect.left() + index as f32 * pitch + 1.0;
-                ui.painter().rect_filled(
-                    Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(2.0, height)),
-                    1.0,
-                    palette.accent,
-                );
-            }
             if theme::circle_button(
                 ui,
                 Icon::Send,
@@ -4638,6 +4602,45 @@ fn recording_strip(app: &mut App, ui: &mut egui::Ui) {
             .clicked()
             {
                 app.actions.push(Action::SendRecording);
+            }
+            // Recent audio levels, newest on the right of this short strip.
+            let (rect, _) = ui.allocate_exact_size(vec2(WAVE, 28.0), Sense::hover());
+            ui.interact(rect, egui::Id::new("recording-wave"), Sense::hover());
+            let pitch = 3.0;
+            let count = (rect.width() / pitch).floor() as usize;
+            let start = levels.len().saturating_sub(count);
+            for (index, level) in levels[start..].iter().enumerate() {
+                let height = 2.0_f32 + (level * 4.0).min(1.0) * 24.0;
+                let x = rect.left() + index as f32 * pitch + 1.0;
+                ui.painter().rect_filled(
+                    Rect::from_center_size(egui::pos2(x, rect.center().y), vec2(2.0, height)),
+                    1.0,
+                    palette.accent,
+                );
+            }
+            theme::text(
+                ui,
+                crate::util::duration(elapsed.as_secs() as u32),
+                theme::medium(14.0),
+                palette.text,
+            );
+            // Pulsing recording light.
+            let (dot, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+            let pulse = 0.55 + 0.45 * (elapsed.as_secs_f32() * 3.0).sin().abs();
+            ui.painter()
+                .circle_filled(dot.center(), 5.0, palette.danger.gamma_multiply(pulse));
+            if theme::circle_button(
+                ui,
+                Icon::Trash,
+                button,
+                palette.surface,
+                palette.surface_hover,
+                palette.secondary,
+                i18n::t(I18nKey::CommonDiscard),
+            )
+            .clicked()
+            {
+                app.actions.push(Action::CancelRecording);
             }
         },
     );

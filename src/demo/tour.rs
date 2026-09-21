@@ -1149,6 +1149,32 @@ mod tests {
     }
 
     #[test]
+    fn recording_controls_cluster_on_the_right() {
+        let mut app = super::super::tests::app();
+        prepare(&mut app);
+        crate::demo::apply_flags(&mut app, Some("recording"));
+        let ctx = egui::Context::default();
+        app.attach(&ctx);
+        for at in 0..3 {
+            step_output(&mut app, &ctx, Vec::new(), at as f32 * 0.05, true);
+        }
+        let wave = ctx
+            .read_response(egui::Id::new("recording-wave"))
+            .expect("recording wave")
+            .rect;
+        assert!(
+            (wave.width() - 140.0).abs() < 0.5,
+            "recording wave stays compact, width {}",
+            wave.width()
+        );
+        assert!(
+            wave.left() > 800.0,
+            "recording wave sits on the right next to Send, left {}",
+            wave.left()
+        );
+    }
+
+    #[test]
     fn the_schedule_dialog_stacks_its_parts() {
         let mut app = super::super::tests::app();
         prepare(&mut app);
