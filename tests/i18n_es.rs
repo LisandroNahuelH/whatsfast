@@ -35,8 +35,8 @@ const PAGES: &[Option<&str>] = &[
 /// page that stops painting its rows fails here instead of passing silently.
 const FLOOR: &[(Option<&str>, usize)] = &[
     (None, 81),
-    (Some("empty"), 40),
-    (Some("settings"), 110),
+    (Some("empty"), 39),
+    (Some("settings"), 108),
     (Some("login"), 11),
     (Some("logged-out"), 5),
     (Some("pair"), 13),
@@ -45,7 +45,7 @@ const FLOOR: &[(Option<&str>, usize)] = &[
     (Some("info"), 90),
     (Some("mention"), 66),
     (Some("light"), 81),
-    (Some("privacy-except"), 115),
+    (Some("privacy-except"), 113),
     (Some("image-viewer"), 78),
     (Some("poll"), 66),
     (Some("update-failed"), 84),

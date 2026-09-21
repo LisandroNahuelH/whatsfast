@@ -17,9 +17,12 @@ use crate::util;
 const MIN_ZOOM: f32 = 1.0;
 const MAX_ZOOM: f32 = 8.0;
 const HEADER: f32 = 56.0;
-const STRIP: f32 = 76.0;
 const THUMB: f32 = 56.0;
 const STRIP_GAP: f32 = 8.0;
+const STRIP_PAD: f32 = 8.0;
+/// Solid bar under the thumbs: width + inner + outer (theme uses a floating bar).
+const STRIP_BAR: f32 = 8.0 + 4.0 + 2.0;
+const STRIP: f32 = STRIP_PAD * 2.0 + THUMB + STRIP_BAR;
 
 #[derive(Clone, Debug)]
 pub struct ImageViewer {
@@ -604,9 +607,19 @@ fn paint_strip(
     if items.is_empty() {
         return;
     }
-    let inner = rect.shrink2(vec2(8.0, 8.0));
+    let inner = rect.shrink2(vec2(STRIP_PAD, STRIP_PAD));
     let pad = strip_side_pad(inner.width());
     let mut child = ui.new_child(UiBuilder::new().max_rect(inner));
+    // The app style floats bars over content. This strip needs the bar under
+    // the thumbs, so they stay fully visible.
+    {
+        let scroll = &mut child.spacing_mut().scroll;
+        scroll.floating = false;
+        scroll.bar_width = 8.0;
+        scroll.bar_inner_margin = 4.0;
+        scroll.bar_outer_margin = 2.0;
+        scroll.foreground_color = false;
+    }
     egui::ScrollArea::horizontal()
         .id_salt("viewer-strip")
         .auto_shrink([false, false])
