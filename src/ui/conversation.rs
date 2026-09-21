@@ -3426,6 +3426,11 @@ fn content(
                 ));
             }
             detail.push(crate::util::bytes(media.size));
+            let click = if message.content.gallery_kind().is_some() {
+                AttachmentClick::Viewer
+            } else {
+                AttachmentClick::Open
+            };
             attachment(
                 ui,
                 view,
@@ -3435,7 +3440,7 @@ fn content(
                 file_name,
                 &detail.join(" · "),
                 width,
-                true,
+                click,
                 actions,
             );
             caption.as_ref().and_then(|caption| {
@@ -4067,7 +4072,11 @@ fn video(
             title,
             &detail.join(" · "),
             width,
-            !gif,
+            if gif {
+                AttachmentClick::Idle
+            } else {
+                AttachmentClick::Viewer
+            },
             actions,
         );
         return width;
@@ -4187,6 +4196,12 @@ fn video(
     size.x
 }
 
+enum AttachmentClick {
+    Idle,
+    Open,
+    Viewer,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn attachment(
     ui: &mut egui::Ui,
@@ -4197,10 +4212,11 @@ fn attachment(
     title: &str,
     detail: &str,
     width: f32,
-    open_file: bool,
+    click: AttachmentClick,
     actions: &mut Vec<Action>,
 ) {
     let palette = view.palette;
+    let shows_external = matches!(click, AttachmentClick::Open);
     let response = Frame::new()
         .fill(palette.window.gamma_multiply(0.35))
         .corner_radius(CornerRadius::same(8))
@@ -4220,7 +4236,7 @@ fn attachment(
                 theme::paint_icon(ui, icon, disc, 18.0, palette.accent);
             };
             let action = |ui: &mut egui::Ui| match (&media.path, &media.state) {
-                (Some(_), _) if open_file => {
+                (Some(_), _) if shows_external => {
                     theme::icon(ui, Icon::ExternalLink, 18.0, palette.secondary);
                 }
                 (Some(_), _) => {}
@@ -4273,7 +4289,7 @@ fn attachment(
             response.rect,
         );
     });
-    let steal = open_file || media.path.is_none();
+    let steal = !matches!(click, AttachmentClick::Idle) || media.path.is_none();
     let mut response = ui.interact(
         response.rect,
         ui.id().with(("attachment", &message.id)),
@@ -4288,9 +4304,21 @@ fn attachment(
     }
     if steal && response.clicked() && !auto {
         match &media.path {
-            Some(path) if open_file => actions.push(Action::OpenFile(path.clone())),
-            Some(_) => {}
+            Some(path) => match click {
+                AttachmentClick::Open => actions.push(Action::OpenFile(path.clone())),
+                AttachmentClick::Viewer => actions.push(Action::ViewImage {
+                    chat: view.chat.id.clone(),
+                    message: message.id.clone(),
+                }),
+                AttachmentClick::Idle => {}
+            },
             None if !matches!(media.state, MediaState::Downloading) => {
+                if matches!(click, AttachmentClick::Viewer) {
+                    actions.push(Action::ViewImage {
+                        chat: view.chat.id.clone(),
+                        message: message.id.clone(),
+                    });
+                }
                 actions.push(Action::Download {
                     chat: view.chat.id.clone(),
                     message: message.id.clone(),
@@ -4646,6 +4674,7 @@ fn chat_of(chat: &ChatId) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::GalleryKind;
 
     fn media(w: Option<u32>, h: Option<u32>) -> Media {
         Media {
@@ -4873,6 +4902,44 @@ mod tests {
             })
         );
         assert_eq!(downloaded_clip_action(true, chat, "gif".into()), None);
+    }
+
+    fn document(mime: &str, name: &str) -> Content {
+        Content::Document {
+            media: Media {
+                mime: mime.into(),
+                size: 1,
+                path: Some(PathBuf::from(name)),
+                ..Default::default()
+            },
+            file_name: name.into(),
+            caption: None,
+            pages: None,
+        }
+    }
+
+    fn attachment_click(content: &Content) -> AttachmentClick {
+        if content.gallery_kind().is_some() {
+            AttachmentClick::Viewer
+        } else {
+            AttachmentClick::Open
+        }
+    }
+
+    #[test]
+    fn a_video_file_opens_the_viewer_and_a_pdf_opens_the_file() {
+        assert!(matches!(
+            attachment_click(&document("video/mp4", "clip.mp4")),
+            AttachmentClick::Viewer
+        ));
+        assert!(matches!(
+            attachment_click(&document("application/pdf", "notes.pdf")),
+            AttachmentClick::Open
+        ));
+        assert_eq!(
+            document("video/mp4", "clip.mp4").gallery_kind(),
+            Some(GalleryKind::Video)
+        );
     }
 }
 

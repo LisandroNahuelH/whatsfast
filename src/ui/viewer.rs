@@ -8,7 +8,7 @@ use crate::animation;
 use crate::app::App;
 use crate::archive::ChatMedia;
 use crate::i18n::{self, Key};
-use crate::model::{Action, Content, Dialog, Message};
+use crate::model::{Action, Dialog, GalleryKind, Message};
 use crate::theme::{self, Icon};
 use crate::ui::conversation;
 use crate::ui::widgets;
@@ -46,32 +46,20 @@ impl ImageViewer {
     }
 }
 
-/// Path of a downloaded image or non-GIF video.
+/// Path of a downloaded gallery photo or video.
 pub fn media_path(message: &Message) -> Option<&Path> {
-    match &message.content {
-        Content::Image { media, .. } => media.path.as_deref(),
-        Content::Video {
-            gif: false, media, ..
-        } => media.path.as_deref(),
-        _ => None,
-    }
+    message.content.gallery_kind()?;
+    message.content.media()?.path.as_deref()
 }
 
 /// Neighbor image or video in a loaded page. Does not wrap.
 pub fn neighbor_image<'a>(messages: &'a [Message], current: &str, step: i8) -> Option<&'a str> {
     let ids: Vec<&str> = messages
         .iter()
-        .filter(|message| is_gallery_item(&message.content))
+        .filter(|message| message.content.gallery_kind().is_some())
         .map(|message| message.id.as_str())
         .collect();
     neighbor_ids(&ids, current, step)
-}
-
-fn is_gallery_item(content: &Content) -> bool {
-    matches!(
-        content,
-        Content::Image { .. } | Content::Video { gif: false, .. }
-    )
 }
 
 fn neighbor_ids<'a>(ids: &[&'a str], current: &str, step: i8) -> Option<&'a str> {
@@ -113,14 +101,13 @@ fn still_image_path(app: &App, viewer: &ImageViewer) -> Option<PathBuf> {
         .viewer_media
         .iter()
         .find(|item| item.id == viewer.message);
-    if item.is_some_and(|item| item.video) {
-        return None;
-    }
     let message = app
         .conversations
         .get(&viewer.chat)
         .and_then(|conversation| conversation.message(&viewer.message));
-    if message.is_some_and(|message| matches!(message.content, Content::Video { gif: false, .. })) {
+    if item.is_some_and(|item| item.video)
+        || message.is_some_and(|message| message.content.gallery_kind() == Some(GalleryKind::Video))
+    {
         return None;
     }
     if let Some(path) = item
@@ -129,10 +116,16 @@ fn still_image_path(app: &App, viewer: &ImageViewer) -> Option<PathBuf> {
     {
         return Some(path);
     }
-    match message.map(|message| &message.content) {
-        Some(Content::Image { media, .. }) => media.path.clone().filter(|path| path.is_file()),
-        _ => None,
+    let message = message?;
+    if message.content.gallery_kind() != Some(GalleryKind::Photo) {
+        return None;
     }
+    message
+        .content
+        .media()?
+        .path
+        .clone()
+        .filter(|path| path.is_file())
 }
 
 pub fn neighbor_media<'a>(items: &'a [ChatMedia], current: &str, step: i8) -> Option<&'a str> {
@@ -444,7 +437,7 @@ fn paint_stage(
     let video = item.as_ref().is_some_and(|item| item.video)
         || message
             .as_ref()
-            .is_some_and(|message| matches!(message.content, Content::Video { gif: false, .. }));
+            .is_some_and(|message| message.content.gallery_kind() == Some(GalleryKind::Video));
     let path = item
         .as_ref()
         .and_then(|item| item.path.clone())
@@ -746,7 +739,7 @@ fn fit(size: egui::Vec2, max: egui::Vec2) -> egui::Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Media, Message};
+    use crate::model::{Content, Media};
 
     #[test]
     fn panes_keep_a_positive_stage_inside_the_window() {
@@ -858,16 +851,35 @@ mod tests {
         }
     }
 
+    fn file_clip(id: &str) -> Message {
+        Message {
+            content: Content::Document {
+                media: Media {
+                    mime: "application/octet-stream".into(),
+                    size: 1,
+                    path: Some(std::path::PathBuf::from("clip.mp4")),
+                    ..Default::default()
+                },
+                file_name: "clip.mp4".into(),
+                caption: None,
+                pages: None,
+            },
+            ..photo(id, None)
+        }
+    }
+
     #[test]
     fn neighbor_walks_photos_and_videos_and_skips_gifs() {
         let messages = vec![
             photo("a", Some("a.jpg")),
             video("clip", false),
+            file_clip("file"),
             video("loop", true),
             photo("b", None),
         ];
         assert_eq!(neighbor_image(&messages, "a", 1), Some("clip"));
-        assert_eq!(neighbor_image(&messages, "clip", 1), Some("b"));
+        assert_eq!(neighbor_image(&messages, "clip", 1), Some("file"));
+        assert_eq!(neighbor_image(&messages, "file", 1), Some("b"));
         assert_eq!(neighbor_image(&messages, "b", 1), None);
         assert_eq!(neighbor_image(&messages, "clip", -1), Some("a"));
     }

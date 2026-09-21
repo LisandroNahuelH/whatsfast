@@ -1012,12 +1012,12 @@ impl Archive {
         Ok(messages)
     }
 
-    /// Images and non-GIF videos of one chat, oldest first, for the viewer strip.
+    /// Images, non-GIF videos, and document files of those types, oldest first.
     pub fn chat_media(&self, chat: &str) -> Result<Vec<ChatMedia>> {
         let mut statement = self.connection.prepare(
             "SELECT id, timestamp, content, thumbnail FROM messages
              WHERE chat = ?1 AND json_valid(content)
-             AND json_extract(content, '$.kind') IN ('image', 'video')
+             AND json_extract(content, '$.kind') IN ('image', 'video', 'document')
              ORDER BY timestamp ASC, rowid ASC",
         )?;
         let rows = statement.query_map(params![chat], |row| {
@@ -1033,17 +1033,14 @@ impl Archive {
             let content: Content = serde_json::from_str(&raw).unwrap_or(Content::Unsupported {
                 what: "unreadable".into(),
             });
-            let (video, path) = match content {
-                Content::Image { media, .. } => (false, media.path),
-                Content::Video {
-                    gif: false, media, ..
-                } => (true, media.path),
-                _ => continue,
+            let Some(kind) = content.gallery_kind() else {
+                continue;
             };
+            let path = content.media().and_then(|media| media.path.clone());
             list.push(ChatMedia {
                 id,
                 timestamp,
-                video,
+                video: kind == crate::model::GalleryKind::Video,
                 path,
                 thumbnail,
             });
@@ -2122,11 +2119,43 @@ pub(crate) mod tests {
         archive
             .insert_message(&message("1@s.whatsapp.net", "text", 40, false), None)
             .unwrap();
+        let clip = {
+            let mut row = message("1@s.whatsapp.net", "file-mp4", 25, false);
+            row.content = Content::Document {
+                media: crate::model::Media {
+                    mime: "application/octet-stream".into(),
+                    size: 4,
+                    path: Some(PathBuf::from("clip.mp4")),
+                    ..Default::default()
+                },
+                file_name: "clip.mp4".into(),
+                caption: None,
+                pages: None,
+            };
+            row
+        };
+        let pdf = {
+            let mut row = message("1@s.whatsapp.net", "notes", 26, false);
+            row.content = Content::Document {
+                media: crate::model::Media {
+                    mime: "application/pdf".into(),
+                    size: 5,
+                    ..Default::default()
+                },
+                file_name: "notes.pdf".into(),
+                caption: None,
+                pages: None,
+            };
+            row
+        };
+        archive.insert_message(&clip, None).unwrap();
+        archive.insert_message(&pdf, None).unwrap();
         let media = archive.chat_media("1@s.whatsapp.net").unwrap();
         let ids: Vec<&str> = media.iter().map(|item| item.id.as_str()).collect();
-        assert_eq!(ids, vec!["photo", "video"]);
+        assert_eq!(ids, vec!["photo", "video", "file-mp4"]);
         assert!(!media[0].video && media[0].path.is_some());
         assert!(media[1].video && media[1].path.is_none());
+        assert!(media[2].video && media[2].path.is_some());
     }
 
     #[test]

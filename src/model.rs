@@ -3,7 +3,7 @@
 //! The backend translates protocol types into these models, keeping protobufs
 //! out of views and giving the archive a stable shape.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -328,6 +328,13 @@ pub enum Content {
     },
 }
 
+/// Photo or playable video in the in-app viewer album.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GalleryKind {
+    Photo,
+    Video,
+}
+
 /// Poll information safe to send to the interface; encryption keys stay in the worker.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -484,6 +491,45 @@ impl Content {
             | Self::Sticker { media, .. } => Some(media),
             _ => None,
         }
+    }
+
+    /// Whether this row belongs in the photo/video viewer.
+    pub fn gallery_kind(&self) -> Option<GalleryKind> {
+        match self {
+            Self::Image { .. } => Some(GalleryKind::Photo),
+            Self::Video { gif: false, .. } => Some(GalleryKind::Video),
+            Self::Document {
+                media, file_name, ..
+            } => gallery_file(&media.mime, file_name),
+            _ => None,
+        }
+    }
+}
+
+fn gallery_file(mime: &str, file_name: &str) -> Option<GalleryKind> {
+    let mime = mime
+        .split(';')
+        .next()
+        .unwrap_or(mime)
+        .trim()
+        .to_ascii_lowercase();
+    if mime == "image/gif" {
+        return None;
+    }
+    if mime.starts_with("image/") {
+        return Some(GalleryKind::Photo);
+    }
+    if mime.starts_with("video/") {
+        return Some(GalleryKind::Video);
+    }
+    let ext = Path::new(file_name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())?;
+    match ext.as_str() {
+        "jpg" | "jpeg" | "png" | "webp" | "bmp" | "tif" | "tiff" => Some(GalleryKind::Photo),
+        "mp4" | "m4v" | "mov" | "webm" | "mkv" | "3gp" | "3gpp" => Some(GalleryKind::Video),
+        _ => None,
     }
 }
 
@@ -1163,6 +1209,76 @@ mod tests {
             size: 1,
             ..Default::default()
         }
+    }
+
+    fn document(mime: &str, name: &str) -> Content {
+        Content::Document {
+            media: Media {
+                mime: mime.into(),
+                size: 1,
+                ..Default::default()
+            },
+            file_name: name.into(),
+            caption: None,
+            pages: None,
+        }
+    }
+
+    #[test]
+    fn gallery_kind_covers_photos_videos_and_those_files() {
+        assert_eq!(
+            Content::Image {
+                caption: None,
+                media: media(),
+            }
+            .gallery_kind(),
+            Some(GalleryKind::Photo)
+        );
+        assert_eq!(
+            Content::Video {
+                caption: None,
+                media: Media {
+                    mime: "video/mp4".into(),
+                    size: 1,
+                    ..Default::default()
+                },
+                seconds: None,
+                gif: false,
+            }
+            .gallery_kind(),
+            Some(GalleryKind::Video)
+        );
+        assert_eq!(
+            Content::Video {
+                caption: None,
+                media: Media {
+                    mime: "video/mp4".into(),
+                    size: 1,
+                    ..Default::default()
+                },
+                seconds: None,
+                gif: true,
+            }
+            .gallery_kind(),
+            None
+        );
+        assert_eq!(
+            document("video/mp4", "clip.mp4").gallery_kind(),
+            Some(GalleryKind::Video)
+        );
+        assert_eq!(
+            document("application/octet-stream", "clip.MP4").gallery_kind(),
+            Some(GalleryKind::Video)
+        );
+        assert_eq!(
+            document("image/jpeg", "scan.jpg").gallery_kind(),
+            Some(GalleryKind::Photo)
+        );
+        assert_eq!(
+            document("application/pdf", "notes.pdf").gallery_kind(),
+            None
+        );
+        assert_eq!(document("image/gif", "loop.gif").gallery_kind(), None);
     }
 
     #[test]

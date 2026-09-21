@@ -646,6 +646,18 @@ pub fn populate(app: &mut App) {
         },
         message(
             ada,
+            "ada-clip-file",
+            true,
+            older + 90,
+            Content::Document {
+                media: media("video/mp4", 1_204_113, None, None),
+                file_name: "clip.mp4".into(),
+                caption: None,
+                pages: None,
+            },
+        ),
+        message(
+            ada,
             "ada-format",
             false,
             older + 60 * 16,
@@ -1367,26 +1379,18 @@ pub fn apply_flags(app: &mut App, page: Option<&str>) {
                         conversation
                             .messages
                             .iter()
-                            .filter_map(|message| match &message.content {
-                                crate::model::Content::Image { media, .. } => {
-                                    Some(crate::archive::ChatMedia {
-                                        id: message.id.clone(),
-                                        timestamp: message.timestamp,
-                                        video: false,
-                                        path: media.path.clone(),
-                                        thumbnail: message.thumbnail.clone(),
-                                    })
-                                }
-                                crate::model::Content::Video {
-                                    gif: false, media, ..
-                                } => Some(crate::archive::ChatMedia {
+                            .filter_map(|message| {
+                                let kind = message.content.gallery_kind()?;
+                                Some(crate::archive::ChatMedia {
                                     id: message.id.clone(),
                                     timestamp: message.timestamp,
-                                    video: true,
-                                    path: media.path.clone(),
+                                    video: kind == crate::model::GalleryKind::Video,
+                                    path: message
+                                        .content
+                                        .media()
+                                        .and_then(|media| media.path.clone()),
                                     thumbnail: message.thumbnail.clone(),
-                                }),
-                                _ => None,
+                                })
                             })
                             .collect()
                     })
