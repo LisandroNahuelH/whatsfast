@@ -336,28 +336,25 @@ fn header(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         });
 }
 
-/// Which pin chip a click on the banner bar belongs to. A hit on a chip
-/// keeps that chip; empty space on the same row goes to the nearest chip.
-fn pin_banner_index(chips: &[Rect], bar: Rect, pos: egui::Pos2) -> Option<usize> {
-    if chips.is_empty() || !bar.contains(pos) {
+/// Height of one pinned-message row. A pin is one plain line under the header,
+/// so the banner adds a row per pin instead of wrapping or clipping a bubble.
+const PIN_ROW_HEIGHT: f32 = 30.0;
+/// Gap between the banner edge and the pin icon, and the icon's own box.
+const PIN_ROW_INSET: f32 = 12.0;
+const PIN_ICON: f32 = 16.0;
+
+/// The pinned row a point on the banner belongs to. Rows are one line each,
+/// stacked from the top, so a click answers with the band under the pointer.
+fn pin_banner_row(bar: Rect, rows: usize, pos: egui::Pos2) -> Option<usize> {
+    if rows == 0 || !bar.contains(pos) {
         return None;
     }
-    chips
-        .iter()
-        .position(|chip| pos.x >= chip.left() && pos.x <= chip.right())
-        .or_else(|| {
-            chips
-                .iter()
-                .enumerate()
-                .min_by(|(_, left), (_, right)| {
-                    (left.center().x - pos.x)
-                        .abs()
-                        .total_cmp(&(right.center().x - pos.x).abs())
-                })
-                .map(|(index, _)| index)
-        })
+    let index = ((pos.y - bar.top()) / PIN_ROW_HEIGHT).floor();
+    (index >= 0.0 && (index as usize) < rows).then_some(index as usize)
 }
 
+/// Pinned messages under the chat header: plain text, one line each, with the
+/// message's own words cut off with an ellipsis when they do not fit.
 fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
     let rows: Vec<crate::archive::Pinned> =
         app.chat_pins.get(&chat.id).cloned().unwrap_or_default();
@@ -365,51 +362,45 @@ fn pin_banner(app: &mut App, ui: &mut egui::Ui, chat: &Chat) {
         return;
     }
     let palette = app.palette;
-    let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
+    let height = PIN_ROW_HEIGHT * rows.len() as f32;
+    let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     ui.painter().rect_filled(bar, 0.0, palette.panel);
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(bar.shrink2(vec2(12.0, 6.0)))
-            .layout(Layout::left_to_right(Align::Center)),
-    );
-    child.set_clip_rect(bar);
-    let (icon, _) = child.allocate_exact_size(vec2(16.0, 16.0), Sense::hover());
-    theme::paint_icon(&child, Icon::Pin, icon, 14.0, palette.accent);
-    child.spacing_mut().item_spacing.x = 6.0;
-    let mut chips = Vec::with_capacity(rows.len());
-    for row in rows {
+    let icon_left = bar.left() + PIN_ROW_INSET;
+    let text_left = icon_left + PIN_ICON + 8.0;
+    let text_width = (bar.right() - PIN_ROW_INSET - text_left).max(1.0);
+    for (index, row) in rows.iter().enumerate() {
+        let center_y = bar.top() + PIN_ROW_HEIGHT * (index as f32 + 0.5);
+        let icon = Rect::from_center_size(
+            pos2(icon_left + PIN_ICON / 2.0, center_y),
+            Vec2::splat(PIN_ICON),
+        );
+        theme::paint_icon(ui, Icon::Pin, icon, 14.0, palette.accent);
         let label = widgets::line(
-            &child,
+            ui,
             &row.text,
-            theme::regular(12.0),
+            theme::regular(13.0),
             palette.text,
-            160.0,
+            text_width,
             1,
         );
-        let size = vec2(label.size().x + 16.0, 24.0);
-        let (rect, _) = child.allocate_exact_size(size, Sense::hover());
-        child.painter().rect_filled(rect, 12.0, palette.surface);
         label.paint(
-            &child,
-            pos2(rect.left() + 8.0, rect.center().y - label.size().y / 2.0),
+            ui,
+            pos2(text_left, center_y - label.size().y / 2.0),
             palette.text,
         );
-        chips.push((rect, row));
     }
     let response = ui
         .interact(bar, ui.id().with("pin-banner"), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
     if response.clicked()
         && let Some(pos) = response.interact_pointer_pos()
+        && let Some(index) = pin_banner_row(bar, rows.len(), pos)
     {
-        let rects: Vec<Rect> = chips.iter().map(|(rect, _)| *rect).collect();
-        if let Some(index) = pin_banner_index(&rects, bar, pos) {
-            let row = &chips[index].1;
-            app.actions.push(Action::OpenMessage {
-                chat: row.chat.clone(),
-                message: row.id.clone(),
-            });
-        }
+        let row = &rows[index];
+        app.actions.push(Action::OpenMessage {
+            chat: row.chat.clone(),
+            message: row.id.clone(),
+        });
     }
 }
 
@@ -4703,23 +4694,19 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_the_pin_banner_row_opens_the_nearest_chip() {
-        let bar = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 36.0));
-        let one = Rect::from_min_size(pos2(40.0, 6.0), vec2(80.0, 24.0));
-        assert_eq!(pin_banner_index(&[one], bar, pos2(80.0, 18.0)), Some(0));
-        assert_eq!(pin_banner_index(&[one], bar, pos2(10.0, 2.0)), Some(0));
-        assert_eq!(pin_banner_index(&[one], bar, pos2(390.0, 34.0)), Some(0));
-        assert_eq!(pin_banner_index(&[one], bar, pos2(10.0, 40.0)), None);
+    fn a_click_on_the_pin_banner_opens_the_row_under_it() {
+        let bar = Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 60.0));
+        // One plain line per pin, so the second pin owns the second band.
+        assert_eq!(pin_banner_row(bar, 2, pos2(80.0, 2.0)), Some(0));
+        assert_eq!(pin_banner_row(bar, 2, pos2(10.0, 29.9)), Some(0));
+        assert_eq!(pin_banner_row(bar, 2, pos2(50.0, 30.0)), Some(1));
+        assert_eq!(pin_banner_row(bar, 2, pos2(390.0, 59.9)), Some(1));
 
-        let left = Rect::from_min_size(pos2(40.0, 6.0), vec2(60.0, 24.0));
-        let right = Rect::from_min_size(pos2(120.0, 6.0), vec2(60.0, 24.0));
-        let chips = [left, right];
-        assert_eq!(pin_banner_index(&chips, bar, pos2(50.0, 18.0)), Some(0));
-        assert_eq!(pin_banner_index(&chips, bar, pos2(150.0, 18.0)), Some(1));
-        assert_eq!(pin_banner_index(&chips, bar, pos2(105.0, 18.0)), Some(0));
-        assert_eq!(pin_banner_index(&chips, bar, pos2(115.0, 18.0)), Some(1));
-        assert_eq!(pin_banner_index(&chips, bar, pos2(5.0, 18.0)), Some(0));
-        assert_eq!(pin_banner_index(&[], bar, pos2(50.0, 18.0)), None);
+        // Outside the banner, in the space a shorter banner left below it, or
+        // with nothing pinned at all, a click opens nothing.
+        assert_eq!(pin_banner_row(bar, 2, pos2(50.0, 60.0)), None);
+        assert_eq!(pin_banner_row(bar, 1, pos2(50.0, 30.0)), None);
+        assert_eq!(pin_banner_row(bar, 0, pos2(50.0, 10.0)), None);
     }
 
     #[test]

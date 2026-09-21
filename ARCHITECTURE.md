@@ -40,6 +40,9 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   Search and Ctrl+G open it; Ctrl+F stays on the left list. The day filter is
   an `Area` popup under the calendar icon, centered on it. Closing the chat
   closes the pane.
+  Pinned messages sit under the chat header as one plain line each (`Pin` icon
+  plus the message text, one line, ellipsis), so the banner grows a row per
+  pin instead of wrapping a chip; a click opens the pin of the band it hits.
 - **`src/app.rs`** — Applies actions after each frame. Opening a chat always
   sends `LoadChat` for the newest archive page. A verified GitHub update
   in `.whatsfast-pending` is adopted here on process start (not in demos).
