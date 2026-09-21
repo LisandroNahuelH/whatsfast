@@ -4,6 +4,7 @@ Append-only, newest first.
 
 | Date | Decision | Why | Replaces |
 |------|----------|-----|----------|
+| 2026-09-20 | Text bubbles size to row ink, not wrap cap | `Galley::size().x` is the 72% wrap limit; short outgoing lines sat in a wide empty pad | Allocate `galley.size().x` for the body |
 | 2026-09-20 | Windows and Linux use a client-drawn caption | Native min/max/close ignore the app palette and Lucide | `titlebar_shown(false)` with OS decorations still on |
 | 2026-09-20 | F11 toggles viewport fullscreen | Same shortcut as other desktop apps; Esc still dismisses UI | No fullscreen key |
 | 2026-09-20 | Opening a chat reloads the newest archive page | History files rows without `Event::Messages`; `requested` skipped a second `LoadChat` | One `LoadChat` per process lifetime |
