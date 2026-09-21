@@ -30,7 +30,7 @@ Settings **Downloads** paints attachment weight as 6 px accent bars on a dim tra
 
 **Send read receipts** and **Show when you are typing** sit in Settings **Privacy**, above the account rows. Reason: they control what others see of you, not chat chrome.
 
-The media viewer is a full-window overlay: a 56 px header (avatar, name, last seen, zoom, go-to-message, reply, star, pin, react, forward, download, close), the photo or video in the centre, and a full-width filmstrip of that chat's images and videos. Right-click the photo, or the photo bubble in the chat, for **Copy image**. Reason: WhatsApp Web keeps actions and the rest of the album in reach; the gallery is the archive, not the loaded page, and a copied photo should paste into other apps.
+The media viewer is a full-window overlay: a 56 px header (avatar, name, last seen, zoom, go-to-message, reply, star, pin, react, forward, download, close), the photo or video in the centre, and a full-width filmstrip of that chat's images and videos in time order, including MP4 and similar files sent as documents. Right-click the photo, or the photo bubble in the chat, for **Copy image**. Reason: WhatsApp Web keeps actions and the rest of the album in reach; a video file is still a video, not a generic download.
 
 A message pin is not a chat pin. Pin for everyone for 7 days, at most three per chat, with a left-list copy of Starred, chips under the chat header, and the same footer mark a star uses. A click on the chip or on the rest of that header row jumps to the message. Reason: WhatsApp Web's pin-in-chat is a protocol act, and the row itself must show the pin.
 
