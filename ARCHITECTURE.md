@@ -21,8 +21,8 @@ in `AGENTS/whatsfast-upstream-sync.md` (once that file exists).
   paints a 27 px themed caption (`theme::client_chrome`) with Lucide min/max/close
   and `ViewportCommand` drag, minimize, maximize, and close. `F11` sends
   `ToggleFullscreen` and hides that bar. macOS keeps native traffic lights.
-  The open chat paints a bundled doodle wallpaper behind the bubbles, scaled
-  to cover the panel. Each family has three PNGs; Settings names them
+  The open chat paints a bundled 4K doodle wallpaper behind the bubbles.
+  `paint_in` fits the whole sheet, then `MirroredRepeat` fills the rest. Each family has three PNGs; Settings names them
   `Black 1` and so on, and the chat menu **Next wallpaper** steps the slot.
   Settings keeps a plain `palette.chat` fill.
   Clicking a chat photo or video opens `ui/viewer.rs`, a full-window overlay

@@ -123,7 +123,7 @@ Each item below is a WhatsFast change on top of the upstream ZapFast baseline. U
 
 ### Chat doodle wallpaper that follows the theme
 
-- **Technical:** The open chat paints a 1080p doodle wallpaper behind the bubbles and scales it to fill the panel as the window resizes. Settings **Chat wallpaper** is Auto by default (Black 1 to White 3 from the theme colours). Hover a name to preview it. Right-click the open chat and choose **Next wallpaper** to step through the three doodles for that family. Settings itself stays a plain colour.
+- **Technical:** The open chat paints a 4K doodle wallpaper behind the bubbles. The sheet fits the panel, and mirrored repeat covers a 16:10 window without an empty edge. Settings **Chat wallpaper** is Auto by default (Black 1 to White 3 from the theme colours). Hover a name to preview it. Right-click the open chat and choose **Next wallpaper** to step through the three doodles for that family. Settings itself stays a plain colour.
 - **Daily use:** The thread looks like WhatsApp's doodle paper, tinted to Dark, Nord, Ristretto, or Light, without hiding the bubbles.
 
 </td>

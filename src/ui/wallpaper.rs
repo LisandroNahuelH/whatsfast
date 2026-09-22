@@ -1,6 +1,6 @@
 //! Bundled doodle wallpapers behind the open chat.
 
-use egui::{Color32, ColorImage, Pos2, Rect, TextureHandle, TextureOptions, Ui, pos2};
+use egui::{Color32, ColorImage, Rect, TextureHandle, TextureOptions, TextureWrapMode, Ui, pos2};
 
 use crate::settings::{ChatWallpaper, WALLPAPER_SLOTS, WallpaperFamily};
 use crate::theme::Palette;
@@ -42,12 +42,15 @@ pub fn paint_in(ui: &mut Ui, family: WallpaperFamily, slot: u8, rect: Rect) {
     if tex.x <= 0.0 || tex.y <= 0.0 {
         return;
     }
-    let scale = (rect.width() / tex.x).max(rect.height() / tex.y);
-    let dest = Rect::from_center_size(rect.center(), tex * scale);
-    ui.painter().with_clip_rect(rect).image(
+    // Fit the whole sheet, then MirroredRepeat covers 16:10 and other windows.
+    let base_scale = (rect.width() / tex.x).min(rect.height() / tex.y);
+    let uv_size = rect.size() / (tex * base_scale);
+    let uv_min = pos2(0.5 - uv_size.x / 2.0, 0.5 - uv_size.y / 2.0);
+    let uv_max = pos2(0.5 + uv_size.x / 2.0, 0.5 + uv_size.y / 2.0);
+    ui.painter().image(
         texture.id(),
-        dest,
-        Rect::from_min_max(Pos2::ZERO, pos2(1.0, 1.0)),
+        rect,
+        Rect::from_min_max(uv_min, uv_max),
         Color32::WHITE,
     );
 }
@@ -58,18 +61,34 @@ fn texture(ui: &Ui, family: WallpaperFamily, slot: u8) -> Option<TextureHandle> 
     if let Some(handle) = ui.ctx().data(|data| data.get_temp::<TextureHandle>(id)) {
         return Some(handle);
     }
-    let image = decode(family, slot)?;
-    let handle = ui
-        .ctx()
-        .load_texture(asset_key(family, slot), image, TextureOptions::LINEAR);
+    let max_side = ui.ctx().input(|i| i.max_texture_side);
+    let image = decode(family, slot, max_side)?;
+    let handle = ui.ctx().load_texture(
+        asset_key(family, slot),
+        image,
+        TextureOptions {
+            wrap_mode: TextureWrapMode::MirroredRepeat,
+            ..TextureOptions::LINEAR
+        },
+    );
     ui.ctx()
         .data_mut(|data| data.insert_temp(id, handle.clone()));
     Some(handle)
 }
 
-fn decode(family: WallpaperFamily, slot: u8) -> Option<ColorImage> {
+fn decode(family: WallpaperFamily, slot: u8, max_side: usize) -> Option<ColorImage> {
     let bytes = png(family, slot);
-    let bitmap = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let mut bitmap = image::load_from_memory(bytes).ok()?.to_rgba8();
+    if bitmap.width() as usize > max_side || bitmap.height() as usize > max_side {
+        let max_w = max_side as u32;
+        let max_h = max_side as u32;
+        let scale =
+            (max_w as f32 / bitmap.width() as f32).min(max_h as f32 / bitmap.height() as f32);
+        let new_w = (bitmap.width() as f32 * scale).round() as u32;
+        let new_h = (bitmap.height() as f32 * scale).round() as u32;
+        bitmap =
+            image::imageops::resize(&bitmap, new_w, new_h, image::imageops::FilterType::Triangle);
+    }
     let size = [bitmap.width() as usize, bitmap.height() as usize];
     Some(ColorImage::from_rgba_unmultiplied(size, bitmap.as_raw()))
 }
@@ -172,5 +191,22 @@ mod tests {
             ChatWallpaper::Black.resolve(&Palette::light()),
             WallpaperFamily::Black
         );
+    }
+
+    #[test]
+    fn all_15_wallpapers_decode_to_4k() {
+        for family in WallpaperFamily::ALL {
+            for slot in 0..WALLPAPER_SLOTS {
+                let img = decode(family, slot, 4096).expect("failed to decode wallpaper");
+                assert_eq!(
+                    img.size,
+                    [3840, 2160],
+                    "wallpaper {family:?} slot {slot} must be 4K"
+                );
+            }
+        }
+        // Clamping to 2048 works without panic
+        let clamped = decode(WallpaperFamily::Black, 0, 2048).expect("failed to decode clamped");
+        assert!(clamped.size[0] <= 2048 && clamped.size[1] <= 2048);
     }
 }
