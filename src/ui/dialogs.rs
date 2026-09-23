@@ -255,12 +255,16 @@ fn edit_chat_list(app: &mut App, ui: &mut egui::Ui, id: Option<&str>) {
         .collect();
     chats.sort_by_key(|chat| std::cmp::Reverse(chat.last_activity));
     let row_height = 52.0;
-    let max_height = (ui.ctx().content_rect().height() - 280.0).clamp(row_height * 3.0, 380.0);
+    // show_rows adds the current item spacing to each row. The rows below
+    // allocate exactly row_height, so any leftover spacing paints as a gap.
+    let saved_spacing = ui.spacing().item_spacing.y;
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let max_height = (ui.available_height() - 44.0).clamp(row_height * 3.0, 420.0);
     let mut toggled = None;
     egui::ScrollArea::vertical()
         .id_salt("list-members")
         .max_height(max_height)
-        .auto_shrink([false, true])
+        .auto_shrink([false, false])
         .show_rows(ui, row_height, chats.len(), |ui, range| {
             ui.spacing_mut().item_spacing.y = 0.0;
             for chat in &chats[range] {
@@ -333,6 +337,7 @@ fn edit_chat_list(app: &mut App, ui: &mut egui::Ui, id: Option<&str>) {
                 }
             }
         });
+    ui.spacing_mut().item_spacing.y = saved_spacing;
     if let Some(id) = toggled
         && !app.list_picked.remove(&id)
     {
@@ -340,26 +345,29 @@ fn edit_chat_list(app: &mut App, ui: &mut egui::Ui, id: Option<&str>) {
     }
     ui.add_space(8.0);
     let ready = !app.list_name.trim().is_empty();
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if theme::pill_button(
-            ui,
-            &palette,
-            if id.is_some() {
-                i18n::t(Key::DialogSave)
-            } else {
-                i18n::t(Key::DialogCreate)
-            },
-            true,
-        )
-        .clicked()
-            && ready
-        {
-            app.actions.push(Action::SaveChatList {
-                id: id.map(str::to_owned),
-                name: app.list_name.trim().to_owned(),
-                members: app.list_picked.iter().cloned().collect(),
-            });
-        }
+    // right_to_left(Center) in a vertical ui takes the leftover height.
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if theme::pill_button(
+                ui,
+                &palette,
+                if id.is_some() {
+                    i18n::t(Key::DialogSave)
+                } else {
+                    i18n::t(Key::DialogCreate)
+                },
+                true,
+            )
+            .clicked()
+                && ready
+            {
+                app.actions.push(Action::SaveChatList {
+                    id: id.map(str::to_owned),
+                    name: app.list_name.trim().to_owned(),
+                    members: app.list_picked.iter().cloned().collect(),
+                });
+            }
+        });
     });
 }
 
